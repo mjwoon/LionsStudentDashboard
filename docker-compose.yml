@@ -27,7 +27,8 @@ services:
     volumes:
       - ./backend:/app
       - /app/.venv
-      - ./models:/app/models # AI 모델 공유 볼륨
+      # AI 모델 공유 볼륨은 주석 처리 (backend의 models 패키지와 충돌)
+      # - ./models:/app/models
     ports:
       - "8080:8080"
     environment:
@@ -74,6 +75,7 @@ services:
       - "5173:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - VITE_API_URL=http://localhost:8080
     stdin_open: true
     depends_on:
       - backend

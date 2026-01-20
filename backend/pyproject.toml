@@ -1,9 +1,14 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Lions Student Dashboard Backend API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.128.0",
+    "sqlalchemy>=2.0.0",
+    "pydantic>=2.0.0",
+    "pydantic[email]>=2.0.0",
+    "python-multipart>=0.0.6",
+    "psycopg2-binary>=2.9.0",
 ]

@@ -1,42 +1,178 @@
-#root {
-  max-width: 1280px;
+.app {
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #646cff;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: #646cff;
+}
+
+.header p {
+  margin: 0.5rem 0 0;
+  color: #888;
+}
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #eee;
+}
+
+.tab {
+  padding: 1rem 2rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.tab:hover {
+  color: #646cff;
+}
+
+.tab.active {
+  color: #646cff;
+  border-bottom-color: #646cff;
+}
+
+.content {
+  min-height: 400px;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #646cff;
+}
+
+.error {
+  background: #fee;
+  color: #c00;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.refresh-btn {
+  padding: 0.5rem 1rem;
+  background: #646cff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  transition: background 0.3s;
+}
+
+.refresh-btn:hover {
+  background: #535bf2;
+}
+
+.table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+thead {
+  background: #f5f5f5;
+}
+
+th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #ddd;
+}
+
+td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+tr:hover {
+  background: #f9f9f9;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status.재학 {
+  background: #e6f4ea;
+  color: #1e8e3e;
+}
+
+.status.휴학 {
+  background: #fef7e0;
+  color: #f9ab00;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.stat-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.stat-value {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #646cff;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+h2 {
+  margin-top: 0;
+  color: #333;
 }
 
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+h3 {
+  color: #555;
+  margin-top: 2rem;
 }

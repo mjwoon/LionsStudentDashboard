@@ -1,9 +1,44 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from database import init_db
+from routers import students, courses, surveys
 
-# 이 줄이 반드시 있어야 합니다. 
-# Uvicorn은 이 'app' 변수를 찾아 실행합니다.
-app = FastAPI()
+app = FastAPI(
+    title="Lions Student Dashboard API",
+    description="한양대학교 LIONS 학생 대시보드 백엔드 API",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 개발 환경에서 모든 오리진 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(students.router)
+app.include_router(courses.router)
+app.include_router(surveys.router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    init_db()
+
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
+    return {
+        "message": "Lions Student Dashboard API",
+        "version": "1.0.0",
+        "status": "running"
+    }
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}

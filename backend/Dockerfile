@@ -7,6 +7,7 @@ WORKDIR /app
 # 3. 환경 변수 설정 (Python이 .pyc 파일을 생성하지 않도록 하고 버퍼링을 끎)
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # 4. 의존성 파일 복사 (캐싱을 위해 먼저 복사)
 # 로컬에서 `uv init`을 실행해 생성된 파일들입니다.
@@ -18,6 +19,6 @@ RUN uv sync --frozen --no-cache
 # 6. 소스 코드 복사
 COPY . .
 
-# 7. FastAPI 실행 (uvicorn 사용)
-# --host 0.0.0.0은 외부(Docker 네트워크) 접근을 위해 필수입니다.
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+# 7. FastAPI 실행
+# seed_data.py가 자동으로 DB 연결을 기다림
+CMD ["sh", "-c", "uv run python seed_data.py && uv run fastapi dev main.py --host 0.0.0.0 --port 8080"]

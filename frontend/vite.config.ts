@@ -9,6 +9,6 @@ export default defineConfig({
     watch: {
       usePolling: true, // Docker 환경에서 파일 변경 감지를 위해 필수
     },
-    strictPort: true, // 포트가 이미 사용 중일 때 다음 포트로 넘어가지 않게 설정
+    strictPort: false, // 포트가 사용 중이면 다음 포트 사용
   },
 })
