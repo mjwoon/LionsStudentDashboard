@@ -125,6 +125,12 @@ export const api = {
       return fetchAPI<SurveyRoundResponse>(`/api/major-surveys/rounds/${roundId}?${params}`)
     },
   },
+
+  // 대시보드 관련 API
+  dashboard: {
+    stats: () => 
+      fetchAPI<DashboardStatsResponse>('/api/dashboard/stats'),
+  },
 }
 
 // 타입 정의
@@ -326,4 +332,31 @@ export interface SurveySubmission {
   second_choice?: { id: number; name: string }
   decision_scale: number
   submitted_at: string
+}
+
+// Dashboard Types
+export interface DashboardStatsResponse {
+  colleges: College[]
+  departments: DepartmentWithStats[]
+  current_data: DepartmentWithStats[]
+  trend_data: TrendDataPoint[]
+}
+
+export interface College {
+  id: number
+  name: string
+}
+
+export interface DepartmentWithStats {
+  id: string
+  name: string
+  college: string
+  color: string
+  students: number
+  percent: number
+}
+
+export interface TrendDataPoint {
+  period: string
+  data: Record<string, number>
 }

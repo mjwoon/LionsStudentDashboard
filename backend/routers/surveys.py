@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, distinct
-from typing import Optional
+from typing import Optional, List
 from database import get_db
 from models.database import (
     MajorSurvey, Student, Department, SurveyRound, 
-    Course, CourseEnrollment
+    Course, CourseEnrollment, College
 )
 from models.schemas import (
     SurveySummaryResponse, SurveyOverview, MajorPreference, SurveyStatus,
     SurveyCreate, SurveyCreateResponse, SurveySubmitData,
     SurveyRoundResponse, SurveyRoundMeta, RoundInfo, SurveySubmissionItem,
-    SurveyChoiceBase
+    SurveyChoiceBase, DashboardStatsResponse, DepartmentWithStats, 
+    TrendDataPoint, CollegeBase
 )
 from datetime import datetime
 import math
@@ -235,4 +236,133 @@ def get_round_surveys(
             status=survey_round.status
         ),
         submissions=submissions_list
+    )
+
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    """대시보드 통계 데이터 조회"""
+    
+    # Department code to frontend id mapping
+    dept_code_map = {
+        'CS': 'cs', 'EE': 'ee', 'ME': 'mechanical', 'CHEM_ENG': 'chemical',
+        'CIVIL': 'civil', 'ARCH': 'architecture', 'IE': 'industrial', 'MATER': 'materials',
+        'MATH': 'math', 'PHYS': 'physics', 'CHEM': 'chem', 'BIO': 'bio',
+        'EARTH': 'earth', 'ASTRO': 'astronomy',
+        'BIZ': 'business', 'ACCT': 'accounting', 'FIN': 'finance', 'MKT': 'marketing',
+        'KOR': 'korean', 'ENG': 'english', 'HIST': 'history', 'PHIL': 'philosophy', 'CHI': 'chinese',
+        'ECON': 'economics', 'POL': 'political', 'SOC': 'sociology', 'PSY': 'psychology',
+        'MEDIA': 'media', 'LAW': 'law'
+    }
+    
+    # Department colors
+    dept_colors = {
+        'cs': '#3b82f6', 'ee': '#10b981', 'mechanical': '#f59e0b', 'chemical': '#ef4444',
+        'civil': '#8b5cf6', 'architecture': '#ec4899', 'industrial': '#14b8a6', 'materials': '#f97316',
+        'math': '#06b6d4', 'physics': '#6366f1', 'chem': '#a855f7', 'bio': '#ec4899',
+        'earth': '#84cc16', 'astronomy': '#0ea5e9',
+        'business': '#f59e0b', 'accounting': '#eab308', 'finance': '#22c55e', 'marketing': '#06b6d4',
+        'korean': '#8b5cf6', 'english': '#6366f1', 'history': '#a855f7', 'philosophy': '#ec4899', 'chinese': '#f43f5e',
+        'economics': '#10b981', 'political': '#3b82f6', 'sociology': '#f59e0b', 'psychology': '#ef4444',
+        'media': '#8b5cf6', 'law': '#14b8a6'
+    }
+    
+    # College name to id mapping
+    college_map = {
+        '공과대학': 'engineering',
+        '자연과학대학': 'science',
+        '경영대학': 'business',
+        '인문대학': 'humanities',
+        '사회과학대학': 'social'
+    }
+    
+    # Get colleges
+    colleges_db = db.query(College).filter(College.id != 1).all()
+    colleges = [CollegeBase(id=college.id, name=college.name) for college in colleges_db]
+    colleges.insert(0, CollegeBase(id=0, name="전체"))
+    
+    # Get latest round
+    latest_round = db.query(SurveyRound).order_by(SurveyRound.round_number.desc()).first()
+    
+    if not latest_round:
+        return DashboardStatsResponse(
+            colleges=colleges,
+            departments=[],
+            current_data=[],
+            trend_data=[]
+        )
+    
+    # Get current data (latest round statistics)
+    current_stats = db.query(
+        Department.code,
+        Department.name,
+        College.name.label('college_name'),
+        func.count(MajorSurvey.id).label('count')
+    ).join(
+        MajorSurvey, Department.id == MajorSurvey.first_choice_dept_id
+    ).join(
+        College, Department.college_id == College.id
+    ).filter(
+        MajorSurvey.round_id == latest_round.id,
+        Department.code != 'LIONSE'
+    ).group_by(
+        Department.id, Department.code, Department.name, College.name
+    ).order_by(
+        func.count(MajorSurvey.id).desc()
+    ).all()
+    
+    total_students = sum(stat.count for stat in current_stats)
+    
+    departments_list = []
+    current_data_list = []
+    
+    for stat in current_stats:
+        dept_id = dept_code_map.get(stat.code, stat.code.lower())
+        college_id = college_map.get(stat.college_name, 'other')
+        color = dept_colors.get(dept_id, '#6b7280')
+        percent = (stat.count / total_students * 100) if total_students > 0 else 0
+        
+        dept_data = DepartmentWithStats(
+            id=dept_id,
+            name=stat.name,
+            college=college_id,
+            color=color,
+            students=stat.count,
+            percent=round(percent, 1)
+        )
+        departments_list.append(dept_data)
+        current_data_list.append(dept_data)
+    
+    # Get trend data (all rounds)
+    rounds = db.query(SurveyRound).order_by(SurveyRound.round_number).all()
+    trend_data_list = []
+    
+    for idx, round_obj in enumerate(rounds, 1):
+        round_stats = db.query(
+            Department.code,
+            func.count(MajorSurvey.id).label('count')
+        ).join(
+            MajorSurvey, Department.id == MajorSurvey.first_choice_dept_id
+        ).filter(
+            MajorSurvey.round_id == round_obj.id,
+            Department.code != 'LIONSE'
+        ).group_by(
+            Department.code
+        ).all()
+        
+        data_dict = {}
+        for stat in round_stats:
+            dept_id = dept_code_map.get(stat.code, stat.code.lower())
+            data_dict[dept_id] = stat.count
+        
+        trend_data_list.append(TrendDataPoint(
+            period=f"{idx}차",
+            data=data_dict
+        ))
+    
+    return DashboardStatsResponse(
+        colleges=colleges,
+        departments=departments_list,
+        current_data=current_data_list,
+        trend_data=trend_data_list
     )

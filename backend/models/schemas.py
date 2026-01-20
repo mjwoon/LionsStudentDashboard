@@ -4,6 +4,14 @@ from datetime import datetime
 
 
 # Base Response Models
+class CollegeBase(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class DepartmentBase(BaseModel):
     id: int
     name: str
@@ -252,7 +260,38 @@ class SurveyRoundMeta(BaseModel):
     total_count: int
     current_page: int
     total_pages: int
-    per_page: int
+    per_page: int = 20
+
+
+# Dashboard Statistics Models
+class DepartmentWithStats(BaseModel):
+    id: str
+    name: str
+    college: str
+    color: str
+    students: int
+    percent: float
+
+    class Config:
+        from_attributes = True
+
+
+class TrendDataPoint(BaseModel):
+    period: str
+    data: dict  # department_id: count
+
+    class Config:
+        from_attributes = True
+
+
+class DashboardStatsResponse(BaseModel):
+    colleges: List[CollegeBase]
+    departments: List[DepartmentWithStats]
+    current_data: List[DepartmentWithStats]
+    trend_data: List[TrendDataPoint]
+
+    class Config:
+        from_attributes = True
 
 
 class SurveyRoundResponse(BaseModel):
