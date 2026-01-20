@@ -1,0 +1,83 @@
+services:
+  # 1. Database: 벡터 검색(pgvector)을 지원하는 PostgreSQL
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: fullstack_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: my_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Redis: AI 요청 처리를 위한 비동기 메시지 브로커
+  redis:
+    image: redis:7-alpine
+    container_name: fullstack_redis
+    ports:
+      - "6379:6379"
+
+  # 3. Backend: FastAPI (uv 기반)
+  backend:
+    build: ./backend
+    container_name: fastapi_backend
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+      - ./models:/app/models # AI 모델 공유 볼륨
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/my_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      - db
+      - redis
+
+  # 4. Worker: AI 연산을 백그라운드에서 처리하는 별도 컨테이너
+  # # (백엔드와 동일한 이미지를 사용하되 실행 명령만 다르게 설정)
+  # worker:
+  #   build: ./backend
+  #   container_name: ai_worker
+  #   command: uv run celery -A tasks worker --loglevel=info
+  #   volumes:
+  #     - ./backend:/app
+  #     - ./models:/app/models
+  #   environment:
+  #     DATABASE_URL: postgresql://user:password@db:5432/my_db
+  #     REDIS_URL: redis://redis:6379/0
+  #   depends_on:
+  #     - redis
+  #     - db
+
+  # # 5. Local AI: Ollama (로컬에서 LLM 실행)
+  # ollama:
+  #   image: ollama/ollama
+  #   container_name: ollama_server
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+
+  # 6. Frontend: React Typescript
+  frontend:
+    build: ./frontend
+    container_name: react_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  ollama_data:
