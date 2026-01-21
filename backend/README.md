@@ -40,6 +40,7 @@ uv sync
 ### 2. 샘플 데이터 생성
 
 ```bash
+rm c:/Users/82106/Workspace/LionsStudentDashboard/backend/lions_dashboard.db 
 uv run python seed_data.py
 ```
 

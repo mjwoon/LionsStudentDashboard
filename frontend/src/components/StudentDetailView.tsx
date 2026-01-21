@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ChevronLeft, Download, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { api } from '../api';
 
@@ -168,14 +167,6 @@ export default function StudentDetailView() {
 
   // 학점 통계 (간단히 총 학점만 계산 - 실제 성적은 백엔드에서 관리)
   const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
-
-  // 카테고리별 과목 수 (completion_type 기준)
-  const categoryData = [
-    { name: '전공기초', value: courses.filter((c) => c.completion_type === '전공기초').length, color: '#3b82f6' },
-    { name: '전공핵심', value: courses.filter((c) => c.completion_type === '전공핵심').length, color: '#10b981' },
-    { name: '전공심화', value: courses.filter((c) => c.completion_type === '전공심화').length, color: '#f59e0b' },
-    { name: '교양필수', value: courses.filter((c) => c.completion_type === '교양필수').length, color: '#ef4444' },
-  ].filter((d) => d.value > 0);
 
   // 학기별 이수 학점 데이터
   const semesterData = courses.reduce((acc, course) => {
@@ -364,10 +355,14 @@ export default function StudentDetailView() {
                   <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">학과</th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">Pride</th>
                   <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">분반</th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">최신 희망 학과</th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">전공결정도</th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">이수현황</th>
+                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">수강과목 적합성</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {students.map((s) => (
+                {[...students].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map((s) => (
                   <tr
                     key={s.student_id}
                     onClick={() => {
@@ -386,7 +381,11 @@ export default function StudentDetailView() {
                         {s.academic_info.pride}
                       </span>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.academic_info.class_number}반</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.academic_info.class_number}</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
                   </tr>
                 ))}
               </tbody>
@@ -486,18 +485,6 @@ export default function StudentDetailView() {
           ) : (
             <p className="text-gray-500">조사 결과가 없습니다.</p>
           )}
-          <div className="mt-4 pt-4 border-t space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">Pride 구분</span>
-              <span className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                {student?.academic_info.pride}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">분반</span>
-              <span className="text-sm text-gray-900">{student?.academic_info.class_number}반</span>
-            </div>
-          </div>
         </div>
       )}
 
@@ -518,7 +505,7 @@ export default function StudentDetailView() {
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  {colleges.map((college) => (
+                  {colleges.filter(college => college.id !== 1).map((college) => (
                     <option key={college.id} value={college.id}>
                       {college.name}
                     </option>
