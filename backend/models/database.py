@@ -53,6 +53,7 @@ class Student(Base):
     phone = Column(String(20))
     department_id = Column(Integer, ForeignKey("departments.id"))
     advisor_id = Column(Integer, ForeignKey("advisors.id"), nullable=True)
+    track = Column(String(20), nullable=True)  # 전계열, 자연계열, 인문사회계열
     pride = Column(String(10))  # L, I, O, N, S, E
     class_number = Column(Integer)  # 분반
     status = Column(String(20), default="재학")  # 재학, 휴학, 졸업 등
@@ -74,6 +75,8 @@ class Course(Base):
     credits = Column(Integer, nullable=False)
     course_type = Column(String(50))  # 전공필수, 전공선택, 교양필수 등
     department_id = Column(Integer, ForeignKey("departments.id"))
+    course_year = Column(Integer, nullable=True)  # 1, 2, 3, 4
+    semester = Column(Integer, nullable=True)  # 1 or 2
     is_entry_requirement = Column(Boolean, default=False)
     is_recommended = Column(Boolean, default=False)
     is_retake_only = Column(Boolean, default=False)

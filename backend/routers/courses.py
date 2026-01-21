@@ -199,3 +199,50 @@ def get_department_curriculum(department_id: int, db: Session = Depends(get_db))
         tracks=["기본 트랙"],  # Placeholder - should come from database
         entry_requirements_description="전공기초 과목 이수 및 평점 요건 충족"
     )
+
+
+@router.get("/courses/curriculum", response_model=dict)
+def get_full_curriculum(
+    department_id: Optional[int] = Query(None, description="학과 ID"),
+    db: Session = Depends(get_db)
+):
+    """전체 교육과정 조회 (학년/학기별 구조화)"""
+    
+    # Base query
+    query = db.query(Course).options(joinedload(Course.department))
+    
+    # Filter by department if provided
+    if department_id:
+        query = query.filter(Course.department_id == department_id)
+    
+    courses = query.all()
+    
+    # 학년/학기별로 그룹화
+    curriculum = {}
+    for course in courses:
+        year = course.course_year or 0
+        semester = course.semester or 0
+        
+        year_key = f"{year}학년" if year > 0 else "기타"
+        sem_key = f"{semester}학기" if semester > 0 else "학기미정"
+        
+        if year_key not in curriculum:
+            curriculum[year_key] = {}
+        if sem_key not in curriculum[year_key]:
+            curriculum[year_key][sem_key] = []
+        
+        curriculum[year_key][sem_key].append({
+            "course_id": course.id,
+            "course_code": course.course_code,
+            "course_name": course.course_name,
+            "credits": course.credits,
+            "course_type": course.course_type,
+            "is_entry_requirement": course.is_entry_requirement,
+            "is_recommended": course.is_recommended,
+            "department_name": course.department.name if course.department else None
+        })
+    
+    return {
+        "curriculum": curriculum,
+        "total_courses": len(courses)
+    }

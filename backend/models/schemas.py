@@ -35,6 +35,7 @@ class DepartmentDetail(BaseModel):
 class AcademicInfo(BaseModel):
     pride: str
     class_number: int
+    track: Optional[str] = None  # 전계열, 자연계열, 인문사회계열
     advisor_id: Optional[int] = None
     advisor_name: Optional[str] = None
     status: str = "재학"

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { TrendingUp, Users, Download, ChevronDown } from 'lucide-react';
 import { api } from '../api';
 
 export default function DashboardView() {
   const [selectedCollege, setSelectedCollege] = useState('all');
-  const [selectedDepts, setSelectedDepts] = useState<string[]>(['cs', 'ee', 'bio', 'business']);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
   const [showTopN, setShowTopN] = useState(10);
   const [loading, setLoading] = useState(true);
   const [colleges, setColleges] = useState<any[]>([]);
@@ -19,27 +19,14 @@ export default function DashboardView() {
         setLoading(true);
         const data = await api.dashboard.stats();
         
-        // Add 'all' option to colleges
+        // Filter out college with id=1 (라이언스 칼리지) and add 'all' option
+        const filteredColleges = data.colleges.filter(c => c.id !== 1);
         const collegesWithAll = [
           { id: 'all', name: '전체' },
-          ...data.colleges.map(c => ({ id: c.name, name: c.name }))
+          ...filteredColleges.map(c => ({ id: String(c.id), name: c.name }))
         ];
         
-        // Map college names to IDs
-        const collegeMap: Record<string, string> = {
-          '공과대학': 'engineering',
-          '자연과학대학': 'science',
-          '경영대학': 'business',
-          '인문대학': 'humanities',
-          '사회과학대학': 'social'
-        };
-        
-        const mappedColleges = collegesWithAll.map(c => ({
-          id: c.id === 'all' ? 'all' : collegeMap[c.name] || c.id,
-          name: c.name
-        }));
-        
-        setColleges(mappedColleges);
+        setColleges(collegesWithAll);
         setDepartments(data.departments);
         setCurrentData(data.current_data.map(d => ({
           dept: d.name,
@@ -328,10 +315,9 @@ export default function DashboardView() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
-                          className="h-2 rounded-full"
+                          className="h-2 rounded-full bg-blue-600"
                           style={{ 
-                            width: `${item.percent * 3}%`,
-                            backgroundColor: dept?.color
+                            width: `${item.percent * 3}%`
                           }}
                         />
                       </div>
