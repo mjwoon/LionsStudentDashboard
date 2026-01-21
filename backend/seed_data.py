@@ -93,152 +93,25 @@ def seed_database():
 
         # Create Departments
         print("Creating departments...")
-        departments_list = [
-            # 라이언스 칼리지
-            Department(
-                id=100,
-                code="LIONS1",
-                name="전계열",
-                college_id=1,
-                min_credits=130,
-            ),
-            Department(
-                id=101,
-                code="LIONS2",
-                name="자연계열",
-                college_id=1,
-                min_credits=130,
-            ),
-            Department(
-                id=102,
-                code="LIONS3",
-                name="인문사회계열",
-                college_id=1,
-                min_credits=130,
-            ),
-            # 공과대학
-            Department(
-                id=202, code="EE", name="전자공학과", college_id=2, min_credits=130
-            ),
-            Department(
-                id=203, code="ME", name="기계공학과", college_id=2, min_credits=135
-            ),
-            Department(
-                id=204,
-                code="CHEM_ENG",
-                name="화학공학과",
-                college_id=2,
-                min_credits=130,
-            ),
-            Department(
-                id=205, code="CIVIL", name="토목공학과", college_id=2, min_credits=130
-            ),
-            Department(
-                id=206, code="ARCH", name="건축공학과", college_id=2, min_credits=135
-            ),
-            Department(
-                id=207, code="IE", name="산업공학과", college_id=2, min_credits=130
-            ),
-            Department(
-                id=208, code="MATER", name="신소재공학과", college_id=2, min_credits=130
-            ),
-            # 소프트웨어융합대학
-            Department(
-                id=301, code="CS", name="컴퓨터학부", college_id=3, min_credits=130
-            ),
-            Department(
-                id=302, code="ICT", name="ICT융합학부", college_id=3, min_credits=130
-            ),
-            Department(
-                id=303, code="AI", name="인공지능학과", college_id=3, min_credits=130
-            ),
-            Department(
-                id=304,
-                code="MATH",
-                name="수리데이터사이언스학과",
-                college_id=3,
-                min_credits=130,
-            ),
-            # 첨단융합대학
-            Department(
-                id=401, code="PHYS", name="물리학과", college_id=4, min_credits=126
-            ),
-            Department(
-                id=402, code="CHEM", name="화학과", college_id=4, min_credits=126
-            ),
-            Department(
-                id=403, code="BIO", name="생명과학과", college_id=4, min_credits=126
-            ),
-            Department(
-                id=404,
-                code="EARTH",
-                name="지구환경과학과",
-                college_id=4,
-                min_credits=126,
-            ),
-            Department(
-                id=405, code="ASTRO", name="천문우주학과", college_id=4, min_credits=126
-            ),
-            # 경상대학
-            Department(
-                id=501, code="BIZ", name="경영학과", college_id=5, min_credits=126
-            ),
-            Department(
-                id=502, code="ACCT", name="회계학과", college_id=5, min_credits=126
-            ),
-            Department(
-                id=503, code="FIN", name="재무금융학과", college_id=5, min_credits=126
-            ),
-            Department(
-                id=504, code="MKT", name="마케팅학과", college_id=5, min_credits=126
-            ),
-            # 글로벌문화통상대학
-            Department(
-                id=601,
-                code="KOR",
-                name="글로벌문화통상학부",
-                college_id=6,
-                min_credits=126,
-            ),
-            # 커뮤니케이션%컬쳐대학
-            Department(
-                id=701, code="ECON", name="광고홍보학과", college_id=7, min_credits=126
-            ),
-            Department(
-                id=702, code="POL", name="문화콘텐츠학과", college_id=7, min_credits=126
-            ),
-            Department(
-                id=703, code="SOC", name="문화인류학과", college_id=7, min_credits=126
-            ),
-            Department(
-                id=704, code="PSY", name="미디어학과", college_id=7, min_credits=126
-            ),
-            # 디자인대학
-            Department(
-                id=801,
-                code="DESIGN",
-                name="융합디자인학부",
-                college_id=8,
-                min_credits=130,
-            ),
-            Department(
-                id=802,
-                code="INDUST_DESIGN",
-                name="산업디자인학과",
-                college_id=8,
-                min_credits=130,
-            ),
-            Department(
-                id=803,
-                code="VISUAL_DESIGN",
-                name="시각디자인학과",
-                college_id=8,
-                min_credits=130,
-            ),
-        ]
+        # Load departments from college.json
+        college_json_path = os.path.join(os.path.dirname(__file__), "data", "college.json")
+        with open(college_json_path, "r", encoding="utf-8") as f:
+            college_data = json.load(f)
+        
+        departments_list = []
+        for dept_data in college_data["departments"]:
+            department = Department(
+                id=dept_data["id"],
+                code=dept_data["code"],
+                name=dept_data["name"],
+                college_id=dept_data["college_id"],
+                min_credits=dept_data.get("min_credits")
+            )
+            departments_list.append(department)
 
         db.add_all(departments_list)
         db.commit()
+        print(f"Created {len(departments_list)} departments from college.json")
 
         # Create Advisors
         print("Creating advisors...")
@@ -249,38 +122,38 @@ def seed_database():
             Advisor(id=3, name="김교수", email="kim@hanyang.ac.kr", department_id=100),
             # 공과대학
             Advisor(
-                id=4, name="이교수", email="lee.ee@hanyang.ac.kr", department_id=202
-            ),  # 전자공학과
+                id=4, name="이교수", email="lee.ee@hanyang.ac.kr", department_id=205
+            ),  # 전자공학부
             Advisor(
-                id=5, name="정교수", email="jung.me@hanyang.ac.kr", department_id=203
+                id=5, name="정교수", email="jung.me@hanyang.ac.kr", department_id=206
             ),  # 기계공학과
             Advisor(
-                id=6, name="강교수", email="kang.chem@hanyang.ac.kr", department_id=204
-            ),  # 화학공학과
+                id=6, name="강교수", email="kang.chem@hanyang.ac.kr", department_id=207
+            ),  # 배터리소재화학공학과
             # 소프트웨어융합대학
             Advisor(
-                id=7, name="송교수", email="song.cs@hanyang.ac.kr", department_id=301
+                id=7, name="송교수", email="song.cs@hanyang.ac.kr", department_id=300
             ),  # 컴퓨터학부
             Advisor(
-                id=8, name="윤교수", email="yoon.math@hanyang.ac.kr", department_id=304
+                id=8, name="윤교수", email="yoon.math@hanyang.ac.kr", department_id=307
             ),  # 수리데이터사이언스학과
             # 첨단융합대학
             Advisor(
-                id=9, name="한교수", email="han.phys@hanyang.ac.kr", department_id=401
-            ),  # 물리학과
+                id=9, name="한교수", email="han.semi@hanyang.ac.kr", department_id=400
+            ),  # 차세대반도체융합공학부
             Advisor(
-                id=10, name="오교수", email="oh.chem@hanyang.ac.kr", department_id=402
-            ),  # 화학과
+                id=10, name="오교수", email="oh.bio@hanyang.ac.kr", department_id=403
+            ),  # 바이오신양융합학부
             # 경상대학
             Advisor(
-                id=11, name="서교수", email="seo.biz@hanyang.ac.kr", department_id=501
-            ),  # 경영학과
+                id=11, name="서교수", email="seo.biz@hanyang.ac.kr", department_id=500
+            ),  # 경영학부
             # 글로벌문화통상대학
             Advisor(
                 id=12,
                 name="안교수",
                 email="ahn.global@hanyang.ac.kr",
-                department_id=601,
+                department_id=700,
             ),  # 글로벌문화통상학부
         ]
 
@@ -413,7 +286,7 @@ def seed_database():
                 course_name=course_data["course_name"],
                 credits=course_data["credits"],
                 course_type=course_data["course_type"],
-                department_id=301,  # 컴퓨터학부
+                department_id=300,  # 컴퓨터학부
                 course_year=course_data.get("course_year"),
                 semester=course_data.get("semester"),
                 is_entry_requirement=is_entry_req,
@@ -496,38 +369,37 @@ def seed_database():
 
         # 전공별 희망 학생 수 (더 다양하고 현실적으로)
         # 인기학과: 컴공, 경영, 전자공학, AI
-        # 중간: 기계, ICT, 경제, 화학 등
-        # 비인기: 천문우주, 디자인 등
+        # 중간: 기계, ICT, 건축 등
+        # 비인기: 배터리, 디자인 등
         dept_preferences = [
             # (학과ID, 1차조사 희망자수, 2차조사 희망자수)
-            (301, 35, 28),  # 컴퓨터학부 - 매우 인기
-            (501, 28, 25),  # 경영학과 - 인기
-            (202, 22, 18),  # 전자공학과 - 인기
-            (303, 18, 15),  # 인공지능학과 - 인기
-            (203, 15, 12),  # 기계공학과
-            (304, 14, 11),  # 수리데이터사이언스학과
-            (701, 12, 10),  # 광고홍보학과
-            (204, 10, 9),  # 화학공학과
-            (704, 9, 8),  # 미디어학과
-            (302, 8, 7),  # ICT융합학부
-            (401, 7, 6),  # 물리학과
-            (601, 7, 6),  # 글로벌문화통상학부
-            (207, 6, 5),  # 산업공학과
-            (502, 6, 5),  # 회계학과
-            (205, 5, 4),  # 토목공학과
-            (206, 5, 5),  # 건축공학과
-            (503, 5, 4),  # 재무금융학과
-            (702, 4, 4),  # 문화콘텐츠학과
-            (208, 4, 3),  # 신소재공학과
-            (703, 4, 3),  # 문화인류학과
-            (402, 3, 3),  # 화학과
-            (504, 3, 3),  # 마케팅학과
-            (404, 3, 2),  # 지구환경과학과
+            (300, 35, 28),  # 컴퓨터학부 - 매우 인기
+            (500, 28, 25),  # 경영학부 - 인기
+            (205, 22, 18),  # 전자공학부 - 인기
+            (306, 18, 15),  # 인공지능학과 - 인기
+            (206, 15, 12),  # 기계공학과
+            (307, 14, 11),  # 수리데이터사이언스학과
+            (600, 12, 10),  # 광고홍보학과
+            (207, 10, 9),  # 배터리소재화학공학과
+            (601, 9, 8),  # 미디어학과
+            (303, 8, 7),  # ICT융합학부
+            (200, 7, 6),  # 건축학부
+            (700, 7, 6),  # 글로벌문화통상학부
+            (208, 6, 5),  # 산업경영공학과
+            (501, 6, 5),  # 경제학부
+            (203, 5, 4),  # 건설환경공학과
+            (204, 5, 5),  # 교통물류공학과
+            (502, 5, 4),  # 보험계리학과
+            (602, 4, 4),  # 문화콘텐츠학과
+            (209, 4, 3),  # 로봇공학과
+            (603, 4, 3),  # 문화인류학과
+            (210, 3, 3),  # 에너지바이오학과
+            (211, 3, 3),  # 해양융합공학과
+            (400, 3, 2),  # 차세대반도체융합공학부
             (801, 3, 3),  # 융합디자인학부
-            (802, 2, 2),  # 산업디자인학과
-            (803, 2, 2),  # 시각디자인학과
-            (403, 2, 1),  # 생명과학과
-            (405, 2, 2),  # 천문우주학과
+            (802, 2, 2),  # 주얼리패션디자인학과 (실제로는 800)
+            (403, 2, 2),  # 바이오신양융합학부
+            (406, 2, 1),  # 국방지능정보융합학부
         ]
 
         # 1차 조사 생성 (총 200명 중 약 90% 참여)
