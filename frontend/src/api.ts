@@ -83,6 +83,19 @@ export const api = {
       fetchAPI<DepartmentCurriculum>(`/api/departments/${departmentId}/curriculum`),
   },
 
+  // 평가 관련 API
+  evaluation: {
+    getStudentEvaluation: (studentId: string, departmentId: number, forceRecalculate = false) => {
+      const params = new URLSearchParams()
+      if (forceRecalculate) {
+        params.append('force_recalculate', 'true')
+      }
+      return fetchAPI<EvaluationResult>(
+        `/api/evaluation/student/${studentId}/department/${departmentId}${params.toString() ? '?' + params : ''}`
+      )
+    },
+  },
+
   // 과목 관련 API
   courses: {
     list: (page = 1, perPage = 20, filters?: {
@@ -359,4 +372,39 @@ export interface DepartmentWithStats {
 export interface TrendDataPoint {
   period: string
   data: Record<string, number>
+}
+// Evaluation Types
+export interface EvaluationResult {
+  student_id: number
+  department_id: number
+  department_name: string
+  admission_year: number
+  required_courses: {
+    score: number
+    total_requirements: number
+    satisfied_requirements: number
+    pass: boolean
+    message: string
+    details: any[]
+  }
+  recommended_courses: {
+    score: number
+    total_courses: number
+    completed_courses: number
+    total_credits: number
+    completed_credits: number
+    completion_rate: number
+    message: string
+    details: any[]
+  }
+  related_credits: {
+    score: number
+    total_available_credits: number
+    earned_credits: number
+    message: string
+  }
+  overall_score: number
+  grade: string
+  summary_message: string
+  evaluated_at: string
 }

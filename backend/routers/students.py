@@ -136,8 +136,9 @@ def get_student_courses(student_id: str, db: Session = Depends(get_db)):
             year=enrollment.year,
             semester=enrollment.semester,
             completion_type=enrollment.completion_type,
-            is_entry_requirement=enrollment.course.is_entry_requirement,
-            is_retake=enrollment.is_retake
+            is_retake=enrollment.is_retake,
+            grade=enrollment.grade,
+            numeric_grade=float(enrollment.numeric_grade) if enrollment.numeric_grade else None
         )
         course_history.append(course_detail)
     

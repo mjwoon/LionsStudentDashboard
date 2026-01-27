@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
-from routers import students, courses, surveys
+from routers import students, courses, surveys, evaluation
 
 app = FastAPI(
     title="Lions Student Dashboard API",
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(students.router)
 app.include_router(courses.router)
 app.include_router(surveys.router)
+app.include_router(evaluation.router)
 
 
 @app.on_event("startup")

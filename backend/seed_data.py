@@ -7,6 +7,7 @@ import time
 import json
 import os
 import random
+import csv
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
@@ -20,8 +21,32 @@ from models.database import (
     CourseEnrollment,
     SurveyRound,
     MajorSurvey,
+    DecisionStatus,
+    DepartmentEntryRequirement,
+    RequirementCourse,
+    StudentRequirementStatus,
+    GradeLevelEnum,
 )
 from datetime import datetime, timedelta
+
+
+# 성적 등급 및 점수 매핑
+GRADE_OPTIONS = [
+    ('A+', 4.5), ('A0', 4.0), ('A-', 3.7),
+    ('B+', 3.3), ('B0', 3.0), ('B-', 2.7),
+    ('C+', 2.3), ('C0', 2.0), ('C-', 1.7),
+    ('D+', 1.3), ('D0', 1.0), ('D-', 0.7),
+    ('F', 0.0)
+]
+
+# 성적 가중치 (좋은 성적이 더 많이 나오도록)
+GRADE_WEIGHTS = [15, 20, 10, 12, 15, 8, 6, 5, 3, 2, 2, 1, 1]
+
+
+def generate_random_grade():
+    """랜덤 성적 생성 (좋은 성적 편향)"""
+    grade, numeric = random.choices(GRADE_OPTIONS, weights=GRADE_WEIGHTS, k=1)[0]
+    return grade, numeric
 
 
 def wait_for_db(max_retries=30, delay=1):
@@ -56,7 +81,11 @@ def seed_database():
     try:
         # Clear existing data
         print("Clearing existing data...")
+        db.query(StudentRequirementStatus).delete()
+        db.query(RequirementCourse).delete()
+        db.query(DepartmentEntryRequirement).delete()
         db.query(MajorSurvey).delete()
+        db.query(DecisionStatus).delete()
         db.query(CourseEnrollment).delete()
         db.query(Course).delete()
         db.query(Student).delete()
@@ -238,7 +267,7 @@ def seed_database():
         students = []
 
         # 모든 학생을 라이언스 칼리지 2025학번 1학년으로 생성 (200명)
-        for i in range(200):
+        for i in range(300):
             name = random.choice(last_names) + random.choice(first_names)
             track = random.choice(tracks)
             students.append(
@@ -272,14 +301,6 @@ def seed_database():
 
         courses = []
         for idx, course_data in enumerate(sw_data["curriculum"], start=1):
-            # Determine if course is entry requirement based on course_type
-            is_entry_req = course_data["course_type"] in ["전공기초", "전공핵심"]
-            is_recommended = course_data["course_type"] in [
-                "전공기초",
-                "전공핵심",
-                "교양필수",
-            ]
-
             course = Course(
                 id=idx,
                 course_code=course_data["course_code"],
@@ -289,8 +310,6 @@ def seed_database():
                 department_id=300,  # 컴퓨터학부
                 course_year=course_data.get("course_year"),
                 semester=course_data.get("semester"),
-                is_entry_requirement=is_entry_req,
-                is_recommended=is_recommended,
             )
             courses.append(course)
 
@@ -302,35 +321,65 @@ def seed_database():
         print("Creating course enrollments...")
         enrollments = []
 
-        # 1학년이므로 1학년 1학기 과목만 수강 (sw.json에서 course_year=1, semester=1인 과목들)
-        # sw.json에서 1학년 1학기 과목들의 ID 찾기
-        first_year_first_sem_courses = [
-            idx + 1
+        # 1학년 과목만 수강 (sw.json에서 course_year=1인 과목들)
+        # 1학년 1학기 과목
+        first_year_sem1_courses = [
+            {"id": idx + 1, "credits": course["credits"], "course_type": course["course_type"]}
             for idx, course in enumerate(sw_data["curriculum"])
             if course["course_year"] == 1 and course["semester"] == 1
         ]
+        # 1학년 2학기 과목
+        first_year_sem2_courses = [
+            {"id": idx + 1, "credits": course["credits"], "course_type": course["course_type"]}
+            for idx, course in enumerate(sw_data["curriculum"])
+            if course["course_year"] == 1 and course["semester"] == 2
+        ]
 
-        print(f"1학년 1학기 과목 수: {len(first_year_first_sem_courses)}")
+        print(f"SW 1학년 1학기 과목 수: {len(first_year_sem1_courses)}")
+        print(f"SW 1학년 2학기 과목 수: {len(first_year_sem2_courses)}")
 
-        # 각 학생에게 현실적인 1학년 1학기 수강 과목 부여
-        print("Generating enrollments for students...")
+        MAX_CREDITS_PER_SEMESTER = 20
+
+        # 각 학생에게 1학년 과목 부여 (학기당 20학점 제한)
+        print("Generating SW enrollments for students...")
         for idx, student_id in enumerate(student_ids):
-            # 1학년 1학기는 3-5과목 정도 수강
-            num_courses = min(random.randint(3, 5), len(first_year_first_sem_courses))
+            # 1학기 수강
+            sem1_credits = 0
+            random.shuffle(first_year_sem1_courses)
+            for course_info in first_year_sem1_courses:
+                if sem1_credits + course_info["credits"] <= MAX_CREDITS_PER_SEMESTER:
+                    grade, numeric_grade = generate_random_grade()
+                    enrollment = CourseEnrollment(
+                        student_id=student_id,
+                        course_id=course_info["id"],
+                        year=2025,
+                        semester=1,
+                        completion_type=course_info["course_type"],
+                        is_retake=False,
+                        grade=grade,
+                        numeric_grade=numeric_grade,
+                    )
+                    enrollments.append(enrollment)
+                    sem1_credits += course_info["credits"]
 
-            # 랜덤하게 과목 선택
-            selected_courses = random.sample(first_year_first_sem_courses, num_courses)
-
-            for course_id in selected_courses:
-                enrollment = CourseEnrollment(
-                    student_id=student_id,
-                    course_id=course_id,
-                    year=2025,
-                    semester=1,
-                    completion_type=sw_data["curriculum"][course_id - 1]["course_type"],
-                    is_retake=False,
-                )
-                enrollments.append(enrollment)
+            # 2학기 수강
+            sem2_credits = 0
+            random.shuffle(first_year_sem2_courses)
+            for course_info in first_year_sem2_courses:
+                if sem2_credits + course_info["credits"] <= MAX_CREDITS_PER_SEMESTER:
+                    grade, numeric_grade = generate_random_grade()
+                    enrollment = CourseEnrollment(
+                        student_id=student_id,
+                        course_id=course_info["id"],
+                        year=2025,
+                        semester=2,
+                        completion_type=course_info["course_type"],
+                        is_retake=False,
+                        grade=grade,
+                        numeric_grade=numeric_grade,
+                    )
+                    enrollments.append(enrollment)
+                    sem2_credits += course_info["credits"]
 
             # 진행 상황 표시 (매 50명마다)
             if (idx + 1) % 50 == 0:
@@ -341,134 +390,409 @@ def seed_database():
         db.commit()
         print("Course enrollments created successfully!")
 
-        # Create Survey Rounds
+        # Create ICT Courses from filtered_ict.csv
+        print("Creating ICT courses from filtered_ict.csv...")
+        ict_csv_path = os.path.join(os.path.dirname(__file__), "filtered_ict.csv")
+        ict_courses = []
+        ict_course_data = []
+
+        # 이미 존재하는 SW 과목 코드 목록
+        existing_course_codes = set(c["course_code"] for c in sw_data["curriculum"])
+
+        # CSV 모듈로 제대로 파싱 (쉼표가 포함된 과목명 처리)
+        with open(ict_csv_path, "r", encoding="utf-8-sig") as f:
+            reader = csv.reader(f)
+            header = next(reader)  # 헤더 스킵
+            for row in reader:
+                if len(row) >= 7:
+                    course_code = row[0]
+                    course_name = row[1]
+                    course_type = row[2]
+                    credits = int(row[3]) if row[3] else 3
+                    course_year = int(row[4]) if row[4] else 1
+                    semester = int(row[5]) if row[5] else 1
+                    department = row[6]
+
+                    # 이미 SW 과목으로 존재하는 과목은 스킵 (교양 과목 포함)
+                    # 교양 과목은 SW에 이미 추가되었으므로 ICT에서는 스킵
+                    if course_code in existing_course_codes:
+                        continue
+
+                    ict_course_data.append({
+                        "course_code": course_code,
+                        "course_name": course_name,
+                        "course_type": course_type,
+                        "credits": credits,
+                        "course_year": course_year,
+                        "semester": semester,
+                        "department": department
+                    })
+
+                    # 추가한 코드는 중복 체크용 세트에 추가
+                    existing_course_codes.add(course_code)
+
+        # Create ICT courses (starting from ID after sw.json courses)
+        ict_course_start_id = len(courses) + 1
+        for idx, course_data in enumerate(ict_course_data):
+            course = Course(
+                id=ict_course_start_id + idx,
+                course_code=course_data["course_code"],
+                course_name=course_data["course_name"],
+                credits=course_data["credits"],
+                course_type=course_data["course_type"],
+                department_id=303,  # ICT융합학부
+                course_year=course_data["course_year"],
+                semester=course_data["semester"],
+            )
+            ict_courses.append(course)
+
+        db.add_all(ict_courses)
+        db.commit()
+        print(f"Created {len(ict_courses)} ICT courses from filtered_ict.csv")
+
+        # Create Additional ICT Course Enrollments (약 2000개, 1학년 과목만, 학기당 20학점 제한)
+        print("Creating additional ICT course enrollments (target: ~2000, 1st year only, max 20 credits/semester)...")
+        ict_enrollments = []
+
+        # ICT 과목 ID와 데이터 매핑
+        ict_course_id_to_data = {}
+        for course_data, course in zip(ict_course_data, ict_courses):
+            ict_course_id_to_data[course.id] = course_data
+
+        # ICT 과목 ID 목록 (1학년만)
+        ict_course_ids = [c.id for c in ict_courses]
+
+        # 1학년 과목만 학기별로 분류
+        ict_courses_by_sem = {1: [], 2: []}
+        for course_data, course in zip(ict_course_data, ict_courses):
+            # 1학년 과목만 포함
+            if course_data["course_year"] != 1:
+                continue
+            sem = course_data["semester"]
+            ict_courses_by_sem[sem].append({
+                "id": course.id,
+                "credits": course_data["credits"],
+                "course_type": course_data["course_type"]
+            })
+
+        print(f"ICT 1학년 1학기 과목 수: {len(ict_courses_by_sem[1])}")
+        print(f"ICT 1학년 2학기 과목 수: {len(ict_courses_by_sem[2])}")
+
+        # 학생별 학기별 학점 추적
+        # {student_id: {(year, semester): total_credits}}
+        student_semester_credits = {}
+
+        # 기존 SW 수강 기록의 학점 계산
+        for e in enrollments:
+            key = (e.student_id, e.year, e.semester)
+            course_credits = sw_data["curriculum"][e.course_id - 1]["credits"]
+            if e.student_id not in student_semester_credits:
+                student_semester_credits[e.student_id] = {}
+            sem_key = (e.year, e.semester)
+            if sem_key not in student_semester_credits[e.student_id]:
+                student_semester_credits[e.student_id][sem_key] = 0
+            student_semester_credits[e.student_id][sem_key] += course_credits
+
+        MAX_CREDITS_PER_SEMESTER = 20
+        target_enrollments = 2000
+        enrollment_count = 0
+
+        # 각 학생에게 ICT 과목 배정 (학기당 20학점 제한)
+        for student_id in student_ids:
+            if enrollment_count >= target_enrollments:
+                break
+
+            if student_id not in student_semester_credits:
+                student_semester_credits[student_id] = {}
+
+            # 1학기와 2학기 모두 수강
+            for semester in [1, 2]:
+                if enrollment_count >= target_enrollments:
+                    break
+
+                year = 2025
+                sem_key = (year, semester)
+
+                # 현재 학기 학점 확인
+                current_credits = student_semester_credits[student_id].get(sem_key, 0)
+
+                # 해당 학기 과목들을 랜덤하게 섞음
+                available = ict_courses_by_sem[semester].copy()
+                random.shuffle(available)
+
+                # 이미 수강한 과목 제외를 위한 set
+                enrolled_course_ids = set()
+
+                for course_info in available:
+                    if enrollment_count >= target_enrollments:
+                        break
+
+                    course_id = course_info["id"]
+                    credits = course_info["credits"]
+
+                    # 이미 수강한 과목이면 스킵
+                    if course_id in enrolled_course_ids:
+                        continue
+
+                    # 20학점 초과하면 스킵
+                    if current_credits + credits > MAX_CREDITS_PER_SEMESTER:
+                        continue
+
+                    # 수강 등록
+                    grade, numeric_grade = generate_random_grade()
+                    enrollment = CourseEnrollment(
+                        student_id=student_id,
+                        course_id=course_id,
+                        year=year,
+                        semester=semester,
+                        completion_type=course_info["course_type"],
+                        is_retake=random.random() < 0.05,
+                        grade=grade,
+                        numeric_grade=numeric_grade,
+                    )
+                    ict_enrollments.append(enrollment)
+                    enrolled_course_ids.add(course_id)
+                    current_credits += credits
+                    enrollment_count += 1
+
+                # 학점 업데이트
+                student_semester_credits[student_id][sem_key] = current_credits
+
+        # 목표에 도달하지 못한 경우 추가 생성
+        attempts = 0
+        max_attempts = 10000
+        while enrollment_count < target_enrollments and attempts < max_attempts:
+            attempts += 1
+            student_id = random.choice(student_ids)
+            semester = random.choice([1, 2])
+            year = 2025
+
+            if student_id not in student_semester_credits:
+                student_semester_credits[student_id] = {}
+
+            sem_key = (year, semester)
+            current_credits = student_semester_credits[student_id].get(sem_key, 0)
+
+            # 이미 20학점 이상이면 스킵
+            if current_credits >= MAX_CREDITS_PER_SEMESTER:
+                continue
+
+            # 해당 학기 과목 중 랜덤 선택
+            available = [c for c in ict_courses_by_sem[semester]
+                        if current_credits + c["credits"] <= MAX_CREDITS_PER_SEMESTER]
+
+            if not available:
+                continue
+
+            course_info = random.choice(available)
+
+            grade, numeric_grade = generate_random_grade()
+            enrollment = CourseEnrollment(
+                student_id=student_id,
+                course_id=course_info["id"],
+                year=year,
+                semester=semester,
+                completion_type=course_info["course_type"],
+                is_retake=random.random() < 0.05,
+                grade=grade,
+                numeric_grade=numeric_grade,
+            )
+            ict_enrollments.append(enrollment)
+            student_semester_credits[student_id][sem_key] = current_credits + course_info["credits"]
+            enrollment_count += 1
+
+        print(f"Adding {len(ict_enrollments)} ICT enrollments to database...")
+        db.add_all(ict_enrollments)
+        db.commit()
+        print("ICT course enrollments created successfully!")
+
+        # Create Survey Rounds (3차까지)
         print("Creating survey rounds...")
         round1 = SurveyRound(
             id=1,
             round_number=1,
             title="2025학년도 1차 전공희망조사",
             status="CLOSED",
-            start_date=datetime(2025, 9, 1),
-            end_date=datetime(2025, 9, 30),
+            start_date=datetime(2025, 3, 1),
+            end_date=datetime(2025, 3, 31),
         )
         round2 = SurveyRound(
             id=2,
             round_number=2,
-            title="2026학년도 2차 전공희망조사",
+            title="2025학년도 2차 전공희망조사",
+            status="CLOSED",
+            start_date=datetime(2025, 9, 1),
+            end_date=datetime(2025, 9, 30),
+        )
+        round3 = SurveyRound(
+            id=3,
+            round_number=3,
+            title="2026학년도 3차 전공희망조사",
             status="OPEN",
             start_date=datetime(2026, 1, 15),
             end_date=datetime(2026, 2, 15),
         )
 
-        db.add_all([round1, round2])
+        db.add_all([round1, round2, round3])
+        db.commit()
+
+        # Create Decision Statuses
+        print("Creating decision statuses...")
+        decision_statuses = [
+            DecisionStatus(id=1, status_name="최종결정"),
+            DecisionStatus(id=2, status_name="고민중"),
+            DecisionStatus(id=3, status_name="조사중"),
+            DecisionStatus(id=4, status_name="미정"),
+        ]
+        db.add_all(decision_statuses)
         db.commit()
 
         # Create Major Surveys
         print("Creating major surveys...")
         surveys = []
 
-        # 전공별 희망 학생 수 (더 다양하고 현실적으로)
-        # 인기학과: 컴공, 경영, 전자공학, AI
-        # 중간: 기계, ICT, 건축 등
-        # 비인기: 배터리, 디자인 등
-        dept_preferences = [
-            # (학과ID, 1차조사 희망자수, 2차조사 희망자수)
-            (300, 35, 28),  # 컴퓨터학부 - 매우 인기
-            (500, 28, 25),  # 경영학부 - 인기
-            (205, 22, 18),  # 전자공학부 - 인기
-            (306, 18, 15),  # 인공지능학과 - 인기
-            (206, 15, 12),  # 기계공학과
-            (307, 14, 11),  # 수리데이터사이언스학과
-            (600, 12, 10),  # 광고홍보학과
-            (207, 10, 9),  # 배터리소재화학공학과
-            (601, 9, 8),  # 미디어학과
-            (303, 8, 7),  # ICT융합학부
-            (200, 7, 6),  # 건축학부
-            (700, 7, 6),  # 글로벌문화통상학부
-            (208, 6, 5),  # 산업경영공학과
-            (501, 6, 5),  # 경제학부
-            (203, 5, 4),  # 건설환경공학과
-            (204, 5, 5),  # 교통물류공학과
-            (502, 5, 4),  # 보험계리학과
-            (602, 4, 4),  # 문화콘텐츠학과
-            (209, 4, 3),  # 로봇공학과
-            (603, 4, 3),  # 문화인류학과
-            (210, 3, 3),  # 에너지바이오학과
-            (211, 3, 3),  # 해양융합공학과
-            (400, 3, 2),  # 차세대반도체융합공학부
-            (801, 3, 3),  # 융합디자인학부
-            (802, 2, 2),  # 주얼리패션디자인학과 (실제로는 800)
-            (403, 2, 2),  # 바이오신양융합학부
-            (406, 2, 1),  # 국방지능정보융합학부
+        # 희망 학과 목록 (인기도 순)
+        dept_list = [
+            300,  # 컴퓨터학부 - 매우 인기
+            500,  # 경영학부 - 인기
+            205,  # 전자공학부 - 인기
+            306,  # 인공지능학과 - 인기
+            206,  # 기계공학과
+            307,  # 수리데이터사이언스학과
+            600,  # 광고홍보학과
+            207,  # 배터리소재화학공학과
+            601,  # 미디어학과
+            303,  # ICT융합학부
+            200,  # 건축학부
+            700,  # 글로벌문화통상학부
+            208,  # 산업경영공학과
+            501,  # 경제학부
+            203,  # 건설환경공학과
+            204,  # 교통물류공학과
+            502,  # 보험계리학과
+            602,  # 문화콘텐츠학과
+            209,  # 로봇공학과
+            603,  # 문화인류학과
+            210,  # 에너지바이오학과
+            211,  # 해양융합공학과
+            400,  # 차세대반도체융합공학부
+            801,  # 융합디자인학부
+            802,  # 주얼리패션디자인학과
+            403,  # 바이오신약융합학부
+            406,  # 국방지능정보융합학부
         ]
 
-        # 1차 조사 생성 (총 200명 중 약 90% 참여)
-        student_index = 0
-        for dept_id, count_r1, _ in dept_preferences:
-            for _ in range(count_r1):
-                if student_index >= len(student_ids):
-                    break
-                student_id = student_ids[student_index]
+        # 1차 조사: 전체 학생 참여 (300명)
+        print("  Creating round 1 surveys...")
+        for student_id in student_ids:
+            first_choice = random.choice(dept_list[:15])  # 인기 학과 위주
+            second_choice = None
+            if random.random() < 0.7:
+                other_depts = [d for d in dept_list if d != first_choice]
+                second_choice = random.choice(other_depts)
 
-                # 2지망은 60% 확률로 작성
-                second_choice = None
-                if random.random() < 0.6:
-                    # 다른 학과를 2지망으로 랜덤 선택
-                    other_depts = [d[0] for d in dept_preferences if d[0] != dept_id]
-                    second_choice = random.choice(other_depts)
+            survey = MajorSurvey(
+                student_id=student_id,
+                round_id=1,
+                first_choice_dept_id=first_choice,
+                second_choice_dept_id=second_choice,
+                decision_status_id=random.choice([1, 2, 3, 4]),
+                decision_scale=random.randint(1, 5),
+                submitted_at=datetime(2025, 3, random.randint(1, 31)),
+            )
+            surveys.append(survey)
 
-                survey = MajorSurvey(
-                    student_id=student_id,
-                    round_id=1,
-                    first_choice_dept_id=dept_id,
-                    second_choice_dept_id=second_choice,
-                    decision_scale=random.randint(1, 5),  # 1~5점 랜덤
-                    submitted_at=datetime(2025, 9, random.randint(1, 30)),
-                )
-                surveys.append(survey)
-                student_index += 1
+        # 2차 조사: 전체 학생 참여 (300명)
+        print("  Creating round 2 surveys...")
+        for student_id in student_ids:
+            first_choice = random.choice(dept_list[:20])
+            second_choice = None
+            if random.random() < 0.6:
+                other_depts = [d for d in dept_list if d != first_choice]
+                second_choice = random.choice(other_depts)
 
-        # 2차 조사 생성 (1차 미참여자 + 마음이 바뀐 학생들)
-        student_index2 = 0
-        for dept_id, _, count_r2 in dept_preferences:
-            for _ in range(count_r2):
-                if student_index2 >= len(student_ids):
-                    break
-                student_id = student_ids[student_index2]
+            survey = MajorSurvey(
+                student_id=student_id,
+                round_id=2,
+                first_choice_dept_id=first_choice,
+                second_choice_dept_id=second_choice,
+                decision_status_id=random.choice([1, 2, 3, 4]),
+                decision_scale=random.randint(2, 5),
+                submitted_at=datetime(2025, 9, random.randint(1, 30)),
+            )
+            surveys.append(survey)
 
-                # 2지망은 50% 확률로 작성
-                second_choice = None
-                if random.random() < 0.5:
-                    other_depts = [d[0] for d in dept_preferences if d[0] != dept_id]
-                    second_choice = random.choice(other_depts)
+        # 3차 조사: 전체 학생 참여 (300명)
+        print("  Creating round 3 surveys...")
+        for student_id in student_ids:
+            first_choice = random.choice(dept_list)
+            second_choice = None
+            if random.random() < 0.5:
+                other_depts = [d for d in dept_list if d != first_choice]
+                second_choice = random.choice(other_depts)
 
-                survey = MajorSurvey(
-                    student_id=student_id,
-                    round_id=2,
-                    first_choice_dept_id=dept_id,
-                    second_choice_dept_id=second_choice,
-                    decision_scale=random.randint(2, 5),  # 2차는 2~5점 (조금 더 확신)
-                    submitted_at=(
-                        datetime(2026, 1, random.randint(15, 31))
-                        if random.randint(15, 31) <= 31
-                        else datetime(2026, 2, random.randint(1, 15))
-                    ),
-                )
-                surveys.append(survey)
-                student_index2 += 1
+            survey = MajorSurvey(
+                student_id=student_id,
+                round_id=3,
+                first_choice_dept_id=first_choice,
+                second_choice_dept_id=second_choice,
+                decision_status_id=random.choice([1, 2, 3, 4]),
+                decision_scale=random.randint(3, 5),
+                submitted_at=datetime(2026, 1, random.randint(15, 27)),
+            )
+            surveys.append(survey)
 
         db.add_all(surveys)
         db.commit()
 
-        print("✅ Database seeded successfully!")
+        # Create Sample Department Entry Requirements (샘플 데이터)
+        print("Creating sample department entry requirements...")
+        sample_requirements = []
+        
+        # 컴퓨터학부 (300) 진입요건 - 2025학번용
+        # 그룹1: 전공기초 과목 중 2과목 이상 B 이상
+        req1 = DepartmentEntryRequirement(
+            department_id=300,
+            admission_year=2025,
+            requirement_group=1,
+            target_grade_level=GradeLevelEnum.B,
+            required_count=2,
+            requirement_text="다음 전공기초 과목 중 2과목 이상을 B 이상으로 이수해야 합니다.",
+            is_alert_required=False
+        )
+        sample_requirements.append(req1)
+        
+        db.add_all(sample_requirements)
+        db.flush()  # ID 할당
+        
+        # 요건 과목 매핑 (컴퓨터학부 그룹1)
+        # 실제 존재하는 전공기초/전공핵심 과목 코드 사용
+        req_courses = []
+        cs_basic_courses = ["GEN2052", "GEN1030", "CUL7133"]  # 미분적분학1, 컴퓨터개론, 파이썬과인공지능
+        for code in cs_basic_courses:
+            req_courses.append(RequirementCourse(
+                requirement_id=req1.id,
+                course_code=code
+            ))
+        
+        db.add_all(req_courses)
+        db.commit()
+        print(f"Created {len(sample_requirements)} sample entry requirements")
+        print("Note: StudentRequirementStatus table is empty - will be populated by evaluation algorithm")
+
+        print("[SUCCESS] Database seeded successfully!")
         print(f"Created:")
         print(f"  - {len(students)} students")
-        print(f"  - {len(courses)} courses")
-        print(f"  - {len(enrollments)} course enrollments")
+        print(f"  - {len(courses)} SW courses")
+        print(f"  - {len(ict_courses)} ICT courses")
+        print(f"  - {len(enrollments)} SW course enrollments")
+        print(f"  - {len(ict_enrollments)} ICT course enrollments")
         print(f"  - {len(surveys)} survey submissions")
+        print(f"  - Total courses: {len(courses) + len(ict_courses)}")
+        print(f"  - Total enrollments: {len(enrollments) + len(ict_enrollments)}")
 
     except Exception as e:
-        print(f"❌ Error seeding database: {e}")
+        print(f"[ERROR] Error seeding database: {e}")
         db.rollback()
         raise
     finally:

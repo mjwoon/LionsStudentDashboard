@@ -69,6 +69,8 @@ export default function StudentDetailView() {
   const [curriculum, setCurriculum] = useState<any>(null);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
   const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [loadingEvaluation, setLoadingEvaluation] = useState(false);
 
   // Fetch students list
   useEffect(() => {
@@ -142,14 +144,17 @@ export default function StudentDetailView() {
     }
   }, [selectedStudent, showDetail]);
 
-  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부)
+  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, ICT융합학부)
   useEffect(() => {
-    if (pathwayDept === 301 && selectedCollege === 3) {
+    // 소프트웨어융합대학(college_id=3)의 컴퓨터학부(300) 또는 ICT융합학부(303)
+    if (selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303)) {
       const fetchCurriculum = async () => {
         try {
           setLoadingCurriculum(true);
-          const response = await fetch('http://localhost:8080/api/courses/curriculum');
+          console.log('Fetching curriculum for department_id:', pathwayDept);
+          const response = await fetch(`http://localhost:8080/api/courses/curriculum?department_id=${pathwayDept}`);
           const data = await response.json();
+          console.log('Curriculum data received:', data);
           setCurriculum(data);
         } catch (error) {
           console.error('Failed to fetch curriculum:', error);
@@ -162,6 +167,29 @@ export default function StudentDetailView() {
       setCurriculum(null);
     }
   }, [pathwayDept, selectedCollege]);
+
+  // Fetch evaluation when pathwayDept or studentDetail changes
+  useEffect(() => {
+    if (!pathwayDept || !studentDetail?.student_id) {
+      setEvaluation(null);
+      return;
+    }
+
+    const fetchEvaluation = async () => {
+      try {
+        setLoadingEvaluation(true);
+        const result = await api.evaluation.getStudentEvaluation(studentDetail.student_id, pathwayDept);
+        setEvaluation(result);
+      } catch (error) {
+        console.error('Failed to fetch evaluation:', error);
+        setEvaluation(null);
+      } finally {
+        setLoadingEvaluation(false);
+      }
+    };
+
+    fetchEvaluation();
+  }, [pathwayDept, studentDetail]);
 
   const student = studentDetail;
 
@@ -575,20 +603,28 @@ export default function StudentDetailView() {
                   </div>
 
                   {/* 전체 적합도 */}
-                  <div className="flex-1 p-4 rounded-lg border bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300">
-                    <div className="text-sm font-medium text-gray-900 mb-1">전체 적합도</div>
-                    <div className="text-2xl font-bold text-gray-700 mb-1">
-                      {Math.round(pathwayAnalysis.overallRate)}%
-                    </div>
-                    <div className="text-xs text-gray-600 mb-2">
-                      종합 진입 준비도
-                    </div>
-                    <div className="w-full rounded-full h-2 bg-gray-200">
-                      <div
-                        className="h-2 rounded-full bg-gray-600"
-                        style={{ width: `${pathwayAnalysis.overallRate}%` }}
-                      />
-                    </div>
+                  <div className="flex-1 p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-purple-100 border-purple-300">
+                    <div className="text-sm font-medium text-purple-900 mb-1">전체 적합도</div>
+                    {loadingEvaluation ? (
+                      <div className="text-sm text-purple-600">계산 중...</div>
+                    ) : evaluation ? (
+                      <>
+                        <div className="text-2xl font-bold text-purple-700 mb-1">
+                          {Math.round(evaluation.overall_score)}점
+                        </div>
+                        <div className="text-xs text-purple-600 mb-2">
+                          등급: {evaluation.grade} | {evaluation.summary_message.split(' ')[0]}
+                        </div>
+                        <div className="w-full rounded-full h-2 bg-purple-200">
+                          <div
+                            className="h-2 rounded-full bg-purple-600"
+                            style={{ width: `${evaluation.overall_score}%` }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-gray-500">평가 데이터 없음</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -620,8 +656,8 @@ export default function StudentDetailView() {
             </div>
           )}
 
-          {/* 소프트웨어융합대학 > 컴퓨터학부 선택 시 전체 교육과정 및 이수 현황 표시 */}
-          {pathwayDept && selectedCollege === 3 && pathwayDept === 301 && (
+          {/* 소프트웨어융합대학 > 컴퓨터학부 또는 ICT융합학부 선택 시 전체 교육과정 및 이수 현황 표시 */}
+          {pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303) && (
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg px-6 py-4">
                 <h2 className="text-xl font-bold text-white">전체 교육과정 및 이수 현황</h2>

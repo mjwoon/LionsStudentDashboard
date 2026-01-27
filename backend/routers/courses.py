@@ -18,7 +18,6 @@ def get_courses(
     per_page: int = Query(20, ge=1, le=100),
     course_type: Optional[str] = None,
     department_id: Optional[int] = None,
-    is_entry_requirement: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
     """전체 과목 목록 조회 (유형별 필터)"""
@@ -33,8 +32,6 @@ def get_courses(
         query = query.filter(Course.course_type == course_type)
     if department_id:
         query = query.filter(Course.department_id == department_id)
-    if is_entry_requirement is not None:
-        query = query.filter(Course.is_entry_requirement == is_entry_requirement)
     
     # Get total count
     total_count = query.count()
@@ -57,8 +54,6 @@ def get_courses(
                 name=course.department.name
             ),
             flags=CourseFlags(
-                is_entry_requirement=course.is_entry_requirement,
-                is_recommended=course.is_recommended,
                 is_retake_only=course.is_retake_only
             ),
             description=course.description
@@ -74,12 +69,36 @@ def get_courses(
 
 
 @router.get("/courses/entry-requirements", response_model=EntryRequirementsResponse)
-def get_entry_requirements(db: Session = Depends(get_db)):
-    """전공 진입 필수 과목 목록 조회"""
+def get_entry_requirements(
+    department_id: Optional[int] = None,
+    admission_year: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """전공 진입 요건 조회 (새로운 구조)"""
+    from models.database import DepartmentEntryRequirement, RequirementCourse
     
+    # 진입요건 조회
+    query = db.query(DepartmentEntryRequirement).options(
+        joinedload(DepartmentEntryRequirement.requirement_courses)
+    )
+    
+    if department_id:
+        query = query.filter(DepartmentEntryRequirement.department_id == department_id)
+    if admission_year:
+        query = query.filter(DepartmentEntryRequirement.admission_year == admission_year)
+    
+    requirements = query.all()
+    
+    # 요건에 포함된 모든 과목 수집
+    all_course_codes = set()
+    for req in requirements:
+        for req_course in req.requirement_courses:
+            all_course_codes.add(req_course.course_code)
+    
+    # 과목 정보 조회
     courses = db.query(Course).options(
         joinedload(Course.department)
-    ).filter(Course.is_entry_requirement == True).all()
+    ).filter(Course.course_code.in_(all_course_codes)).all()
     
     courses_list = []
     for course in courses:
@@ -91,7 +110,7 @@ def get_entry_requirements(db: Session = Depends(get_db)):
             course_type=course.course_type,
             department_id=course.department.id,
             department_name=course.department.name,
-            is_recommended=course.is_recommended
+            is_recommended=False  # 이제 별도 테이블에서 관리
         )
         courses_list.append(course_data)
     
@@ -167,8 +186,6 @@ def get_department_courses(
                 name=course.department.name
             ),
             flags=CourseFlags(
-                is_entry_requirement=course.is_entry_requirement,
-                is_recommended=course.is_recommended,
                 is_retake_only=course.is_retake_only
             ),
             description=course.description
@@ -213,7 +230,11 @@ def get_full_curriculum(
     
     # Filter by department if provided
     if department_id:
-        query = query.filter(Course.department_id == department_id)
+        # 해당 학과 과목 + 교양 과목 모두 포함
+        query = query.filter(
+            (Course.department_id == department_id) | 
+            (Course.course_type.in_(["교양필수", "교양선택"]))
+        )
     
     courses = query.all()
     
@@ -237,8 +258,8 @@ def get_full_curriculum(
             "course_name": course.course_name,
             "credits": course.credits,
             "course_type": course.course_type,
-            "is_entry_requirement": course.is_entry_requirement,
-            "is_recommended": course.is_recommended,
+            "is_entry_requirement": False,  # 이제 별도 테이블로 관리
+            "is_recommended": False,  # 이제 별도 테이블로 관리
             "department_name": course.department.name if course.department else None
         })
     

@@ -91,8 +91,6 @@ class StudentCreateResponse(BaseModel):
 
 # Course Models
 class CourseFlags(BaseModel):
-    is_entry_requirement: bool
-    is_recommended: bool
     is_retake_only: bool
 
 
@@ -128,8 +126,9 @@ class CourseEnrollmentDetail(BaseModel):
     year: int
     semester: int
     completion_type: str
-    is_entry_requirement: bool
     is_retake: bool
+    grade: Optional[str] = None
+    numeric_grade: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -299,3 +298,146 @@ class SurveyRoundResponse(BaseModel):
     meta: SurveyRoundMeta
     round_info: RoundInfo
     submissions: List[SurveySubmissionItem]
+
+
+# Department Entry Requirements Models
+class RequirementCourseDetail(BaseModel):
+    course_code: str
+    course_name: str
+    credits: int
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentEntryRequirementDetail(BaseModel):
+    id: int
+    department_id: int
+    department_name: str
+    admission_year: int
+    requirement_group: int
+    target_grade_level: str
+    required_count: int
+    requirement_text: str
+    is_alert_required: bool
+    courses: List[RequirementCourseDetail]
+
+    class Config:
+        from_attributes = True
+
+
+# Student Requirement Status Models
+class StudentRequirementStatusDetail(BaseModel):
+    id: int
+    student_id: str
+    department_id: int
+    department_name: str
+    is_satisfied: bool
+    analysis_json: Optional[dict] = None
+    ai_summary: Optional[str] = None
+    calculated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StudentRequirementStatusResponse(BaseModel):
+    student_id: str
+    first_choice_dept_id: Optional[int] = None
+    evaluations: List[StudentRequirementStatusDetail]
+
+
+class MajorEvaluationSummary(BaseModel):
+    """전공 평가 요약"""
+    required_courses_total: int
+    required_courses_completed: int
+    required_courses_percentage: float
+    missing_courses: List[dict]
+
+
+class StudentMajorEvaluationResponse(BaseModel):
+    """학생 전공 평가 응답"""
+    student_id: str
+    department_id: int
+    department_name: str
+    evaluation: MajorEvaluationSummary
+    entry_requirements: Optional[str] = None
+
+
+# Evaluation Service Schemas
+class RequiredCoursesResult(BaseModel):
+    """필수 과목 평가 결과"""
+    score: float
+    total_requirements: int
+    satisfied_requirements: int
+    details: List[dict]
+    pass_: bool = None
+    message: str
+
+    class Config:
+        populate_by_name = True
+        fields = {'pass_': 'pass'}
+
+
+class RecommendedCoursesResult(BaseModel):
+    """권장 과목 평가 결과"""
+    score: float
+    total_courses: int
+    completed_courses: int
+    total_credits: int
+    completed_credits: int
+    completion_rate: float
+    details: List[dict]
+    message: str
+
+
+class RelatedCreditsResult(BaseModel):
+    """관련 학점 평가 결과"""
+    score: float
+    total_available_credits: int
+    earned_credits: int
+    message: str
+    target_credits: Optional[float] = None
+
+
+class EvaluationResultResponse(BaseModel):
+    """전공진입 적합도 평가 결과"""
+    student_id: int
+    department_id: int
+    department_name: str
+    admission_year: int
+    required_courses: dict
+    recommended_courses: dict
+    related_credits: dict
+    overall_score: float
+    grade: str
+    summary_message: str
+    evaluated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BatchEvaluationRequest(BaseModel):
+    """배치 평가 요청"""
+    department_id: Optional[int] = None
+    admission_year: int = 2025
+    limit_students: Optional[int] = None
+
+
+class BatchEvaluationResponse(BaseModel):
+    """배치 평가 응답"""
+    department_id: int
+    department_name: str
+    total_students: int
+    saved_count: int
+    message: str
+
+
+class StudentEvaluationSummary(BaseModel):
+    """학생 평가 요약"""
+    student_id: str
+    student_name: str
+    total_evaluations: int
+    top_departments: List[dict]
+    message: Optional[str] = None
