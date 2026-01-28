@@ -1,0 +1,143 @@
+{
+  "colleges": [
+    {
+      "name": "공학대학",
+      "majors": [
+        {
+          "name": "전자공학과",
+          "necessary_courses": [
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "GEN0063",
+              "course_name": "일반물리학1",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "GEN2052",
+              "course_name": "미분적분학1",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "ELE3037",
+              "course_name": "확률과통계",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "GEN0064",
+              "course_name": "일반물리학2",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "GEN2053",
+              "course_name": "미분적분학2",
+              "course_type": "전공기초",
+              "credits": 3
+            }
+          ]
+        },
+        {
+          "name": "산업경영공학과",
+          "necessary_courses": [
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "GEN2052",
+              "course_name": "미분적분학1",
+              "course_type": "전공기초",
+              "credits": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "커뮤니케이션 & 컬쳐대학",
+      "majors": [
+        {
+          "name": "광고홍보학전공",
+          "necessary_courses": [
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "APR1004",
+              "course_name": "커뮤니케이션론",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "APR2013",
+              "course_name": "광고원론",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "APR2014",
+              "course_name": "홍보원론",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "APR1038",
+              "course_name": "크리에이티브디자인",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "APR1037",
+              "course_name": "전략적커뮤니케이션",
+              "course_type": "전공기초",
+              "credits": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "첨단융합대학",
+      "majors": [
+        {
+          "name": "분자의약전공",
+          "necessary_courses": [
+            {
+              "course_year": 1,
+              "semester": 1,
+              "course_code": "GEN0074",
+              "course_name": "일반생물학1",
+              "course_type": "전공기초",
+              "credits": 3
+            },
+            {
+              "course_year": 1,
+              "semester": 2,
+              "course_code": "GEN0075",
+              "course_name": "일반생물학2",
+              "course_type": "전공기초",
+              "credits": 3
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

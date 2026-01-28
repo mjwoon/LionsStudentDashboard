@@ -23,6 +23,7 @@ def get_students(
     pride: Optional[str] = None,
     class_number: Optional[int] = None,
     status: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """학생 목록 조회 (필터링 및 페이징 지원)"""
@@ -42,6 +43,14 @@ def get_students(
         query = query.filter(Student.class_number == class_number)
     if status:
         query = query.filter(Student.status == status)
+    if search:
+        # Search in student_id, name, email
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (Student.student_id.like(search_pattern)) |
+            (Student.name.like(search_pattern)) |
+            (Student.email.like(search_pattern))
+        )
     
     # Get total count
     total_count = query.count()
@@ -72,7 +81,7 @@ def get_students(
         
         # 이수현황 계산: 최신 희망학과의 1학년 과목 이수 현황
         completion_status = "0/0"
-        course_suitability = "0%"
+        course_suitability = None
         
         if first_choice_dept_id:
             # 희망학과의 1학년 과목 목록 조회
@@ -94,10 +103,19 @@ def get_students(
                 ).count()
                 
                 completion_status = f"{completed_first_year}/{total_first_year}"
-                
-                # 수강과목 적합성: 희망학과 1학년 과목 이수율
-                completion_rate = (completed_first_year / total_first_year) * 100 if total_first_year > 0 else 0
-                course_suitability = f"{completion_rate:.1f}%"
+            
+            # 수강과목 적합성: 전체 적합도 점수 (평가 시스템 사용)
+            from services.evaluation_service import EvaluationService
+            evaluator = EvaluationService(db)
+            try:
+                eval_result = evaluator.evaluate_student(
+                    student.id, first_choice_dept_id, save_to_db=False
+                )
+                # overall_score를 백분율 형식으로 반환
+                course_suitability = f"{eval_result['overall_score']:.0f}점"
+            except:
+                # 평가 실패 시 기본값
+                course_suitability = None
         
         student_data = StudentInList(
             student_id=student.student_id,

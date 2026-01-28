@@ -248,6 +248,25 @@ def get_full_curriculum(
     except FileNotFoundError:
         return {"curriculum": {}, "total_courses": 0}
     
+    # 권장 과목 데이터 로드
+    recommended_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "recommended.json")
+    recommended_courses = set()
+    try:
+        with open(recommended_path, "r", encoding="utf-8") as f:
+            recommended_data = json.load(f)
+            
+            # 해당 학과의 권장 과목 찾기
+            dept = db.query(Department).filter(Department.id == department_id).first()
+            if dept:
+                dept_name = dept.name
+                for college in recommended_data["colleges"]:
+                    for major in college["majors"]:
+                        if major["name"] in dept_name or dept_name in major["name"]:
+                            recommended_courses = set(major["recommended_courses"])
+                            break
+    except FileNotFoundError:
+        pass  # 권장 과목 파일이 없으면 무시
+    
     # 학년/학기별로 그룹화
     curriculum = {}
     total_courses = 0
@@ -268,6 +287,9 @@ def get_full_curriculum(
         db_course = db.query(Course).filter(Course.course_code == course_info["course_code"]).first()
         course_id = db_course.id if db_course else 0
         
+        # 권장 과목 체크
+        is_recommended = course_info["course_name"] in recommended_courses
+        
         curriculum[year_key][sem_key].append({
             "course_id": course_id,
             "course_code": course_info["course_code"],
@@ -275,7 +297,7 @@ def get_full_curriculum(
             "credits": course_info["credits"],
             "course_type": course_info["course_type"],
             "is_entry_requirement": False,
-            "is_recommended": False,
+            "is_recommended": is_recommended,
             "department_name": data.get("department", "")
         })
         total_courses += 1

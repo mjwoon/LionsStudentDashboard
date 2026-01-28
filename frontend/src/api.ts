@@ -16,8 +16,18 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     })
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      let errorMessage = `HTTP error! status: ${response.status}`
+      try {
+        const errorData = await response.json()
+        if (errorData.detail) {
+          errorMessage = typeof errorData.detail === 'string' 
+            ? errorData.detail 
+            : JSON.stringify(errorData.detail)
+        }
+      } catch (e) {
+        // JSON 파싱 실패 시 기본 메시지 사용
+      }
+      throw new Error(errorMessage)
     }
 
     return await response.json()
@@ -38,6 +48,7 @@ export const api = {
       pride?: string
       class_number?: number
       status?: string
+      search?: string
     }) => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -46,6 +57,7 @@ export const api = {
         ...(filters?.pride && { pride: filters.pride }),
         ...(filters?.class_number && { class_number: filters.class_number.toString() }),
         ...(filters?.status && { status: filters.status }),
+        ...(filters?.search && { search: filters.search }),
       })
       return fetchAPI<StudentsResponse>(`/api/students?${params}`)
     },
@@ -93,6 +105,14 @@ export const api = {
       return fetchAPI<EvaluationResult>(
         `/api/evaluation/student/${studentId}/department/${departmentId}${params.toString() ? '?' + params : ''}`
       )
+    },
+    
+    getStatistics: () => 
+      fetchAPI<EvaluationStatistics>('/api/evaluation/statistics'),
+    
+    getDepartmentRankings: (departmentId: number, limit = 10) => {
+      const params = new URLSearchParams({ limit: limit.toString() })
+      return fetchAPI<DepartmentRankings>(`/api/evaluation/department/${departmentId}/rankings?${params}`)
     },
   },
 
@@ -485,6 +505,34 @@ export interface EvaluationResult {
   grade: string
   summary_message: string
   evaluated_at: string
+}
+
+export interface EvaluationStatistics {
+  total_evaluated: number
+  average_score: number
+  max_score: number
+  min_score: number
+  grade_distribution: {
+    A: number
+    B: number
+    C: number
+    D: number
+    F: number
+  }
+  satisfaction_rate: number
+}
+
+export interface DepartmentRankings {
+  department_name: string
+  total_evaluated: number
+  rankings: {
+    rank: number
+    student_id: string
+    student_name: string
+    overall_score: number
+    is_satisfied: boolean
+    gpa: number
+  }[]
 }
 
 // Admin Types

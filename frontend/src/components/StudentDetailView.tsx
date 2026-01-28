@@ -77,22 +77,37 @@ export default function StudentDetailView() {
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [evaluation, setEvaluation] = useState<any>(null);
   const [loadingEvaluation, setLoadingEvaluation] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [perPage] = useState<number>(50);
 
   // Fetch students list
   useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        const response = await api.students.list(1, 100);
+        setError(null);
+        const response = await api.students.list(currentPage, perPage, {
+          search: searchQuery || undefined
+        });
         setStudents(response.students);
+        setTotalCount(response.count);
       } catch (error) {
         console.error('Failed to fetch students:', error);
+        setError(error instanceof Error ? error.message : '학생 목록을 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
       }
     };
     fetchStudents();
-  }, []);
+  }, [searchQuery, currentPage, perPage]);
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Fetch departments and colleges
   useEffect(() => {
@@ -184,7 +199,9 @@ export default function StudentDetailView() {
     const fetchEvaluation = async () => {
       try {
         setLoadingEvaluation(true);
+        console.log('Fetching evaluation for student:', studentDetail.student_id, 'department:', pathwayDept);
         const result = await api.evaluation.getStudentEvaluation(studentDetail.student_id, pathwayDept);
+        console.log('Evaluation result:', result);
         setEvaluation(result);
       } catch (error) {
         console.error('Failed to fetch evaluation:', error);
@@ -391,9 +408,48 @@ export default function StudentDetailView() {
 
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-bold text-gray-900">전체 학생 리스트</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900">전체 학생 리스트</h2>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="학번, 이름, 이메일로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    초기화
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              총 {students.length}명의 학생
+            </div>
           </div>
-          <div className="overflow-x-auto">
+          {loading && (
+            <div className="px-6 py-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-gray-600">학생 목록을 불러오는 중...</p>
+            </div>
+          )}
+          {error && (
+            <div className="px-6 py-4 bg-red-50 border-l-4 border-red-500">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+          {!loading && !error && students.length === 0 && (
+            <div className="px-6 py-12 text-center text-gray-500">
+              {searchQuery ? '검색 결과가 없습니다.' : '학생이 없습니다.'}
+            </div>
+          )}
+          {!loading && !error && students.length > 0 && (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -459,9 +515,9 @@ export default function StudentDetailView() {
                     <td className="px-6 py-6 whitespace-nowrap text-sm text-center">
                       {s.course_suitability ? (
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          parseFloat(s.course_suitability) >= 80 ? 'bg-green-100 text-green-800' :
-                          parseFloat(s.course_suitability) >= 60 ? 'bg-blue-100 text-blue-800' :
-                          parseFloat(s.course_suitability) >= 40 ? 'bg-yellow-100 text-yellow-800' :
+                          parseInt(s.course_suitability) >= 80 ? 'bg-green-100 text-green-800' :
+                          parseInt(s.course_suitability) >= 60 ? 'bg-blue-100 text-blue-800' :
+                          parseInt(s.course_suitability) >= 40 ? 'bg-yellow-100 text-yellow-800' :
                           'bg-red-100 text-red-800'
                         }`}>
                           {s.course_suitability}
@@ -474,7 +530,74 @@ export default function StudentDetailView() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && !error && totalCount > 0 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                전체 {totalCount}명 중 {((currentPage - 1) * perPage) + 1}-{Math.min(currentPage * perPage, totalCount)}명 표시
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  이전
+                </button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.ceil(totalCount / perPage) }, (_, i) => i + 1)
+                    .filter(page => {
+                      // Show first, last, current, and adjacent pages
+                      const totalPages = Math.ceil(totalCount / perPage);
+                      return (
+                        page === 1 ||
+                        page === totalPages ||
+                        Math.abs(page - currentPage) <= 1
+                      );
+                    })
+                    .map((page, idx, arr) => (
+                      <div key={page} className="flex items-center gap-1">
+                        {idx > 0 && arr[idx - 1] !== page - 1 && (
+                          <span className="px-2 text-gray-400">...</span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 text-sm rounded-md ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </div>
+                    ))
+                  }
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCount / perPage), prev + 1))}
+                  disabled={currentPage === Math.ceil(totalCount / perPage)}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    currentPage === Math.ceil(totalCount / perPage)
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -669,12 +792,12 @@ export default function StudentDetailView() {
                           {Math.round(evaluation.overall_score)}점
                         </div>
                         <div className="text-xs text-purple-600 mb-2">
-                          등급: {evaluation.grade} | {evaluation.summary_message.split(' ')[0]}
+                          등급: {evaluation.grade}
                         </div>
                         <div className="w-full rounded-full h-2 bg-purple-200">
                           <div
                             className="h-2 rounded-full bg-purple-600"
-                            style={{ width: `${evaluation.overall_score}%` }}
+                            style={{ width: `${Math.min(evaluation.overall_score, 100)}%` }}
                           />
                         </div>
                       </>
@@ -787,6 +910,10 @@ export default function StudentDetailView() {
                                                 <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
                                                   필수
                                                 </span>
+                                              ) : course.is_recommended ? (
+                                                <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded">
+                                                  수강 권장
+                                                </span>
                                               ) : (
                                                 <span className="text-gray-400">-</span>
                                               )}
@@ -804,11 +931,6 @@ export default function StudentDetailView() {
                                               {status.status === 'completed' && status.course && (
                                                 <span className="text-green-600">
                                                   {status.course.year}-{status.course.semester} 이수
-                                                </span>
-                                              )}
-                                              {course.is_recommended && (
-                                                <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded ml-1">
-                                                  추천
                                                 </span>
                                               )}
                                             </td>
@@ -844,7 +966,7 @@ export default function StudentDetailView() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-sm font-medium text-gray-600 mb-2">평균학점</h3>
               <div className="text-3xl font-bold text-gray-900">
-                {gpa !== null ? `${gpa}` : '-'}
+                {gpa !== null ? `${gpa}` : '-'} / 4.5
               </div>
               <p className="text-sm text-gray-500 mt-1">총 {courses.length}과목 이수</p>
             </div>

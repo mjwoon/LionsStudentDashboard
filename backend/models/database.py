@@ -65,6 +65,11 @@ class Student(Base):
     pride = Column(String(10))  # L, I, O, N, S, E
     class_number = Column(Integer)  # 분반
     status = Column(String(20), default="재학")  # 재학, 휴학, 졸업 등
+    
+    # GPA 캐시 (성능 최적화 - 매번 계산하지 않고 업데이트 시 갱신)
+    current_gpa = Column(Numeric(3, 2), nullable=True)  # 현재 평점 (4.5 만점)
+    total_credits = Column(Integer, default=0)  # 총 이수 학점
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -166,6 +171,11 @@ class DepartmentEntryRequirement(Base):
     requirement_text = Column(Text, nullable=False)  # 사용자 노출용 설명
     is_alert_required = Column(Boolean, default=False)  # 학생설계전공 등 알림창 여부
     
+    # OR 조건 처리를 위한 필드
+    # 같은 requirement_group 내에서 여러 조건이 있을 때 OR로 평가
+    # 예: "B 이상 2과목 OR A 이상 1과목" → 두 개의 레코드를 같은 그룹에 넣고 logic_operator="OR"
+    logic_operator = Column(String(10), default="AND")  # "AND" 또는 "OR"
+    
     department = relationship("Department")
     requirement_courses = relationship("RequirementCourse", back_populates="requirement", cascade="all, delete-orphan")
     
@@ -198,6 +208,14 @@ class StudentRequirementStatus(Base):
     # 진단 상세 데이터 (JSON)
     # 예: {"completed": 2, "required": 2, "details": [{"code": "MAT101", "grade": "A0"}]}
     analysis_json = Column(JSON, nullable=True)
+    
+    # 세부 평가 점수 (새로운 평가 체계)
+    gpa_score = Column(Numeric(5, 2), nullable=True)  # 전체 학점 점수 (0-100)
+    required_courses_score = Column(Numeric(5, 2), nullable=True)  # 필수과목 학점 점수 (0-100)
+    recommended_completion_score = Column(Numeric(5, 2), nullable=True)  # 권장과목 이수여부 점수 (0-100)
+    recommended_grade_score = Column(Numeric(5, 2), nullable=True)  # 권장과목 학점 점수 (0-100)
+    curriculum_completion_score = Column(Numeric(5, 2), nullable=True)  # 교육과정 완성도 점수 (0-100)
+    overall_score = Column(Numeric(5, 2), nullable=True)  # 종합 점수 (가중 평균, 0-100)
     
     ai_summary = Column(Text, nullable=True)  # LLM이 생성한 맞춤형 커멘트
     calculated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

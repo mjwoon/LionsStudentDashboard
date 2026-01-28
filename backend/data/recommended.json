@@ -1,0 +1,122 @@
+{
+  "colleges": [
+    {
+      "name": "공학대학",
+      "majors": [
+        {
+          "name": "건축학전공",
+          "recommended_courses": [
+            "건축학개론",
+            "건축표현기법1",
+            "건축기본설계1"
+          ]
+        },
+        {
+          "name": "건축공학전공",
+          "recommended_courses": [
+            "건축공학개론"
+          ]
+        },
+        {
+          "name": "건설환경공학과",
+          "recommended_courses": [
+            "건설환경공학입문설계",
+            "정역학"
+          ]
+        },
+        {
+          "name": "교통물류공학과",
+          "recommended_courses": [
+            "교통물류개론",
+            "스마트모빌리티입문설계"
+          ]
+        },
+        {
+          "name": "산업경영공학과",
+          "recommended_courses": [
+            "산업경영공학개론"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "소프트웨어융합대학",
+      "majors": [
+        {
+          "name": "컴퓨터학부",
+          "recommended_courses": [
+            "프로그래밍기초"
+          ]
+        },
+        {
+          "name": "인공지능학과",
+          "recommended_courses": [
+            "프로그래밍기초"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "첨단융합대학",
+      "majors": [
+        {
+          "name": "바이오나노공학전공",
+          "recommended_courses": [
+            "일반생물학1",
+            "일반생물학2",
+            "일반화학1",
+            "일반화학2"
+          ]
+        },
+        {
+          "name": "분자의약전공",
+          "recommended_courses": [
+            "일반생물학1",
+            "일반생물학2"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "커뮤니케이션 & 컬쳐대학",
+      "majors": [
+        {
+          "name": "문화콘텐츠학과",
+          "recommended_courses": [
+            "문화콘텐츠의기초",
+            "콘텐츠스토리텔링기초",
+            "문화콘텐츠마케팅"
+          ]
+        },
+        {
+          "name": "미디어학과",
+          "recommended_courses": [
+            "커뮤니케이션학의 이해",
+            "디지털미디어사회의 이해"
+          ]
+        },
+        {
+          "name": "광고홍보학과",
+          "recommended_courses": [
+            "커뮤니케이션론",
+            "광고원론",
+            "홍보원론"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "경상대학",
+      "majors": [
+        {
+          "name": "경영학부",
+          "recommended_courses": [
+            "경영학원론",
+            "경영통계분석1",
+            "회계정보의이해"
+          ]
+        }
+      ]
+    }
+  ]
+}
