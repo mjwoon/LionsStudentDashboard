@@ -46,6 +46,11 @@ DEPT_COMPUTER_SCIENCE = 300
 DEPT_DATA_INTELLIGENCE = 303
 DEPT_DESIGN_CONVERGENCE = 304
 DEPT_ARCHITECTURE = 200
+DEPT_ELECTRONICS = 204
+DEPT_INDUSTRIAL_ENG = 207
+DEPT_INDUSTRIAL_MGMT = 207
+DEPT_MOLECULAR_PHARM = 404
+DEPT_ADVERTISING_PR = 600
 
 # Academic Settings
 MAX_CREDITS_PER_SEMESTER = 20
@@ -712,12 +717,14 @@ def seed_database():
         db.commit()
 
         # ====================================================================
-        # ADDITIONAL COURSES (Data Intelligence, Design Convergence, Architecture)
+        # ADDITIONAL COURSES (Data Intelligence, Design Convergence, Architecture, Electronics)
         # ====================================================================
         print("Loading additional department courses...")
         data_intelli_data = load_json_data("dataIntelli.json")
         design_converge_data = load_json_data("designConverge.json")
         arch_data = load_json_data("arch.json")
+        elec_data = load_json_data("elec.json")
+        ime_data = load_json_data("ime.json")
         necessary_data = load_json_data("necessary.json")
         
         # Track existing course codes to avoid duplicates (e.g., shared general education courses)
@@ -779,6 +786,40 @@ def seed_database():
             })
             existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_ARCHITECTURE)
         
+        # Add Electronics courses (dept_id: 204)
+        for course_info in elec_data["curriculum"]:
+            code = course_info["course_code"]
+            if code in existing_course_codes:
+                continue
+                
+            additional_course_data.append({
+                "course_code": code,
+                "course_name": course_info["course_name"],
+                "course_type": course_info["course_type"],
+                "credits": course_info["credits"],
+                "course_year": course_info["course_year"],
+                "semester": course_info["semester"],
+                "department_id": DEPT_ELECTRONICS
+            })
+            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_ELECTRONICS)
+        
+        # Add Industrial Management Engineering courses (dept_id: 207)
+        for course_info in ime_data["curriculum"]:
+            code = course_info["course_code"]
+            if code in existing_course_codes:
+                continue
+                
+            additional_course_data.append({
+                "course_code": code,
+                "course_name": course_info["course_name"],
+                "course_type": course_info["course_type"],
+                "credits": course_info["credits"],
+                "course_year": course_info["course_year"],
+                "semester": course_info["semester"],
+                "department_id": DEPT_INDUSTRIAL_MGMT
+            })
+            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_INDUSTRIAL_MGMT)
+        
         # Add courses from necessary.json (entry requirement courses)
         # These courses may not have department_id, so we use a general department (100 = Lions College)
         for college in necessary_data.get("colleges", []):
@@ -821,6 +862,8 @@ def seed_database():
         print(f"  - Data Intelligence: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_DATA_INTELLIGENCE)}")
         print(f"  - Design Convergence: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_DESIGN_CONVERGENCE)}")
         print(f"  - Architecture: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_ARCHITECTURE)}")
+        print(f"  - Electronics: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_ELECTRONICS)}")
+        print(f"  - Industrial Management Engineering: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_INDUSTRIAL_MGMT)}")
         print(f"  - Entry Requirements (necessary.json): {sum(1 for c in additional_course_data if c['department_id'] == DEPT_LIONS_COLLEGE)}")
 
 
@@ -991,34 +1034,109 @@ def seed_database():
         print(f"Created {len(surveys)} survey responses")
 
         # ====================================================================
-        # DEPARTMENT ENTRY REQUIREMENTS
+        # DEPARTMENT ENTRY REQUIREMENTS (2026년도)
         # ====================================================================
-        print("Creating sample department entry requirements...")
+        print("Creating department entry requirements for 2026...")
         
-        # Computer Science Department (300) - 2025 admission year
-        # Group 1: At least 2 foundational courses with grade B or higher
-        req1 = DepartmentEntryRequirement(
-            department_id=DEPT_COMPUTER_SCIENCE,
-            admission_year=2025,
+        # 1. 전자공학부 (204) - OR 조건: 5개 과목 중 B 이상 2과목 OR A 이상 1과목
+        req_elec_or = DepartmentEntryRequirement(
+            department_id=DEPT_ELECTRONICS,
+            admission_year=2026,
             requirement_group=1,
+            target_grade_level=GradeLevelEnum.A,  # OR 조건의 첫 번째 (A 이상 1과목)
+            required_count=1,
+            logic_operator="OR",
+            requirement_text="아래 5개 과목 중 성적 B(3.0) 이상 2과목 또는 A(4.0) 이상 1과목 필수",
+            is_alert_required=True
+        )
+        db.add(req_elec_or)
+        db.flush()
+        
+        # OR 조건 - Group 2: B 이상 2과목
+        req_elec_and = DepartmentEntryRequirement(
+            department_id=DEPT_ELECTRONICS,
+            admission_year=2026,
+            requirement_group=2,
             target_grade_level=GradeLevelEnum.B,
             required_count=2,
-            requirement_text="다음 전공기초 과목 중 2과목 이상을 B 이상으로 이수해야 합니다.",
-            is_alert_required=False
+            logic_operator="AND",
+            requirement_text="아래 5개 과목 중 성적 B(3.0) 이상 2과목 필수",
+            is_alert_required=True
         )
-        db.add(req1)
-        db.flush()  # Get ID assignment
+        db.add(req_elec_and)
+        db.flush()
         
-        # Map required courses to this requirement
-        cs_basic_courses = ["GEN2052", "GEN1030", "CUL7133"]  # Calculus, Intro to CS, Python & AI
-        req_courses = [
-            RequirementCourse(requirement_id=req1.id, course_code=code)
-            for code in cs_basic_courses
-        ]
-        db.add_all(req_courses)
+        elec_courses = ["ELE3037", "GEN2052", "GEN0063", "GEN2053", "GEN0064"]  # 확률과통계, 미분적분학1, 일반물리학1, 미분적분학2, 일반물리학2
+        for course_code in elec_courses:
+            db.add(RequirementCourse(requirement_id=req_elec_or.id, course_code=course_code))
+            db.add(RequirementCourse(requirement_id=req_elec_and.id, course_code=course_code))
+        
+        print(f"  ✓ 전자공학부: OR 조건 (A 1과목 OR B 2과목)")
+        
+        # 2. 산업경영공학과 (207) - C 이상 1과목
+        req_ie = DepartmentEntryRequirement(
+            department_id=DEPT_INDUSTRIAL_ENG,
+            admission_year=2026,
+            requirement_group=1,
+            target_grade_level=GradeLevelEnum.C,
+            required_count=1,
+            logic_operator="AND",
+            requirement_text="미분적분학1 C(2.0) 이상 필수",
+            is_alert_required=True
+        )
+        db.add(req_ie)
+        db.flush()
+        
+        db.add(RequirementCourse(requirement_id=req_ie.id, course_code="GEN2052"))  # 미분적분학1
+        print(f"  ✓ 산업경영공학과: C 이상 1과목")
+        
+        # 3. 분자의약전공 (404) - B 이상 1과목
+        req_pharm = DepartmentEntryRequirement(
+            department_id=DEPT_MOLECULAR_PHARM,
+            admission_year=2026,
+            requirement_group=1,
+            target_grade_level=GradeLevelEnum.B,
+            required_count=1,
+            logic_operator="AND",
+            requirement_text="아래 2개 과목 중 B(3.0) 이상 1과목 필수",
+            is_alert_required=True
+        )
+        db.add(req_pharm)
+        db.flush()
+        
+        pharm_courses = ["GEN0074", "GEN0075"]  # 일반생물학1, 일반생물학2
+        for course_code in pharm_courses:
+            db.add(RequirementCourse(requirement_id=req_pharm.id, course_code=course_code))
+        
+        print(f"  ✓ 분자의약전공: B 이상 1과목 (2개 중)")
+        
+        # 4. 광고홍보학과 (603) - B 이상 1과목
+        # Note: 광고홍보학과의 정확한 department_id는 college.json 확인 필요
+        # 여기서는 603으로 가정 (커뮤니케이션&컬쳐대학)
+        try:
+            req_adpr = DepartmentEntryRequirement(
+                department_id=DEPT_ADVERTISING_PR,
+                admission_year=2026,
+                requirement_group=1,
+                target_grade_level=GradeLevelEnum.B,
+                required_count=1,
+                logic_operator="AND",
+                requirement_text="아래 5개 과목 중 B(3.0) 이상 1과목 필수",
+                is_alert_required=True
+            )
+            db.add(req_adpr)
+            db.flush()
+            
+            adpr_courses = ["APR1004", "APR2013", "APR2014", "APR1038", "APR1037"]  # 커뮤니케이션론, 광고원론, 홍보원론, 크리에이티브디자인, 전략적커뮤니케이션
+            for course_code in adpr_courses:
+                db.add(RequirementCourse(requirement_id=req_adpr.id, course_code=course_code))
+            
+            print(f"  ✓ 광고홍보학과: B 이상 1과목 (5개 중)")
+        except Exception as e:
+            print(f"  ⚠ 광고홍보학과 진입요건 생성 실패: {e}")
+        
         db.commit()
-        
-        print(f"Created entry requirements for Computer Science department")
+        print(f"Created entry requirements for 4 departments (2026 admission year)")
         print("Note: StudentRequirementStatus will be populated by evaluation algorithm")
 
         # ====================================================================

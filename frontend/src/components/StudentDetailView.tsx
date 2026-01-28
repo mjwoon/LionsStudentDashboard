@@ -165,10 +165,11 @@ export default function StudentDetailView() {
     }
   }, [selectedStudent, showDetail]);
 
-  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스)
+  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스, 공학대학 > 건축학전공, 전자공학부, 산업경영공학과)
   useEffect(() => {
     // 소프트웨어융합대학(college_id=3)의 컴퓨터학부(300), 데이터인텔리전스(303), 디자인컨버전스(304)
-    if ((selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (selectedCollege === 2 && pathwayDept === 200)) {
+    // 공학대학(college_id=2)의 건축학전공(200), 전자공학부(204), 산업경영공학과(207)
+    if ((selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (selectedCollege === 2 && (pathwayDept === 200 || pathwayDept === 204 || pathwayDept === 207))) {
       const fetchCurriculum = async () => {
         try {
           setLoadingCurriculum(true);
@@ -835,8 +836,9 @@ export default function StudentDetailView() {
             </div>
           )}
 
-          {/* 소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스 선택 시 전체 교육과정 및 이수 현황 표시 */}
-          {((pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (pathwayDept && selectedCollege === 2 && (pathwayDept === 200))) && (
+          {/* 소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스, 공학대학 > 건축학전공, 전자공학부, 산업경영공학과 선택 시 전체 교육과정 및 이수 현황 표시 */}
+          {((pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) 
+          || (pathwayDept && selectedCollege === 2 && (pathwayDept === 200 || pathwayDept === 204 || pathwayDept === 207))) && (
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg px-6 py-4">
                 <h2 className="text-xl font-bold text-white">전체 교육과정 및 이수 현황</h2>
@@ -908,7 +910,7 @@ export default function StudentDetailView() {
                                             <td className="px-4 py-3 text-center align-middle w-24">
                                               {course.is_entry_requirement ? (
                                                 <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
-                                                  필수
+                                                  수강필수
                                                 </span>
                                               ) : course.is_recommended ? (
                                                 <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded">

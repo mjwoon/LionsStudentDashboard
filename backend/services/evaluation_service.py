@@ -78,7 +78,7 @@ class EvaluationService:
         self,
         student_id: int,
         department_id: int,
-        admission_year: int = 2025,
+        admission_year: int = 2026,
         save_to_db: bool = True
     ) -> Dict:
         """
@@ -478,7 +478,7 @@ class EvaluationService:
         self,
         student_ids: List[int],
         department_id: int,
-        admission_year: int = 2025
+        admission_year: int = 2026
     ) -> List[Dict]:
         """여러 학생을 한 번에 평가"""
         results = []

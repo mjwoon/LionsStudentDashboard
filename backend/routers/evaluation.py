@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 def evaluate_student_for_department(
     student_id: str,
     department_id: int,
-    admission_year: int = 2025,
+    admission_year: int = 2026,
     force_recalculate: bool = False,
     db: Session = Depends(get_db)
 ):
@@ -25,7 +25,7 @@ def evaluate_student_for_department(
     
     - **student_id**: 학생 학번
     - **department_id**: 평가할 학과 ID
-    - **admission_year**: 입학년도 (진입요건 기준, 기본값: 2025)
+    - **admission_year**: 입학년도 (진입요건 기준, 기본값: 2026)
     - **force_recalculate**: 강제 재계산 여부 (기본값: False, 캐시된 결과 사용)
     
     Returns:

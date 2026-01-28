@@ -233,7 +233,9 @@ def get_full_curriculum(
         300: "sw.json",
         303: "dataIntelli.json",
         304: "designConverge.json",
-        200: "arch.json"
+        200: "arch.json",
+        204: "elec.json",
+        207: "ime.json"
     }
     
     if department_id not in dept_json_map:
@@ -267,6 +269,21 @@ def get_full_curriculum(
     except FileNotFoundError:
         pass  # 권장 과목 파일이 없으면 무시
     
+    # 진입요건 과목 조회
+    from models.database import DepartmentEntryRequirement, RequirementCourse
+    
+    entry_requirement_courses = set()
+    requirements = db.query(DepartmentEntryRequirement).filter(
+        DepartmentEntryRequirement.department_id == department_id
+    ).all()
+    
+    for req in requirements:
+        req_courses = db.query(RequirementCourse).filter(
+            RequirementCourse.requirement_id == req.id
+        ).all()
+        for rc in req_courses:
+            entry_requirement_courses.add(rc.course_code)
+    
     # 학년/학기별로 그룹화
     curriculum = {}
     total_courses = 0
@@ -290,13 +307,16 @@ def get_full_curriculum(
         # 권장 과목 체크
         is_recommended = course_info["course_name"] in recommended_courses
         
+        # 진입요건 과목 체크
+        is_entry_requirement = course_info["course_code"] in entry_requirement_courses
+        
         curriculum[year_key][sem_key].append({
             "course_id": course_id,
             "course_code": course_info["course_code"],
             "course_name": course_info["course_name"],
             "credits": course_info["credits"],
             "course_type": course_info["course_type"],
-            "is_entry_requirement": False,
+            "is_entry_requirement": is_entry_requirement,
             "is_recommended": is_recommended,
             "department_name": data.get("department", "")
         })

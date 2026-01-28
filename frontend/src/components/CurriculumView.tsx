@@ -23,12 +23,14 @@ interface Department {
   name: string;
 }
 
-// 교육과정이 있는 4개 학과
+// 교육과정이 있는 6개 학과
 const AVAILABLE_DEPARTMENTS: Department[] = [
   { id: 300, name: '컴퓨터학부' },
   { id: 303, name: '데이터인텔리전스전공' },
   { id: 304, name: '디자인컨버전스전공' },
-  { id: 200, name: '건축학전공' }
+  { id: 200, name: '건축학전공' },
+  { id: 204, name: '전자공학부' },
+  { id: 207, name: '산업경영공학과' }
 ];
 
 export default function CurriculumView() {
