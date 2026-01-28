@@ -1,0 +1,477 @@
+{
+  "department": "데이터인텔리전스전공",
+  "curriculum": [
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7124",
+      "course_name": "AI리터러시",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7125",
+      "course_name": "ESG와SDGs이해",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "VCC1001",
+      "course_name": "IC-PBL과비전설계",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CSE1007",
+      "course_name": "논리학(컴퓨터전공)",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "GEN2052",
+      "course_name": "미분적분학1",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "GEN0063",
+      "course_name": "일반물리학1",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CSE1020",
+      "course_name": "창의융합설계",
+      "course_type": "전공핵심",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7133",
+      "course_name": "파이썬과인공지능",
+      "course_type": "교양필수",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CSE1017",
+      "course_name": "프로그래밍기초",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "MMT1002",
+      "course_name": "ICT융합을위한인공지능",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "ICT1001",
+      "course_name": "기초확률통계",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "MCD1001",
+      "course_name": "디자인테크놀로지융합의이해",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "MMT2012",
+      "course_name": "디지털미디어의디자인활용",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "CUL2100",
+      "course_name": "아카데믹글쓰기",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "CSE2010",
+      "course_name": "자료구조론",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "MMT4017",
+      "course_name": "퓨쳐미디어와아트",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "VCC2001",
+      "course_name": "IC-PBL과취창업을위한진로탐색",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "INE3093",
+      "course_name": "공학과심리",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "MAT2003",
+      "course_name": "선형대수",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "CSE2021",
+      "course_name": "오픈소스SW",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "MMT2003",
+      "course_name": "융복합미디어개론",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "MMT4020",
+      "course_name": "통계적데이터분석",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "CSE2022",
+      "course_name": "피지컬컴퓨팅",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "DEE4046",
+      "course_name": "학술영어",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "CUL7122",
+      "course_name": "AI+X공학융합프로젝트",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "MMT2011",
+      "course_name": "ICT창업캡스톤디자인",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "CSE3010",
+      "course_name": "데이터베이스",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "MMT2006",
+      "course_name": "스마트센서와액츄에이터",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "MMT2008",
+      "course_name": "애드테크개론",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "MCT2009",
+      "course_name": "의료인공지능",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "INE3042",
+      "course_name": "인간공학과실습",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ENE2008",
+      "course_name": "컴퓨터알고리즘",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "MMT3019",
+      "course_name": "HCI연구실심화실습1",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "MMT3021",
+      "course_name": "ICT창업캡스톤디자인2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "MMT3007",
+      "course_name": "기계학습",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "MMT3018",
+      "course_name": "소셜데이터분석",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "INE4048",
+      "course_name": "인간-컴퓨터시스템설계",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "I-D3100",
+      "course_name": "창의캡스톤디자인1",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "MMT4019",
+      "course_name": "컴퓨터구조와시스템프로그래밍",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MMT3020",
+      "course_name": "HCI연구실심화실습2",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "VCC3003",
+      "course_name": "IC-PBL과역량계발",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MMT3010",
+      "course_name": "데이터시각화",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MMT4018",
+      "course_name": "데이터통신과컴퓨터네트워크",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MCT3011",
+      "course_name": "사용자경험및사용성",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MCT3012",
+      "course_name": "실용머신러닝",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MMT3015",
+      "course_name": "웹로그분석과비즈니스",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "CSE3026",
+      "course_name": "웹애플리케이션개발",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "MCT3010",
+      "course_name": "의공학및뇌공학의이해",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "I-D3101",
+      "course_name": "창의캡스톤디자인2",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "MMT4014",
+      "course_name": "HCI연구실심화실습3",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "MMT4009",
+      "course_name": "ICT융합캡스톤디자인1",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "MCT3003",
+      "course_name": "웰니스디자인",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "MMT3016",
+      "course_name": "인터랙티브멀티미디어",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "VCC4002",
+      "course_name": "취업진로세미나",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "MMT4016",
+      "course_name": "코딩인터뷰",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "MMT4015",
+      "course_name": "HCI연구실심화실습4",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "MMT4010",
+      "course_name": "ICT융합캡스톤디자인2",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "MMT4008",
+      "course_name": "사물인터넷:연결성,시스템및응용",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "MMT3008",
+      "course_name": "융복합미디어소비자심리",
+      "course_type": "전공심화",
+      "credits": 3
+    }
+  ]
+}

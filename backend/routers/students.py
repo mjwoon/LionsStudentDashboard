@@ -53,6 +53,52 @@ def get_students(
     # Format response
     students_list = []
     for student in students:
+        # 최신 희망 학과 조회
+        latest_survey = db.query(MajorSurvey).filter(
+            MajorSurvey.student_id == student.id
+        ).order_by(MajorSurvey.round_id.desc()).first()
+        
+        latest_major_choice = None
+        decision_certainty = None
+        first_choice_dept_id = None
+        if latest_survey:
+            first_choice_dept = db.query(Department).filter(
+                Department.id == latest_survey.first_choice_dept_id
+            ).first()
+            if first_choice_dept:
+                latest_major_choice = first_choice_dept.name
+                first_choice_dept_id = first_choice_dept.id
+            decision_certainty = latest_survey.decision_scale
+        
+        # 이수현황 계산: 최신 희망학과의 1학년 과목 이수 현황
+        completion_status = "0/0"
+        course_suitability = "0%"
+        
+        if first_choice_dept_id:
+            # 희망학과의 1학년 과목 목록 조회
+            first_year_courses = db.query(Course).filter(
+                Course.department_id == first_choice_dept_id,
+                Course.course_year == 1
+            ).all()
+            
+            if first_year_courses:
+                total_first_year = len(first_year_courses)
+                first_year_course_ids = [c.id for c in first_year_courses]
+                
+                # 학생이 해당 학과 1학년 과목 중 이수한 과목 수
+                completed_first_year = db.query(CourseEnrollment).filter(
+                    CourseEnrollment.student_id == student.id,
+                    CourseEnrollment.course_id.in_(first_year_course_ids),
+                    CourseEnrollment.grade.isnot(None),
+                    CourseEnrollment.grade != 'F'
+                ).count()
+                
+                completion_status = f"{completed_first_year}/{total_first_year}"
+                
+                # 수강과목 적합성: 희망학과 1학년 과목 이수율
+                completion_rate = (completed_first_year / total_first_year) * 100 if total_first_year > 0 else 0
+                course_suitability = f"{completion_rate:.1f}%"
+        
         student_data = StudentInList(
             student_id=student.student_id,
             name=student.name,
@@ -68,7 +114,11 @@ def get_students(
                 advisor_name=student.advisor.name if student.advisor else None,
                 status=student.status,
                 updated_at=student.updated_at
-            )
+            ),
+            latest_major_choice=latest_major_choice,
+            decision_certainty=decision_certainty,
+            completion_status=completion_status,
+            course_suitability=course_suitability
         )
         students_list.append(student_data)
     

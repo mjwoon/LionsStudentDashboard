@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Users, BarChart3 } from 'lucide-react';
+import { Users, BarChart3, Settings } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import StudentDetailView from './components/StudentDetailView';
+import AdminView from './components/AdminView';
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'dashboard' | 'student'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'student' | 'admin'>('dashboard');
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -41,6 +42,17 @@ export default function App() {
               <Users className="h-5 w-5" />
               <span>학생 관리</span>
             </button>
+            <button
+              onClick={() => setActiveView('admin')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                activeView === 'admin'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Settings className="h-5 w-5" />
+              <span>관리자</span>
+            </button>
           </nav>
           </div>
         </div>
@@ -50,6 +62,7 @@ export default function App() {
       <main className="flex-1">
         {activeView === 'dashboard' && <DashboardView />}
         {activeView === 'student' && <StudentDetailView />}
+        {activeView === 'admin' && <AdminView />}
       </main>
     </div>
   );

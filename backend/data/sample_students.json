@@ -1,0 +1,22 @@
+[
+  {
+    "student_id": "2026999001",
+    "name": "테스트학생1",
+    "email": "test1@hanyang.ac.kr",
+    "phone": "010-0000-0001",
+    "department_code": "LION",
+    "pride": "L",
+    "class_number": 1,
+    "track": "자연계열"
+  },
+  {
+    "student_id": "2026999002",
+    "name": "테스트학생2",
+    "email": "test2@hanyang.ac.kr",
+    "phone": "010-0000-0002",
+    "department_code": "LION",
+    "pride": "I",
+    "class_number": 2,
+    "track": "인문사회계열"
+  }
+]

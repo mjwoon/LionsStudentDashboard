@@ -510,3 +510,18 @@ class MajorSuitabilityEvaluator:
         
         self.db.commit()
         return saved_count
+
+
+# Admin service를 위한 래퍼 클래스
+class EvaluationService:
+    """평가 서비스 - admin_service.py에서 사용하기 위한 정적 메서드 제공"""
+    
+    @staticmethod
+    def evaluate_major_suitability(db: Session, student_id: int, department_id: int, admission_year: int):
+        """학생의 특정 학과에 대한 전공 적합도 평가"""
+        evaluator = MajorSuitabilityEvaluator(db)
+        result = evaluator.evaluate_student_for_department(student_id, department_id, admission_year)
+        
+        # 딕셔너리를 객체처럼 접근할 수 있도록 SimpleNamespace로 변환
+        from types import SimpleNamespace
+        return SimpleNamespace(**result)

@@ -1,0 +1,23 @@
+[
+  {
+    "course_code": "TEST101",
+    "course_name": "테스트과목1",
+    "credits": 3,
+    "course_type": "전공필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false,
+    "description": "테스트용 과목입니다"
+  },
+  {
+    "course_code": "TEST102",
+    "course_name": "테스트과목2",
+    "credits": 3,
+    "course_type": "전공선택",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  }
+]

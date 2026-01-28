@@ -17,6 +17,10 @@ interface Student {
     advisor_name?: string;
     status: string;
   };
+  latest_major_choice?: string;  // 최신 희망 학과
+  decision_certainty?: number;  // 전공결정도 (1-5)
+  completion_status?: string;  // 이수현황 (예: "15/20")
+  course_suitability?: string;  // 수강과목 적합성
 }
 
 interface CourseEnrollment {
@@ -29,6 +33,8 @@ interface CourseEnrollment {
   completion_type: string;
   is_entry_requirement: boolean;
   is_retake: boolean;
+  grade?: string;  // 성적 (A+, A0, B+, etc.)
+  numeric_grade?: number;  // 숫자 학점 (4.5, 4.0, 3.5, etc.)
 }
 
 interface SurveyHistory {
@@ -144,10 +150,10 @@ export default function StudentDetailView() {
     }
   }, [selectedStudent, showDetail]);
 
-  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, ICT융합학부)
+  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스)
   useEffect(() => {
-    // 소프트웨어융합대학(college_id=3)의 컴퓨터학부(300) 또는 ICT융합학부(303)
-    if (selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303)) {
+    // 소프트웨어융합대학(college_id=3)의 컴퓨터학부(300), 데이터인텔리전스(303), 디자인컨버전스(304)
+    if ((selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (selectedCollege === 2 && pathwayDept === 200)) {
       const fetchCurriculum = async () => {
         try {
           setLoadingCurriculum(true);
@@ -195,18 +201,31 @@ export default function StudentDetailView() {
 
   // 학점 통계 (간단히 총 학점만 계산 - 실제 성적은 백엔드에서 관리)
   const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
+  
+  // 평균학점 계산 (학점 * 이수학점의 가중평균)
+  const calculateGPA = () => {
+    const coursesWithGrades = courses.filter(c => c.numeric_grade !== undefined && c.numeric_grade !== null);
+    if (coursesWithGrades.length === 0) return null;
+    
+    const totalGradePoints = coursesWithGrades.reduce((sum, c) => sum + (c.numeric_grade! * c.credits), 0);
+    const totalCreditsWithGrades = coursesWithGrades.reduce((sum, c) => sum + c.credits, 0);
+    
+    return totalCreditsWithGrades > 0 ? (totalGradePoints / totalCreditsWithGrades).toFixed(2) : null;
+  };
+  
+  const gpa = calculateGPA();
 
-  // 학기별 이수 학점 데이터
-  const semesterData = courses.reduce((acc, course) => {
-    const semesterKey = `${course.year}-${course.semester}`;
-    const existing = acc.find(s => s.semester === semesterKey);
-    if (existing) {
-      existing.credits += course.credits;
-    } else {
-      acc.push({ semester: semesterKey, credits: course.credits });
-    }
-    return acc;
-  }, [] as { semester: string; credits: number }[]);
+  // 학기별 이수 학점 데이터 (향후 사용 예정)
+  // const semesterData = courses.reduce((acc, course) => {
+  //   const semesterKey = `${course.year}-${course.semester}`;
+  //   const existing = acc.find(s => s.semester === semesterKey);
+  //   if (existing) {
+  //     existing.credits += course.credits;
+  //   } else {
+  //     acc.push({ semester: semesterKey, credits: course.credits });
+  //   }
+  //   return acc;
+  // }, [] as { semester: string; credits: number }[]);
 
   const downloadCSV = () => {
     const csv = [
@@ -315,7 +334,7 @@ export default function StudentDetailView() {
     }
   };
 
-  const getStatusText = (status: string, course: CourseEnrollment | null) => {
+  const getStatusText = (status: string) => {
     switch (status) {
       case 'completed':
         return <span className="text-green-600 font-medium">이수완료</span>;
@@ -410,10 +429,47 @@ export default function StudentDetailView() {
                       </span>
                     </td>
                     <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.academic_info.class_number}</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-500">-</td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
+                      {s.latest_major_choice || '-'}
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-center">
+                      {s.decision_certainty ? (
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          s.decision_certainty === 5 ? 'bg-green-100 text-green-800' :
+                          s.decision_certainty === 4 ? 'bg-blue-100 text-blue-800' :
+                          s.decision_certainty === 3 ? 'bg-gray-100 text-gray-800' :
+                          s.decision_certainty === 2 ? 'bg-orange-100 text-orange-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {
+                            s.decision_certainty === 5 ? '매우 확실' :
+                            s.decision_certainty === 4 ? '확실' :
+                            s.decision_certainty === 3 ? '보통' :
+                            s.decision_certainty === 2 ? '불확실' :
+                            '매우 불확실'
+                          }
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
+                      {s.completion_status || '-'}
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap text-sm text-center">
+                      {s.course_suitability ? (
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          parseFloat(s.course_suitability) >= 80 ? 'bg-green-100 text-green-800' :
+                          parseFloat(s.course_suitability) >= 60 ? 'bg-blue-100 text-blue-800' :
+                          parseFloat(s.course_suitability) >= 40 ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {s.course_suitability}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -656,8 +712,8 @@ export default function StudentDetailView() {
             </div>
           )}
 
-          {/* 소프트웨어융합대학 > 컴퓨터학부 또는 ICT융합학부 선택 시 전체 교육과정 및 이수 현황 표시 */}
-          {pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303) && (
+          {/* 소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스 선택 시 전체 교육과정 및 이수 현황 표시 */}
+          {((pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (pathwayDept && selectedCollege === 2 && (pathwayDept === 200))) && (
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg px-6 py-4">
                 <h2 className="text-xl font-bold text-white">전체 교육과정 및 이수 현황</h2>
@@ -680,7 +736,6 @@ export default function StudentDetailView() {
                       <div key={yearLabel} className="bg-white rounded-lg shadow-sm overflow-hidden">
                         <div className="bg-gradient-to-r from-gray-100 to-gray-200 px-6 py-4 border-b">
                           <h3 className="text-lg font-bold text-gray-900">{yearLabel} 교육과정</h3>
-                          <p className="text-sm text-gray-600 mt-1">컴퓨터학부 {yearLabel} 과정</p>
                         </div>
 
                         {/* 학기별로 표시 */}
@@ -739,7 +794,7 @@ export default function StudentDetailView() {
                                             <td className="px-4 py-3 text-center align-middle w-28">
                                               <div className="flex items-center justify-center gap-2">
                                                 {getStatusIcon(status.status)}
-                                                {getStatusText(status.status, status.course)}
+                                                {getStatusText(status.status)}
                                               </div>
                                             </td>
                                             <td className="px-4 py-3 text-center align-middle text-sm text-gray-500 w-40">
@@ -788,7 +843,9 @@ export default function StudentDetailView() {
 
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-sm font-medium text-gray-600 mb-2">평균학점</h3>
-              <div className="text-3xl font-bold text-gray-900">-</div>
+              <div className="text-3xl font-bold text-gray-900">
+                {gpa !== null ? `${gpa}` : '-'}
+              </div>
               <p className="text-sm text-gray-500 mt-1">총 {courses.length}과목 이수</p>
             </div>
 
@@ -857,8 +914,17 @@ export default function StudentDetailView() {
                       <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
                         {course.credits}
                       </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        -
+                      <td className="px-6 py-6 whitespace-nowrap text-sm font-semibold">
+                        {course.grade ? (
+                          <span className={`
+                            ${course.grade.startsWith('A') ? 'text-green-600' : 
+                              course.grade.startsWith('B') ? 'text-blue-600' : 
+                              course.grade.startsWith('C') ? 'text-yellow-600' : 
+                              'text-red-600'}
+                          `}>
+                            {course.grade}
+                          </span>
+                        ) : '-'}
                       </td>
                       <td className="px-6 py-6 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${

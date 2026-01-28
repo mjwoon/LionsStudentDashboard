@@ -21,85 +21,79 @@
       "college_id": 1,
       "min_credits": 130
     },
+    
     {
       "id": 200,
-      "code": "ARCH",
-      "name": "건축학부",
-      "college_id": 2,
-      "min_credits": 162
-    },
-    {
-      "id": 201,
       "code": "ARCH_ARC",
       "name": "건축학전공",
       "college_id": 2,
       "min_credits": 162
     },
     {
-      "id": 202,
+      "id": 201,
       "code": "ARCH_ENG",
       "name": "건축공학전공",
       "college_id": 2,
       "min_credits": 162
     },
     {
-      "id": 203,
+      "id": 202,
       "code": "CIVIL",
       "name": "건설환경공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 204,
+      "id": 203,
       "code": "TRANS",
       "name": "교통물류공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 205,
+      "id": 204,
       "code": "ELEC",
       "name": "전자공학부",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 206,
+      "id": 205,
       "code": "MECH",
       "name": "기계공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 207,
+      "id": 206,
       "code": "BATT",
       "name": "배터리소재화학공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 208,
+      "id": 207,
       "code": "IE",
       "name": "산업경영공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 209,
+      "id": 208,
       "code": "ROBOT",
       "name": "로봇공학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 210,
+      "id": 209,
       "code": "ENERGY",
       "name": "에너지바이오학과",
       "college_id": 2,
       "min_credits": 130
     },
     {
-      "id": 211,
+      "id": 210,
       "code": "OCEAN",
       "name": "해양융합공학과",
       "college_id": 2,
@@ -128,34 +122,27 @@
     },
     {
       "id": 303,
-      "code": "ICT",
-      "name": "ICT융합학부",
-      "college_id": 3,
-      "min_credits": 140
-    },
-    {
-      "id": 304,
       "code": "ICT_DATA",
       "name": "데이터인텔리전스전공",
       "college_id": 3,
       "min_credits": 140
     },
     {
-      "id": 305,
+      "id": 304,
       "code": "ICT_DESIGN",
       "name": "디자인컨버전스전공",
       "college_id": 3,
       "min_credits": 140
     },
     {
-      "id": 306,
+      "id": 305,
       "code": "AI",
       "name": "인공지능학과",
       "college_id": 3,
       "min_credits": 140
     },
     {
-      "id": 307,
+      "id": 306,
       "code": "MATH_DS",
       "name": "수리데이터사이언스학과",
       "college_id": 3,

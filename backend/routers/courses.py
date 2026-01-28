@@ -220,29 +220,41 @@ def get_department_curriculum(department_id: int, db: Session = Depends(get_db))
 
 @router.get("/courses/curriculum", response_model=dict)
 def get_full_curriculum(
-    department_id: Optional[int] = Query(None, description="학과 ID"),
+    department_id: Optional[int] = Query(300, description="학과 ID (기본값: 300 컴퓨터학부)"),
     db: Session = Depends(get_db)
 ):
-    """전체 교육과정 조회 (학년/학기별 구조화)"""
+    """전체 교육과정 조회 (학년/학기별 구조화) - JSON 파일 기반"""
     
-    # Base query
-    query = db.query(Course).options(joinedload(Course.department))
+    import json
+    import os
     
-    # Filter by department if provided
-    if department_id:
-        # 해당 학과 과목 + 교양 과목 모두 포함
-        query = query.filter(
-            (Course.department_id == department_id) | 
-            (Course.course_type.in_(["교양필수", "교양선택"]))
-        )
+    # 학과별 JSON 파일 매핑
+    dept_json_map = {
+        300: "sw.json",
+        303: "dataIntelli.json",
+        304: "designConverge.json",
+        200: "arch.json"
+    }
     
-    courses = query.all()
+    if department_id not in dept_json_map:
+        return {"curriculum": {}, "total_courses": 0}
+    
+    # JSON 파일 읽기
+    json_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", dept_json_map[department_id])
+    
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {"curriculum": {}, "total_courses": 0}
     
     # 학년/학기별로 그룹화
     curriculum = {}
-    for course in courses:
-        year = course.course_year or 0
-        semester = course.semester or 0
+    total_courses = 0
+    
+    for course_info in data["curriculum"]:
+        year = course_info.get("course_year", 0)
+        semester = course_info.get("semester", 0)
         
         year_key = f"{year}학년" if year > 0 else "기타"
         sem_key = f"{semester}학기" if semester > 0 else "학기미정"
@@ -252,18 +264,23 @@ def get_full_curriculum(
         if sem_key not in curriculum[year_key]:
             curriculum[year_key][sem_key] = []
         
+        # DB에서 course_id 조회 (없으면 0)
+        db_course = db.query(Course).filter(Course.course_code == course_info["course_code"]).first()
+        course_id = db_course.id if db_course else 0
+        
         curriculum[year_key][sem_key].append({
-            "course_id": course.id,
-            "course_code": course.course_code,
-            "course_name": course.course_name,
-            "credits": course.credits,
-            "course_type": course.course_type,
-            "is_entry_requirement": False,  # 이제 별도 테이블로 관리
-            "is_recommended": False,  # 이제 별도 테이블로 관리
-            "department_name": course.department.name if course.department else None
+            "course_id": course_id,
+            "course_code": course_info["course_code"],
+            "course_name": course_info["course_name"],
+            "credits": course_info["credits"],
+            "course_type": course_info["course_type"],
+            "is_entry_requirement": False,
+            "is_recommended": False,
+            "department_name": data.get("department", "")
         })
+        total_courses += 1
     
     return {
         "curriculum": curriculum,
-        "total_courses": len(courses)
+        "total_courses": total_courses
     }

@@ -1,0 +1,437 @@
+{
+  "department": "건축학",
+  "curriculum": [
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "ARE1055",
+      "course_name": "건축표현기법1",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "ARE1063",
+      "course_name": "건축학개론",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "ARE1064",
+      "course_name": "건축기본설계1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7124",
+      "course_name": "AI리터러시",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7125",
+      "course_name": "ESG와SDGs이해",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "CUL7133",
+      "course_name": "파이썬과인공지능",
+      "course_type": "교양필수",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 1,
+      "course_code": "VCC1001",
+      "course_name": "IC-PBL과비전설계",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "ARE1065",
+      "course_name": "건축기본설계2",
+      "course_type": "전공기초",
+      "credits": 6
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "ARE2076",
+      "course_name": "디지털모델링1",
+      "course_type": "전공기초",
+      "credits": 3
+    },
+    {
+      "course_year": 1,
+      "semester": 2,
+      "course_code": "CUL2100",
+      "course_name": "아카데믹글쓰기",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "ARD3001",
+      "course_name": "건축계획1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "ARE2001",
+      "course_name": "건축설계1",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "ARE2084",
+      "course_name": "건축환경및설비1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "ARE3074",
+      "course_name": "구조시스템1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "DEE4046",
+      "course_name": "학술영어",
+      "course_type": "교양필수",
+      "credits": 2
+    },
+    {
+      "course_year": 2,
+      "semester": 1,
+      "course_code": "VCC2001",
+      "course_name": "IC-PBL과취창업을위한진로탐색",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ARD3005",
+      "course_name": "서양건축사",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ARE2002",
+      "course_name": "건축설계2",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ARE2085",
+      "course_name": "건축환경및설비2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ARE2086",
+      "course_name": "건축과기술",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 2,
+      "semester": 2,
+      "course_code": "ARE3075",
+      "course_name": "구조시스템2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "ARD4056",
+      "course_name": "근대건축사",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "ARE2074",
+      "course_name": "디지털모델링2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "ARE3057",
+      "course_name": "건축설계3",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "ARE3092",
+      "course_name": "건축재료및구법1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 1,
+      "course_code": "ARE5037",
+      "course_name": "건축정보모델링1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "ARD4007",
+      "course_name": "동양건축사",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "ARE3058",
+      "course_name": "건축설계4",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "ARE3093",
+      "course_name": "도시계획1",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "ARE3094",
+      "course_name": "건축재료및구법2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "ARE3095",
+      "course_name": "조경계획",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 3,
+      "semester": 2,
+      "course_code": "VCC3003",
+      "course_name": "IC-PBL과역량계발",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "ARE4032",
+      "course_name": "건축과사회",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "ARE4033",
+      "course_name": "건축법규와제도",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "ARE4055",
+      "course_name": "건축설계5",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "ARE4207",
+      "course_name": "도시계획2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 1,
+      "course_code": "ARE6046",
+      "course_name": "건축학전공연구실심화실습1",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARD3002",
+      "course_name": "건축계획2",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARD4005",
+      "course_name": "한국건축사",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARE3020",
+      "course_name": "환경친화건축",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARE4034",
+      "course_name": "건물시스템",
+      "course_type": "전공핵심",
+      "credits": 3
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARE4056",
+      "course_name": "건축설계6",
+      "course_type": "전공핵심",
+      "credits": 6
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARE5047",
+      "course_name": "건축학캡스톤디자인1",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 4,
+      "semester": 2,
+      "course_code": "ARE6047",
+      "course_name": "건축학전공연구실심화실습2",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE3079",
+      "course_name": "건축시공및프로젝트관리",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE4078",
+      "course_name": "건축실무",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE4080",
+      "course_name": "건축설계7",
+      "course_type": "전공심화",
+      "credits": 6
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE5036",
+      "course_name": "현대건축이론",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE5048",
+      "course_name": "건축학캡스톤디자인2",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "ARE6048",
+      "course_name": "건축학전공연구실심화실습3",
+      "course_type": "전공심화",
+      "credits": 1
+    },
+    {
+      "course_year": 5,
+      "semester": 1,
+      "course_code": "VCC4002",
+      "course_name": "취업진로세미나",
+      "course_type": "교양필수",
+      "credits": 1
+    },
+    {
+      "course_year": 5,
+      "semester": 2,
+      "course_code": "ARE4081",
+      "course_name": "건축설계8",
+      "course_type": "전공심화",
+      "credits": 6
+    },
+    {
+      "course_year": 5,
+      "semester": 2,
+      "course_code": "ARE5049",
+      "course_name": "건축도시개발론",
+      "course_type": "전공심화",
+      "credits": 3
+    },
+    {
+      "course_year": 5,
+      "semester": 2,
+      "course_code": "ARE6049",
+      "course_name": "건축학전공연구실심화실습4",
+      "course_type": "전공심화",
+      "credits": 1
+    }
+  ]
+}

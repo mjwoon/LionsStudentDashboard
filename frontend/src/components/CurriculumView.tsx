@@ -18,29 +18,54 @@ interface Curriculum {
   };
 }
 
+interface Department {
+  id: number;
+  name: string;
+}
+
+// 교육과정이 있는 4개 학과
+const AVAILABLE_DEPARTMENTS: Department[] = [
+  { id: 300, name: '컴퓨터학부' },
+  { id: 303, name: '데이터인텔리전스전공' },
+  { id: 304, name: '디자인컨버전스전공' },
+  { id: 200, name: '건축학전공' }
+];
+
 export default function CurriculumView() {
   const [curriculum, setCurriculum] = useState<Curriculum>({});
   const [totalCourses, setTotalCourses] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<number>(300); // 기본값: 컴퓨터학부
 
   useEffect(() => {
     const fetchCurriculum = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:8080/api/courses/curriculum');
-        const data = await response.json();
+        console.log('Fetching curriculum for department:', selectedDepartment);
+        const response = await fetch(`http://localhost:8080/api/courses/curriculum?department_id=${selectedDepartment}`);
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
+        const text = await response.text();
+        console.log('Raw response (first 500 chars):', text.substring(0, 500));
+        
+        const data = JSON.parse(text);
+        console.log('Parsed data:', data);
+        console.log('Curriculum keys:', Object.keys(data.curriculum || {}));
+        
         setCurriculum(data.curriculum);
         setTotalCourses(data.total_courses);
       } catch (error) {
         console.error('Failed to fetch curriculum:', error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
       } finally {
         setLoading(false);
       }
     };
 
     fetchCurriculum();
-  }, []);
+  }, [selectedDepartment]);
 
   if (loading) {
     return (
@@ -73,6 +98,26 @@ export default function CurriculumView() {
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       
+      {/* 학과 선택 */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">분석할 학과 선택</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {AVAILABLE_DEPARTMENTS.map(dept => (
+            <button
+              key={dept.id}
+              onClick={() => setSelectedDepartment(dept.id)}
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                selectedDepartment === dept.id
+                  ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {dept.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 필터 */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
         <div className="flex items-center gap-4">

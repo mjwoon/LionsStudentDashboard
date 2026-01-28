@@ -17,13 +17,20 @@ backend/
 ├── main.py                 # FastAPI 애플리케이션 진입점
 ├── database.py             # 데이터베이스 연결 및 설정
 ├── seed_data.py           # 샘플 데이터 생성 스크립트
+├── admin_cli.py           # 관리자 CLI 도구
+├── ADMIN_GUIDE.md         # 관리자 가이드 문서
 ├── models/
 │   ├── database.py        # SQLAlchemy 모델 정의
 │   └── schemas.py         # Pydantic 스키마 정의
 ├── routers/
 │   ├── students.py        # 학생 관리 API 엔드포인트
 │   ├── courses.py         # 과목 및 교육과정 API 엔드포인트
-│   └── surveys.py         # 전공 희망 조사 API 엔드포인트
+│   ├── surveys.py         # 전공 희망 조사 API 엔드포인트
+│   ├── evaluation.py      # 전공 진입 적합도 평가 API
+│   └── admin.py           # 관리자 API 엔드포인트
+├── services/
+│   ├── evaluation_service.py  # 진단 로직
+│   └── admin_service.py       # 관리자 서비스 로직
 ├── pyproject.toml         # 프로젝트 의존성 정의
 └── uv.lock                # uv 의존성 잠금 파일
 ```
@@ -50,12 +57,12 @@ uv run python seed_data.py
 uv run fastapi dev main.py
 ```
 
-서버가 `http://localhost:8000`에서 실행됩니다.
+서버가 `http://localhost:8080`에서 실행됩니다.
 
 ### 4. API 문서 확인
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8080/docs
+- ReDoc: http://localhost:8080/redoc
 
 ## API 엔드포인트
 
@@ -80,6 +87,25 @@ uv run fastapi dev main.py
 - `GET /api/surveys/summary` - 전공 희망 통계 요약
 - `POST /api/surveys` - 전공 희망 설문 제출
 - `GET /api/major-surveys/rounds/{round_id}` - 회차별 조사 결과
+
+### 전공 진입 적합도 평가
+
+- `GET /api/evaluation/{student_id}/{department_id}` - 특정 학생의 특정 학과 진입 적합도 평가
+- `POST /api/evaluation/batch` - 대량 평가 실행 및 캐싱
+
+### 관리자 기능 ⭐ NEW
+
+- `POST /api/admin/upload/courses` - 과목 데이터 업로드
+- `POST /api/admin/upload/courses/file` - 과목 데이터 파일 업로드
+- `POST /api/admin/upload/students` - 학생 데이터 업로드
+- `POST /api/admin/upload/students/file` - 학생 데이터 파일 업로드
+- `POST /api/admin/upload/enrollments` - 수강 데이터 업로드
+- `POST /api/admin/upload/enrollments/file` - 수강 데이터 파일 업로드
+- `POST /api/admin/evaluate/bulk` - 대량 진단 실행 및 결과 캐싱
+- `GET /api/admin/evaluate/stats` - 캐시된 진단 결과 통계
+- `DELETE /api/admin/evaluate/cache` - 캐시된 진단 결과 삭제
+
+> **관리자 기능 상세 가이드**: [ADMIN_GUIDE.md](ADMIN_GUIDE.md)를 참고하세요.
 
 ## 환경 변수
 
@@ -160,6 +186,65 @@ uv add --dev package-name
 - 전공 희망 통계 요약 (전체 학생 수, 학과별 선호도, 참여율)
 - 전공 희망 설문 제출 (중복 제출 방지)
 - 회차별 조사 결과 조회 (페이징 지원)
+
+### ✅ 전공 진입 적합도 평가
+- 학생별 학과별 진입 적합도 평가 (필수과목, 권장과목, 관련학점)
+- 종합 점수 및 등급 산출
+- 대량 평가 및 결과 캐싱
+
+### ✅ 관리자 기능 ⭐ NEW
+- **데이터 업로드**: 과목, 학생, 수강 데이터 일괄 업로드/업데이트
+- **JSON 파일 업로드**: 파일을 통한 대량 데이터 업로드
+- **진단 결과 캐싱**: 모든 학생-학과 조합에 대한 진단 결과 사전 계산 및 저장
+- **캐시 관리**: 통계 조회 및 캐시 삭제 기능
+- **CLI 도구**: 명령줄에서 관리 작업 수행 가능
+
+## 관리자 기능 사용법
+
+### CLI 도구 사용
+
+```bash
+# 도움말 보기
+python admin_cli.py --help
+
+# 모든 데이터 일괄 업로드
+python admin_cli.py upload-all data/
+
+# 과목 데이터만 업로드
+python admin_cli.py upload-courses data/courses.json
+
+# 전체 진단 실행
+python admin_cli.py evaluate
+
+# 강제 재진단
+python admin_cli.py evaluate --force
+
+# 통계 조회
+python admin_cli.py stats
+
+# 캐시 삭제
+python admin_cli.py clear-cache
+```
+
+### 워크플로우 예시
+
+신학기 데이터 업데이트 시나리오:
+
+```bash
+# 1. 새로운 데이터 업로드
+python admin_cli.py upload-all data/2026_spring/
+
+# 2. 기존 캐시 삭제
+python admin_cli.py clear-cache
+
+# 3. 새로운 진단 실행
+python admin_cli.py evaluate --force
+
+# 4. 결과 확인
+python admin_cli.py stats
+```
+
+상세한 사용법은 [ADMIN_GUIDE.md](ADMIN_GUIDE.md)를 참고하세요.
 
 ## API 명세
 

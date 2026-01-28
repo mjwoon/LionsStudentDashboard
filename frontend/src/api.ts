@@ -1,5 +1,5 @@
 // API 기본 설정
-// Docker 환경에서는 호스트의 백엔드 포트(8080)를 직접 사용
+// 개발 환경에서는 백엔드 포트(8080)를 사용
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 // API 요청 헬퍼 함수
@@ -144,6 +144,80 @@ export const api = {
     stats: () => 
       fetchAPI<DashboardStatsResponse>('/api/dashboard/stats'),
   },
+
+  // 관리자 관련 API
+  admin: {
+    // 파일 업로드
+    uploadCoursesFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/courses/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadStudentsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/students/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadEnrollmentsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/enrollments/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    // 진단 관리
+    bulkEvaluate: (request: BulkEvaluationRequest) =>
+      fetchAPI<BulkEvaluationResponse>('/api/admin/evaluate/bulk', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    getEvaluationStats: () =>
+      fetchAPI<CachedEvaluationStats>('/api/admin/evaluate/stats'),
+
+    clearCache: (departmentId?: number) => {
+      const params = departmentId 
+        ? `?department_id=${departmentId}` 
+        : ''
+      return fetchAPI<ClearCacheResponse>(`/api/admin/evaluate/cache${params}`, {
+        method: 'DELETE',
+      })
+    },
+  },
 }
 
 // 타입 정의
@@ -169,6 +243,10 @@ export interface Student {
     advisor_name?: string
     status: string
   }
+  latest_major_choice?: string  // 최신 희망 학과
+  decision_certainty?: number  // 전공결정도 (1-5)
+  completion_status?: string  // 이수현황 (예: "15/20")
+  course_suitability?: string  // 수강과목 적합성
 }
 
 export interface StudentDetail extends Student {
@@ -407,4 +485,42 @@ export interface EvaluationResult {
   grade: string
   summary_message: string
   evaluated_at: string
+}
+
+// Admin Types
+export interface UploadResponse {
+  success: boolean
+  message: string
+  uploaded_count: number
+  updated_count: number
+  errors?: string[]
+}
+
+export interface BulkEvaluationRequest {
+  student_ids?: string[]
+  department_ids?: number[]
+  force_recalculate?: boolean
+}
+
+export interface BulkEvaluationResponse {
+  success: boolean
+  message: string
+  total_students: number
+  total_departments: number
+  total_evaluations: number
+  success_count: number
+  error_count: number
+  errors?: string[]
+}
+
+export interface CachedEvaluationStats {
+  total_cached: number
+  cached_by_department: { [key: string]: number }
+  last_update: string | null
+}
+
+export interface ClearCacheResponse {
+  success: boolean
+  message: string
+  deleted_count: number
 }

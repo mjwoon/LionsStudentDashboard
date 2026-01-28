@@ -64,6 +64,10 @@ class StudentCreate(StudentBase):
 class StudentInList(StudentBase):
     department: DepartmentBase
     academic_info: AcademicInfo
+    latest_major_choice: Optional[str] = None  # 최신 희망 학과
+    decision_certainty: Optional[int] = None  # 전공결정도 (1-5)
+    completion_status: Optional[str] = None  # 이수현황 (예: "15/20")
+    course_suitability: Optional[str] = None  # 수강과목 적합성 (예: "양호")
 
     class Config:
         from_attributes = True
@@ -441,3 +445,76 @@ class StudentEvaluationSummary(BaseModel):
     total_evaluations: int
     top_departments: List[dict]
     message: Optional[str] = None
+
+
+# Admin Schemas
+class DataUploadResponse(BaseModel):
+    """데이터 업로드 응답"""
+    success: bool
+    message: str
+    uploaded_count: int
+    updated_count: int
+    errors: Optional[List[str]] = None
+
+
+class BulkEvaluationRequest(BaseModel):
+    """대량 진단 요청"""
+    student_ids: Optional[List[str]] = None  # None이면 전체 학생
+    department_ids: Optional[List[int]] = None  # None이면 전체 학과
+    force_recalculate: bool = False  # True이면 기존 결과 무시하고 재계산
+
+
+class BulkEvaluationResponse(BaseModel):
+    """대량 진단 응답"""
+    success: bool
+    message: str
+    total_students: int
+    total_departments: int
+    total_evaluations: int
+    success_count: int
+    error_count: int
+    errors: Optional[List[str]] = None
+
+
+class CachedEvaluationStats(BaseModel):
+    """캐시된 진단 결과 통계"""
+    total_cached: int
+    cached_by_department: dict  # {department_name: count}
+    last_update: Optional[datetime] = None
+
+
+class CourseDataUpload(BaseModel):
+    """과목 데이터 업로드 스키마"""
+    course_code: str
+    course_name: str
+    credits: int
+    course_type: str
+    department_code: str
+    course_year: Optional[int] = None
+    semester: Optional[int] = None
+    is_retake_only: bool = False
+    description: Optional[str] = None
+
+
+class StudentDataUpload(BaseModel):
+    """학생 데이터 업로드 스키마"""
+    student_id: str
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    department_code: str
+    pride: str
+    class_number: int
+    track: Optional[str] = None
+
+
+class EnrollmentDataUpload(BaseModel):
+    """수강 데이터 업로드 스키마"""
+    student_id: str
+    course_code: str
+    year: int
+    semester: int
+    completion_type: str
+    is_retake: bool = False
+    grade: Optional[str] = None
+    numeric_grade: Optional[float] = None
