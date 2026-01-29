@@ -13,7 +13,7 @@ sys.path.insert(0, str(backend_path))
 
 from sqlalchemy.orm import Session
 from database import get_db
-from models.database import Student, Department
+from models.models import Student, Department
 from services.evaluation_service import EvaluationService
 from constants import LOG_FORMAT, LOG_DATE_FORMAT
 

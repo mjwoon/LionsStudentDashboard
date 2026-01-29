@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import Optional, List
 from database import get_db
-from models.database import Student, Department, Advisor, CourseEnrollment, Course, MajorSurvey
+from models.models import Student, Department, Advisor, CourseEnrollment, Course, MajorSurvey
 from models.schemas import (
     StudentListResponse, StudentDetail, StudentInList, StudentCreate, 
     StudentCreateResponse, StudentCoursesResponse, StudentSurveysResponse,
@@ -33,7 +33,7 @@ def get_students(
     query = db.query(Student).options(
         joinedload(Student.department).joinedload(Department.college),
         joinedload(Student.advisor),
-        selectinload(Student.major_surveys)
+        selectinload(Student.surveys)
     )
     
     # Apply filters
@@ -69,8 +69,8 @@ def get_students(
     for student in students:
         # 최신 희망 학과 조회 (이미 selectinload로 로드됨)
         latest_survey = None
-        if student.major_surveys:
-            latest_survey = max(student.major_surveys, key=lambda s: s.round_id)
+        if student.surveys:
+            latest_survey = max(student.surveys, key=lambda s: s.round_id)
         
         latest_major_choice = None
         decision_certainty = None

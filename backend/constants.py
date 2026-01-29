@@ -34,20 +34,11 @@ GRADE_LEVEL_MINIMUM = {
 # Evaluation System Weights
 # ============================================================================
 
-# Weight for Required Courses Score (필수과목 학점 점수)
-WEIGHT_REQUIRED_COURSES = 0.40
+# Weight for Curriculum Completion (1학년 전공체계도 완성도)
+WEIGHT_CURRICULUM_COMPLETION = 0.7
 
-# Weight for GPA Score (GPA 점수)
-WEIGHT_GPA = 0.20
-
-# Weight for Recommended Courses Completion (권장과목 이수 여부)
-WEIGHT_RECOMMENDED_COMPLETION = 0.15
-
-# Weight for Recommended Courses Grade (권장과목 학점 점수)
-WEIGHT_RECOMMENDED_GRADE = 0.15
-
-# Weight for Curriculum Completion (교육과정 완성도)
-WEIGHT_CURRICULUM_COMPLETION = 0.10
+# Weight for Related Courses (유사과목 점수)
+WEIGHT_RELATED_COURSES = 0.3
 
 # Overall score thresholds for grading
 GRADE_THRESHOLDS = {

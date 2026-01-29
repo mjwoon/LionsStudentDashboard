@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
-from models.database import Student, Department, College, MajorSurvey, CourseEnrollment, Course
+from models.models import Student, Department, College, MajorSurvey, CourseEnrollment, Course
 from database import get_db
 from sqlalchemy import func, desc, case
 

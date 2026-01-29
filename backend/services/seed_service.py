@@ -2,7 +2,7 @@
 Seed service for database population.
 
 This module contains all the utility functions for seeding the database
-with sample data, including GPA calculation, enrollment generation, and more.
+with sample data, including enrollment generation, survey creation, and more.
 """
 
 import time
@@ -15,9 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
 
-from models.database import (
-    Student,
-    Course,
+from models.models import (
     CourseEnrollment,
     MajorSurvey,
 )
@@ -28,76 +26,8 @@ from fixtures.seed_config import (
     DB_MAX_RETRIES,
     DB_RETRY_DELAY,
 )
-
-
-def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[float, int]:
-    """
-    Calculate student's GPA and total credits from their enrollments.
-    
-    Args:
-        db: Database session
-        student_id: Student database ID
-        
-    Returns:
-        Tuple[float, int]: (current_gpa, total_credits)
-    """
-    from constants import FAILING_GRADE, DEFAULT_CREDITS
-    
-    # Get all completed enrollments with grades (exclude F and in-progress courses)
-    enrollments = db.query(CourseEnrollment).filter(
-        CourseEnrollment.student_id == student_id,
-        CourseEnrollment.grade.isnot(None),
-        CourseEnrollment.grade != ""
-    ).all()
-    
-    if not enrollments:
-        return 0.0, 0
-    
-    # Get course information for credits
-    course_ids = [e.course_id for e in enrollments]
-    courses = db.query(Course).filter(Course.id.in_(course_ids)).all()
-    course_credits = {c.id: c.credits for c in courses}
-    
-    # Calculate weighted GPA (excluding F grades from GPA calculation)
-    total_grade_points = 0.0
-    total_gpa_credits = 0
-    total_earned_credits = 0
-    
-    for enrollment in enrollments:
-        credits = course_credits.get(enrollment.course_id, DEFAULT_CREDITS)
-        
-        # Total earned credits (including F)
-        if enrollment.grade != FAILING_GRADE:
-            total_earned_credits += credits
-        
-        # GPA calculation (exclude F grades)
-        if enrollment.numeric_grade is not None and enrollment.grade != FAILING_GRADE:
-            # Convert Decimal to float for calculation
-            numeric_grade_float = float(enrollment.numeric_grade)
-            total_grade_points += numeric_grade_float * credits
-            total_gpa_credits += credits
-    
-    # Calculate GPA
-    current_gpa = round(total_grade_points / total_gpa_credits, 2) if total_gpa_credits > 0 else 0.0
-    
-    return current_gpa, total_earned_credits
-
-
-def update_student_gpa(db: Session, student_id: int) -> None:
-    """
-    Update student's current_gpa and total_credits fields.
-    
-    Args:
-        db: Database session
-        student_id: Student database ID
-    """
-    gpa, credits = calculate_student_gpa_and_credits(db, student_id)
-    
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if student:
-        student.current_gpa = gpa
-        student.total_credits = credits
-        db.flush()
+# Import GPA calculation functions from student_service to avoid duplication
+from services.student_service import update_student_gpa
 
 
 def generate_random_grade(grade_profile: str = "normal") -> Tuple[str, float]:

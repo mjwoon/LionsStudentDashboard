@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { api } from '../api';
 import type { UploadResponse } from '../api';
+import { DEFAULT_MAX_GPA } from '../constants';
 
 interface UploadState {
   file: File | null;
@@ -115,7 +116,7 @@ export default function DataUploadTab() {
           completion_type: '전공필수',
           is_retake: false,
           grade: 'A+',
-          numeric_grade: 4.5,
+          numeric_grade: DEFAULT_MAX_GPA,
         },
       ];
       filename = 'sample_enrollments.json';

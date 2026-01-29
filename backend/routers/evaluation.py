@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from database import get_db
 from services.evaluation_service import EvaluationService
-from models.database import StudentRequirementStatus, Student, Department
+from models.models import StudentRequirementStatus, Student, Department
 
 router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 
@@ -21,7 +21,7 @@ def evaluate_student_for_department(
     db: Session = Depends(get_db)
 ):
     """
-    특정 학생의 특정 학과에 대한 진입 적합도 평가 (5개 메트릭)
+    특정 학생의 특정 학과에 대한 진입 적합도 평가 (2개 메트릭)
     
     - **student_id**: 학생 학번
     - **department_id**: 평가할 학과 ID
@@ -30,11 +30,8 @@ def evaluate_student_for_department(
     
     Returns:
         {
-            "gpa_score": float,  # GPA 점수 (25%)
-            "required_courses_score": float,  # 필수과목 점수 (30%)
-            "recommended_completion_score": float,  # 권장과목 이수 점수 (15%)
-            "recommended_grade_score": float,  # 권장과목 학점 점수 (15%)
-            "curriculum_completion_score": float,  # 교육과정 완성도 (15%)
+            "curriculum_completion_score": float,  # 1학년 전공체계도 완성도 (70%)
+            "related_courses_score": float,  # 유사과목 점수 (30%)
             "overall_score": float  # 종합 점수 (100점 만점)
         }
     """
@@ -54,11 +51,8 @@ def evaluate_student_for_department(
             return {
                 "student_id": student_id,
                 "department_id": department_id,
-                "gpa_score": float(cached_result.gpa_score or 0),
-                "required_courses_score": float(cached_result.required_courses_score or 0),
-                "recommended_completion_score": float(cached_result.recommended_completion_score or 0),
-                "recommended_grade_score": float(cached_result.recommended_grade_score or 0),
                 "curriculum_completion_score": float(cached_result.curriculum_completion_score or 0),
+                "related_courses_score": float(cached_result.related_courses_score or 0),
                 "overall_score": float(cached_result.overall_score or 0),
                 "grade": 'A' if cached_result.overall_score >= 90 else 'B' if cached_result.overall_score >= 80 else 'C' if cached_result.overall_score >= 70 else 'D' if cached_result.overall_score >= 60 else 'F',
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",

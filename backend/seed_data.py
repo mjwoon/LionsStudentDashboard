@@ -12,7 +12,7 @@ This script creates:
 
 import random
 from database import SessionLocal, init_db
-from models.database import (
+from models.models import (
     College,
     Department,
     Advisor,
@@ -38,20 +38,16 @@ from fixtures.seed_config import (
     DEPT_ARCHITECTURE,
     DEPT_ELECTRONICS,
     DEPT_INDUSTRIAL_ENG,
+    DEPT_INDUSTRIAL_MGMT,
+    DEPT_MOLECULAR_PHARM,
+    DEPT_ADVERTISING_PR,
     REGULAR_STUDENT_COUNT,
     SPECIAL_STUDENTS_CONFIG,
     ADVISORS_DATA,
     COLLEGES_DATA,
+    MAX_CREDITS_PER_SEMESTER,
+    TARGET_ADDITIONAL_ENROLLMENTS,
 )
-from services.seed_service import (
-    wait_for_db,
-    load_json_data,
-    create_course_enrollments,
-    create_survey_for_student,
-    update_student_gpa,
-    generate_random_grade,
-)
-
 from services.seed_service import (
     wait_for_db,
     load_json_data,

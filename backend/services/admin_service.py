@@ -6,7 +6,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from models.database import (
+from models.models import (
     Student, Course, Department, CourseEnrollment,
     StudentRequirementStatus, College, Advisor
 )

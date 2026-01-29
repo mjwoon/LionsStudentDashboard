@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, distinct
 from typing import Optional, List
 from database import get_db
-from models.database import (
+from models.models import (
     MajorSurvey, Student, Department, SurveyRound, 
     Course, CourseEnrollment, College
 )

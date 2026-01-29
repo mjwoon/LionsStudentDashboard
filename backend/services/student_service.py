@@ -4,7 +4,7 @@ Student service for managing student data and GPA calculations.
 
 from sqlalchemy.orm import Session
 from typing import Tuple
-from models.database import Student, CourseEnrollment, Course
+from models.models import Student, CourseEnrollment, Course
 
 
 def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[float, int]:

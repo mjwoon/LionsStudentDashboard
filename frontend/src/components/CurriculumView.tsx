@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BookOpen, Filter } from 'lucide-react';
+import { api } from '../api';
+import { getCourseTypeBadgeColor } from '../constants';
 
 interface Course {
   course_id: number;
@@ -35,7 +37,7 @@ const AVAILABLE_DEPARTMENTS: Department[] = [
 
 export default function CurriculumView() {
   const [curriculum, setCurriculum] = useState<Curriculum>({});
-  const [totalCourses, setTotalCourses] = useState(0);
+  // const [totalCourses, setTotalCourses] = useState(0);  // Currently unused
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<number>(300); // 기본값: 컴퓨터학부
@@ -45,19 +47,12 @@ export default function CurriculumView() {
       try {
         setLoading(true);
         console.log('Fetching curriculum for department:', selectedDepartment);
-        const response = await fetch(`http://localhost:8080/api/courses/curriculum?department_id=${selectedDepartment}`);
-        console.log('Response status:', response.status);
-        console.log('Response ok:', response.ok);
-        
-        const text = await response.text();
-        console.log('Raw response (first 500 chars):', text.substring(0, 500));
-        
-        const data = JSON.parse(text);
+        const data = await api.courses.curriculum(selectedDepartment);
         console.log('Parsed data:', data);
         console.log('Curriculum keys:', Object.keys(data.curriculum || {}));
         
         setCurriculum(data.curriculum);
-        setTotalCourses(data.total_courses);
+        // Total courses count available in data.total_courses if needed
       } catch (error) {
         console.error('Failed to fetch curriculum:', error);
         console.error('Error details:', error instanceof Error ? error.message : String(error));
@@ -82,18 +77,6 @@ export default function CurriculumView() {
   const filterCourses = (courses: Course[]) => {
     if (selectedType === 'all') return courses;
     return courses.filter(c => c.course_type === selectedType);
-  };
-
-  const getCourseTypeBadgeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      '전공기초': 'bg-blue-100 text-blue-800',
-      '전공핵심': 'bg-purple-100 text-purple-800',
-      '전공심화': 'bg-indigo-100 text-indigo-800',
-      '전공선택': 'bg-green-100 text-green-800',
-      '교양필수': 'bg-yellow-100 text-yellow-800',
-      '교양선택': 'bg-gray-100 text-gray-800',
-    };
-    return colors[type] || 'bg-gray-100 text-gray-800';
   };
 
 

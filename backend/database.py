@@ -28,5 +28,5 @@ def get_db() -> Generator[Session, None, None]:
 
 # Function to initialize database
 def init_db():
-    from models.database import Base
+    from models.models import Base
     Base.metadata.create_all(bind=engine)

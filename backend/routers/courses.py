@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from database import get_db
-from models.database import Course, Department, College
+from models.models import Course, Department, College
 from models.schemas import (
     CourseListResponse, CourseInList, CourseFlags, DepartmentBase,
     EntryRequirementsResponse, EntryRequirementCourse,
@@ -75,7 +75,7 @@ def get_entry_requirements(
     db: Session = Depends(get_db)
 ):
     """전공 진입 요건 조회 (새로운 구조)"""
-    from models.database import DepartmentEntryRequirement, RequirementCourse
+    from models.models import DepartmentEntryRequirement, RequirementCourse
     
     # 진입요건 조회
     query = db.query(DepartmentEntryRequirement).options(
@@ -270,7 +270,7 @@ def get_full_curriculum(
         pass  # 권장 과목 파일이 없으면 무시
     
     # 진입요건 과목 조회
-    from models.database import DepartmentEntryRequirement, RequirementCourse
+    from models.models import DepartmentEntryRequirement, RequirementCourse
     
     entry_requirement_courses = set()
     requirements = db.query(DepartmentEntryRequirement).filter(

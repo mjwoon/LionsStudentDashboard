@@ -209,12 +209,9 @@ class StudentRequirementStatus(Base):
     # 예: {"completed": 2, "required": 2, "details": [{"code": "MAT101", "grade": "A0"}]}
     analysis_json = Column(JSON, nullable=True)
     
-    # 세부 평가 점수 (새로운 평가 체계)
-    gpa_score = Column(Numeric(5, 2), nullable=True)  # 전체 학점 점수 (0-100)
-    required_courses_score = Column(Numeric(5, 2), nullable=True)  # 필수과목 학점 점수 (0-100)
-    recommended_completion_score = Column(Numeric(5, 2), nullable=True)  # 권장과목 이수여부 점수 (0-100)
-    recommended_grade_score = Column(Numeric(5, 2), nullable=True)  # 권장과목 학점 점수 (0-100)
-    curriculum_completion_score = Column(Numeric(5, 2), nullable=True)  # 교육과정 완성도 점수 (0-100)
+    # 세부 평가 점수 (2-메트릭 평가 체계)
+    curriculum_completion_score = Column(Numeric(5, 2), nullable=True)  # 1학년 전공체계도 완성도 점수 (0-100)
+    related_courses_score = Column(Numeric(5, 2), nullable=True)  # 유사과목 점수 (0-100)
     overall_score = Column(Numeric(5, 2), nullable=True)  # 종합 점수 (가중 평균, 0-100)
     
     ai_summary = Column(Text, nullable=True)  # LLM이 생성한 맞춤형 커멘트
