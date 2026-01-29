@@ -10,48 +10,35 @@
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
-from typing import Dict, List, Optional, Tuple
+from sqlalchemy import or_
+from typing import List, Dict
 from datetime import datetime
 import json
 import os
+
 from models.database import (
-    Student,
-    Course,
-    CourseEnrollment,
-    Department,
-    DepartmentEntryRequirement,
-    RequirementCourse,
-    StudentRequirementStatus,
-    GradeLevelEnum,
+    Student, Department, Course, CourseEnrollment,
+    DepartmentEntryRequirement, RequirementCourse,
+    StudentRequirementStatus, GradeLevelEnum
+)
+from constants import (
+    GRADE_TO_NUMERIC,
+    GRADE_LEVEL_MINIMUM,
+    WEIGHT_REQUIRED_COURSES,
+    WEIGHT_GPA,
+    WEIGHT_RECOMMENDED_COMPLETION,
+    WEIGHT_RECOMMENDED_GRADE,
+    WEIGHT_CURRICULUM_COMPLETION,
+    GRADE_THRESHOLDS,
+    MAX_GPA,
+    FIRST_YEAR,
+    FAILING_GRADE,
+    MIN_SATISFACTION_SCORE
 )
 
 
 class EvaluationService:
     """5개 메트릭 기반 평가 서비스"""
-    
-    # 가중치 설정 (합계 100%)
-    WEIGHT_REQUIRED_COURSES = 0.40  # 필수과목 학점 40% (핵심)
-    WEIGHT_GPA = 0.20  # GPA 20%
-    WEIGHT_RECOMMENDED_COMPLETION = 0.15  # 권장과목 이수 여부 15%
-    WEIGHT_RECOMMENDED_GRADE = 0.15  # 권장과목 학점 15%
-    WEIGHT_CURRICULUM_COMPLETION = 0.10  # 교육과정 완성도 10%
-    
-    # 성적 등급 -> 숫자 매핑
-    GRADE_TO_NUMERIC = {
-        'A+': 4.5, 'A0': 4.0,
-        'B+': 3.3, 'B0': 3.0,
-        'C+': 2.3, 'C0': 2.0,
-        'D+': 1.3, 'D0': 1.0,
-        'F': 0.0,
-    }
-    
-    # 학년별 등급 -> 최소 점수 매핑
-    GRADE_LEVEL_MINIMUM = {
-        GradeLevelEnum.A: 4.0,  # A 이상: 4.0 이상
-        GradeLevelEnum.B: 3.0,  # B 이상: 3.0 이상
-        GradeLevelEnum.C: 2.0,  # C 이상: 2.0 이상
-    }
     
     def __init__(self, db: Session):
         self.db = db
@@ -141,11 +128,11 @@ class EvaluationService:
         
         # 6. 종합 점수 계산
         overall_score = (
-            required_score * self.WEIGHT_REQUIRED_COURSES +
-            gpa_score * self.WEIGHT_GPA +
-            recommended_completion_score * self.WEIGHT_RECOMMENDED_COMPLETION +
-            recommended_grade_score * self.WEIGHT_RECOMMENDED_GRADE +
-            curriculum_completion_score * self.WEIGHT_CURRICULUM_COMPLETION
+            required_score * WEIGHT_REQUIRED_COURSES +
+            gpa_score * WEIGHT_GPA +
+            recommended_completion_score * WEIGHT_RECOMMENDED_COMPLETION +
+            recommended_grade_score * WEIGHT_RECOMMENDED_GRADE +
+            curriculum_completion_score * WEIGHT_CURRICULUM_COMPLETION
         )
         
         # 7. 상세 분석 JSON 생성
@@ -155,14 +142,14 @@ class EvaluationService:
             recommended_grade_score, curriculum_completion_score
         )
         
-        # 등급 판정
-        if overall_score >= 90:
+        # 등급 판정 (GRADE_THRESHOLDS 사용)
+        if overall_score >= GRADE_THRESHOLDS['A']:
             grade = 'A'
-        elif overall_score >= 80:
+        elif overall_score >= GRADE_THRESHOLDS['B']:
             grade = 'B'
-        elif overall_score >= 70:
+        elif overall_score >= GRADE_THRESHOLDS['C']:
             grade = 'C'
-        elif overall_score >= 60:
+        elif overall_score >= GRADE_THRESHOLDS['D']:
             grade = 'D'
         else:
             grade = 'F'
@@ -190,7 +177,7 @@ class EvaluationService:
     
     def _calculate_gpa_score(self, student: Student) -> float:
         """
-        GPA 점수 계산 (25%)
+        GPA 점수 계산 (20%)
         
         GPA를 100점 만점으로 환산
         - 4.5 = 100점
@@ -199,8 +186,8 @@ class EvaluationService:
         if not student.current_gpa or student.current_gpa == 0:
             return 0.0
         
-        # GPA를 100점 만점으로 환산 (4.5 만점 기준)
-        score = (float(student.current_gpa) / 4.5) * 100
+        # GPA를 100점 만점으로 환산
+        score = (float(student.current_gpa) / MAX_GPA) * 100
         return min(100.0, max(0.0, score))
     
     def _calculate_required_courses_score(
@@ -276,10 +263,10 @@ class EvaluationService:
                 course_info = enrolled_courses_map[course_code]
                 numeric_grade = course_info.get('numeric_grade', 0)
                 
-                if numeric_grade >= self.GRADE_LEVEL_MINIMUM.get(GradeLevelEnum.B, 3.0):
+                if numeric_grade >= GRADE_LEVEL_MINIMUM.get('B', 3.0):
                     b_or_higher.append(course_code)
                 
-                if numeric_grade >= self.GRADE_LEVEL_MINIMUM.get(GradeLevelEnum.A, 4.0):
+                if numeric_grade >= GRADE_LEVEL_MINIMUM.get('A', 4.0):
                     a_or_higher.append(course_code)
         
         # OR 조건: B 이상 required_count개 이상 OR A 이상 1개 이상
@@ -304,9 +291,10 @@ class EvaluationService:
         course_codes = [rc.course_code for rc in req_courses]
         satisfied_courses = []
         
-        min_grade = self.GRADE_LEVEL_MINIMUM.get(
-            requirement.target_grade_level,
-            3.0  # 기본값 B 이상
+        # Get minimum grade from constants or use default
+        min_grade = GRADE_LEVEL_MINIMUM.get(
+            requirement.target_grade_level.value if hasattr(requirement.target_grade_level, 'value') else 'B',
+            3.0
         )
         
         for course_code in course_codes:
@@ -384,7 +372,7 @@ class EvaluationService:
         
         # 평균 성적을 100점 만점으로 환산
         avg_grade = sum(grades) / len(grades)
-        score = (avg_grade / 4.5) * 100
+        score = (avg_grade / MAX_GPA) * 100
         return round(score, 2)
     
     def _calculate_curriculum_completion_score(
@@ -400,7 +388,7 @@ class EvaluationService:
         # 해당 학과의 1학년 과목 조회
         dept_courses = self.db.query(Course).filter(
             Course.department_id == department_id,
-            Course.course_year == 1
+            Course.course_year == FIRST_YEAR
         ).all()
         
         # 1학년 과목이 없으면 0점 반환
@@ -413,7 +401,7 @@ class EvaluationService:
         completed_count = sum(
             1 for enrollment in enrollments
             if enrollment.course_id in dept_course_ids and
-            enrollment.grade and enrollment.grade != 'F'
+            enrollment.grade and enrollment.grade != FAILING_GRADE
         )
         
         # 비율을 점수로 환산
@@ -474,10 +462,10 @@ class EvaluationService:
         status.analysis_json = result.get('analysis_json')
         status.calculated_at = result['evaluated_at']
         
-        # 충족 여부 판정 (required_courses_score가 100점이고 overall이 70점 이상)
+        # 충족 여부 판정 (required_courses_score가 100점이고 overall이 MIN_SATISFACTION_SCORE 이상)
         status.is_satisfied = (
             result['required_courses_score'] >= 100.0 and
-            result['overall_score'] >= 70.0
+            result['overall_score'] >= MIN_SATISFACTION_SCORE
         )
         
         self.db.commit()
@@ -540,8 +528,9 @@ class EvaluationService:
                     "course_name": course.course_name if course else "Unknown",
                     "grade": course_info.get('grade', 'Not Taken'),
                     "numeric_grade": course_info.get('numeric_grade', 0),
-                    "satisfied": course_info.get('numeric_grade', 0) >= self.GRADE_LEVEL_MINIMUM.get(
-                        requirement.target_grade_level, 3.0
+                    "satisfied": course_info.get('numeric_grade', 0) >= GRADE_LEVEL_MINIMUM.get(
+                        requirement.target_grade_level.value if hasattr(requirement.target_grade_level, 'value') else 'B',
+                        3.0
                     ) if course_info else False
                 })
             
@@ -572,7 +561,7 @@ class EvaluationService:
         # 교육과정 완성도 상세 정보 계산 (1학년만)
         dept_courses = self.db.query(Course).filter(
             Course.department_id == department.id,
-            Course.course_year == 1,
+            Course.course_year == FIRST_YEAR,
             or_(
                 Course.course_type.like('%전공%'),
                 Course.course_type == '전공기초',
@@ -585,7 +574,7 @@ class EvaluationService:
         completed_curriculum_count = sum(
             1 for enrollment in enrollments
             if enrollment.course_id in dept_course_ids and
-            enrollment.grade and enrollment.grade != 'F'
+            enrollment.grade and enrollment.grade != FAILING_GRADE
         )
         
         return {
@@ -596,7 +585,7 @@ class EvaluationService:
             },
             "gpa": {
                 "current_gpa": float(student.current_gpa) if student.current_gpa else 0.0,
-                "max_gpa": 4.5,
+                "max_gpa": MAX_GPA,
                 "score": gpa_score
             },
             "recommended_courses": {
@@ -618,18 +607,18 @@ class EvaluationService:
             },
             "overall": {
                 "score": (
-                    required_score * self.WEIGHT_REQUIRED_COURSES +
-                    gpa_score * self.WEIGHT_GPA +
-                    recommended_completion_score * self.WEIGHT_RECOMMENDED_COMPLETION +
-                    recommended_grade_score * self.WEIGHT_RECOMMENDED_GRADE +
-                    curriculum_completion_score * self.WEIGHT_CURRICULUM_COMPLETION
+                    required_score * WEIGHT_REQUIRED_COURSES +
+                    gpa_score * WEIGHT_GPA +
+                    recommended_completion_score * WEIGHT_RECOMMENDED_COMPLETION +
+                    recommended_grade_score * WEIGHT_RECOMMENDED_GRADE +
+                    curriculum_completion_score * WEIGHT_CURRICULUM_COMPLETION
                 ),
                 "weights": {
-                    "required_courses": self.WEIGHT_REQUIRED_COURSES,
-                    "gpa": self.WEIGHT_GPA,
-                    "recommended_completion": self.WEIGHT_RECOMMENDED_COMPLETION,
-                    "recommended_grade": self.WEIGHT_RECOMMENDED_GRADE,
-                    "curriculum_completion": self.WEIGHT_CURRICULUM_COMPLETION
+                    "required_courses": WEIGHT_REQUIRED_COURSES,
+                    "gpa": WEIGHT_GPA,
+                    "recommended_completion": WEIGHT_RECOMMENDED_COMPLETION,
+                    "recommended_grade": WEIGHT_RECOMMENDED_GRADE,
+                    "curriculum_completion": WEIGHT_CURRICULUM_COMPLETION
                 }
             }
         }

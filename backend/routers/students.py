@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import Optional, List
 from database import get_db
 from models.database import Student, Department, Advisor, CourseEnrollment, Course, MajorSurvey
@@ -9,6 +9,7 @@ from models.schemas import (
     DepartmentBase, AcademicInfo, CourseEnrollmentDetail, SurveyHistoryItem,
     SurveyChoiceBase
 )
+from services.student_service import calculate_first_year_completion
 from datetime import datetime
 import math
 
@@ -28,10 +29,11 @@ def get_students(
 ):
     """학생 목록 조회 (필터링 및 페이징 지원)"""
     
-    # Base query with joins
+    # Base query with joins (optimize N+1 queries)
     query = db.query(Student).options(
         joinedload(Student.department).joinedload(Department.college),
-        joinedload(Student.advisor)
+        joinedload(Student.advisor),
+        selectinload(Student.major_surveys)
     )
     
     # Apply filters
@@ -59,50 +61,37 @@ def get_students(
     offset = (page - 1) * per_page
     students = query.offset(offset).limit(per_page).all()
     
+    # Pre-load departments for efficiency (cache)
+    all_departments = {dept.id: dept for dept in db.query(Department).all()}
+    
     # Format response
     students_list = []
     for student in students:
-        # 최신 희망 학과 조회
-        latest_survey = db.query(MajorSurvey).filter(
-            MajorSurvey.student_id == student.id
-        ).order_by(MajorSurvey.round_id.desc()).first()
+        # 최신 희망 학과 조회 (이미 selectinload로 로드됨)
+        latest_survey = None
+        if student.major_surveys:
+            latest_survey = max(student.major_surveys, key=lambda s: s.round_id)
         
         latest_major_choice = None
         decision_certainty = None
         first_choice_dept_id = None
+        
         if latest_survey:
-            first_choice_dept = db.query(Department).filter(
-                Department.id == latest_survey.first_choice_dept_id
-            ).first()
+            first_choice_dept = all_departments.get(latest_survey.first_choice_dept_id)
             if first_choice_dept:
                 latest_major_choice = first_choice_dept.name
                 first_choice_dept_id = first_choice_dept.id
             decision_certainty = latest_survey.decision_scale
         
-        # 이수현황 계산: 최신 희망학과의 1학년 과목 이수 현황
+        # 이수현황 계산: 최신 희망학과의 1학년 과목 이수 현황 (헬퍼 함수 사용)
         completion_status = "0/0"
         course_suitability = None
         
         if first_choice_dept_id:
-            # 희망학과의 1학년 과목 목록 조회
-            first_year_courses = db.query(Course).filter(
-                Course.department_id == first_choice_dept_id,
-                Course.course_year == 1
-            ).all()
-            
-            if first_year_courses:
-                total_first_year = len(first_year_courses)
-                first_year_course_ids = [c.id for c in first_year_courses]
-                
-                # 학생이 해당 학과 1학년 과목 중 이수한 과목 수
-                completed_first_year = db.query(CourseEnrollment).filter(
-                    CourseEnrollment.student_id == student.id,
-                    CourseEnrollment.course_id.in_(first_year_course_ids),
-                    CourseEnrollment.grade.isnot(None),
-                    CourseEnrollment.grade != 'F'
-                ).count()
-                
-                completion_status = f"{completed_first_year}/{total_first_year}"
+            completed, total = calculate_first_year_completion(
+                db, student.id, first_choice_dept_id
+            )
+            completion_status = f"{completed}/{total}"
             
             # 수강과목 적합성: 전체 적합도 점수 (평가 시스템 사용)
             from services.evaluation_service import EvaluationService

@@ -10,14 +10,7 @@ This script creates:
 - Department entry requirements
 """
 
-import time
-import json
-import os
 import random
-from typing import List, Dict, Tuple, Optional
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
 from database import SessionLocal, init_db
 from models.database import (
     College,
@@ -36,330 +29,37 @@ from models.database import (
 )
 from datetime import datetime, timedelta
 
-# ============================================================================
-# CONSTANTS
-# ============================================================================
+# Import configuration and services
+from fixtures.seed_config import (
+    DEPT_LIONS_COLLEGE,
+    DEPT_COMPUTER_SCIENCE,
+    DEPT_DATA_INTELLIGENCE,
+    DEPT_DESIGN_CONVERGENCE,
+    DEPT_ARCHITECTURE,
+    DEPT_ELECTRONICS,
+    DEPT_INDUSTRIAL_ENG,
+    REGULAR_STUDENT_COUNT,
+    SPECIAL_STUDENTS_CONFIG,
+    ADVISORS_DATA,
+    COLLEGES_DATA,
+)
+from services.seed_service import (
+    wait_for_db,
+    load_json_data,
+    create_course_enrollments,
+    create_survey_for_student,
+    update_student_gpa,
+    generate_random_grade,
+)
 
-# Department IDs
-DEPT_LIONS_COLLEGE = 100
-DEPT_COMPUTER_SCIENCE = 300
-DEPT_DATA_INTELLIGENCE = 303
-DEPT_DESIGN_CONVERGENCE = 304
-DEPT_ARCHITECTURE = 200
-DEPT_ELECTRONICS = 204
-DEPT_INDUSTRIAL_ENG = 207
-DEPT_INDUSTRIAL_MGMT = 207
-DEPT_MOLECULAR_PHARM = 404
-DEPT_ADVERTISING_PR = 600
-
-# Academic Settings
-MAX_CREDITS_PER_SEMESTER = 20
-TARGET_ADDITIONAL_ENROLLMENTS = 2000
-REGULAR_STUDENT_COUNT = 300
-
-# Grade Options and Weights
-GRADE_OPTIONS = [
-    ('A+', 4.5), ('A0', 4.0), 
-    ('B+', 3.3), ('B0', 3.0), 
-    ('C+', 2.3), ('C0', 2.0), 
-    ('D+', 1.3), ('D0', 1.0), 
-    ('F', 0.0)
-]
-GRADE_WEIGHTS = [15, 20, 12, 15, 8, 6, 5, 3, 2]  # 9개로 맞춤 (합계: 86)
-
-# Special Students Configuration (for testing and demos)
-# These students have fixed, reproducible data for consistent testing
-SPECIAL_STUDENTS_CONFIG = [
-    {
-        "student_id": "2025123001",
-        "name": "강우수",  # Excellent student (우수 = excellent)
-        "email": "kim.woosoo@hanyang.ac.kr",
-        "phone": "010-1111-1111",
-        "track": "자연계열",
-        "pride": "O",
-        "class_number": 6,
-        "advisor_id": 2,
-        "target_dept": DEPT_DATA_INTELLIGENCE,
-        "decision_scale": 5,  # 매우 확실 - 성적 우수, 목표 명확
-        "grade_seed": 1001,  # Random seed for reproducible grades
-        "grade_profile": "excellent",  # High achiever (mostly A grades)
-        "description": "High-performing student with clear career goals in Data Intelligence"
-    },
-    {
-        "student_id": "2025123002",
-        "name": "강보통",  # Average student (보통 = average)
-        "email": "lee.botong@hanyang.ac.kr",
-        "phone": "010-2222-2222",
-        "track": "전계열",
-        "pride": "S",
-        "class_number": 10,
-        "advisor_id": 2,
-        "target_dept": DEPT_DATA_INTELLIGENCE,
-        "decision_scale": 3,  # 보통 - 평범한 성적, 고민 중
-        "grade_seed": 2002,  # Random seed for reproducible grades
-        "grade_profile": "average",  # Average grades (B range)
-        "description": "Average student exploring major options, considering Data Intelligence"
-    },
-    {
-        "student_id": "2025123003",
-        "name": "강고민",  # Struggling student (고민 = worry/concern)
-        "email": "park.gomin@hanyang.ac.kr",
-        "phone": "010-3333-3333",
-        "track": "인문사회계열",
-        "pride": "O",
-        "class_number": 6,
-        "advisor_id": 1,
-        "target_dept": DEPT_DESIGN_CONVERGENCE,
-        "decision_scale": 2,  # 불확실 - 성적 부진, 진로 고민
-        "grade_seed": 3003,  # Random seed for reproducible grades
-        "grade_profile": "struggling",  # Lower grades (C-D range)
-        "description": "Student facing academic challenges, uncertain about major choice"
-    },
-]
-
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
-
-def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[float, int]:
-    """
-    Calculate student's GPA and total credits from their enrollments.
-    
-    Args:
-        db: Database session
-        student_id: Student database ID
-        
-    Returns:
-        Tuple[float, int]: (current_gpa, total_credits)
-    """
-    # Get all completed enrollments with grades (exclude F and in-progress courses)
-    enrollments = db.query(CourseEnrollment).filter(
-        CourseEnrollment.student_id == student_id,
-        CourseEnrollment.grade.isnot(None),
-        CourseEnrollment.grade != ""
-    ).all()
-    
-    if not enrollments:
-        return 0.0, 0
-    
-    # Get course information for credits
-    course_ids = [e.course_id for e in enrollments]
-    courses = db.query(Course).filter(Course.id.in_(course_ids)).all()
-    course_credits = {c.id: c.credits for c in courses}
-    
-    # Calculate weighted GPA (excluding F grades from GPA calculation)
-    total_grade_points = 0.0
-    total_gpa_credits = 0
-    total_earned_credits = 0
-    
-    for enrollment in enrollments:
-        credits = course_credits.get(enrollment.course_id, 3)  # Default to 3 if not found
-        
-        # Total earned credits (including F)
-        if enrollment.grade != 'F':
-            total_earned_credits += credits
-        
-        # GPA calculation (exclude F grades)
-        if enrollment.numeric_grade is not None and enrollment.grade != 'F':
-            # Convert Decimal to float for calculation
-            numeric_grade_float = float(enrollment.numeric_grade)
-            total_grade_points += numeric_grade_float * credits
-            total_gpa_credits += credits
-    
-    # Calculate GPA
-    current_gpa = round(total_grade_points / total_gpa_credits, 2) if total_gpa_credits > 0 else 0.0
-    
-    return current_gpa, total_earned_credits
-
-
-def update_student_gpa(db: Session, student_id: int) -> None:
-    """
-    Update student's current_gpa and total_credits fields.
-    
-    Args:
-        db: Database session
-        student_id: Student database ID
-    """
-    gpa, credits = calculate_student_gpa_and_credits(db, student_id)
-    
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if student:
-        student.current_gpa = gpa
-        student.total_credits = credits
-        db.flush()
-
-
-def generate_random_grade(grade_profile: str = "normal") -> Tuple[str, float]:
-    """
-    Generate a random grade with configurable bias based on student profile.
-    
-    Args:
-        grade_profile: Grade distribution profile
-            - "excellent": High achiever (mostly A grades)
-            - "average": Average student (mostly B grades)
-            - "struggling": Below average (mostly C-D grades)
-            - "normal": Default distribution (good grade bias)
-    
-    Returns:
-        Tuple[str, float]: (grade letter, numeric grade)
-    """
-    if grade_profile == "excellent":
-        # Excellent students: heavily weighted toward A grades
-        weights = [25, 30, 15, 10, 8, 5, 3, 2, 2]  # 9개 (A+ 중심)
-    elif grade_profile == "average":
-        # Average students: mostly B grades with some A and C
-        weights = [5, 8, 15, 20, 15, 10, 8, 5, 2]  # 9개 (B 중심)
-    elif grade_profile == "struggling":
-        # Struggling students: mostly C-D grades with some B
-        weights = [1, 2, 5, 8, 12, 15, 15, 12, 5]  # 9개 (C-D 중심)
-    else:  # "normal" - default good grade bias
-        weights = GRADE_WEIGHTS
-    
-    grade, numeric = random.choices(GRADE_OPTIONS, weights=weights, k=1)[0]
-    return grade, numeric
-
-
-def wait_for_db(max_retries: int = 30, delay: int = 1) -> bool:
-    """
-    Wait for database connection to be ready.
-    
-    Args:
-        max_retries: Maximum number of connection attempts
-        delay: Delay in seconds between retries
-        
-    Returns:
-        bool: True if connected successfully, False otherwise
-    """
-    for i in range(max_retries):
-        try:
-            db = SessionLocal()
-            db.execute(text("SELECT 1"))
-            db.close()
-            print("Database is ready!")
-            return True
-        except OperationalError:
-            print(f"Database not ready, waiting... ({i+1}/{max_retries})")
-            time.sleep(delay)
-    print("Database connection timeout!")
-    return False
-
-
-def load_json_data(filename: str) -> dict:
-    """
-    Load JSON data from the data directory.
-    
-    Args:
-        filename: Name of the JSON file (e.g., 'sw.json')
-        
-    Returns:
-        dict: Loaded JSON data
-    """
-    json_path = os.path.join(os.path.dirname(__file__), "data", filename)
-    with open(json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def create_course_enrollments(
-    student_id: int,
-    courses_by_semester: Dict[int, List[Dict]],
-    year: int,
-    max_credits: int = MAX_CREDITS_PER_SEMESTER,
-    include_grades: bool = True,
-    shuffle_courses: bool = True,
-    grade_profile: str = "normal"
-) -> List[CourseEnrollment]:
-    """
-    Create course enrollments for a student across multiple semesters.
-    
-    Args:
-        student_id: Student database ID
-        courses_by_semester: Dict mapping semester number to list of course info dicts
-        year: Academic year
-        max_credits: Maximum credits allowed per semester
-        include_grades: Whether to include grades (False for ongoing semesters)
-        shuffle_courses: Whether to randomize course selection order
-        grade_profile: Grade distribution profile for this student
-        
-    Returns:
-        List[CourseEnrollment]: List of enrollment objects
-    """
-    enrollments = []
-    
-    for semester, courses in courses_by_semester.items():
-        sem_credits = 0
-        course_list = courses.copy()
-        if shuffle_courses:
-            random.shuffle(course_list)
-        
-        for course_info in course_list:
-            if sem_credits + course_info["credits"] <= max_credits:
-                # Determine if grades should be included
-                # 2026년 1학기는 현재 진행중이므로 성적 없음 (현재: 2026년 1월)
-                should_include_grade = include_grades and not (year == 2026 and semester == 1)
-                
-                if should_include_grade:
-                    grade, numeric_grade = generate_random_grade(grade_profile)
-                else:
-                    grade, numeric_grade = None, None
-                
-                enrollment = CourseEnrollment(
-                    student_id=student_id,
-                    course_id=course_info["id"],
-                    year=year,
-                    semester=semester,
-                    completion_type=course_info["course_type"],
-                    is_retake=False,
-                    grade=grade,
-                    numeric_grade=numeric_grade,
-                )
-                enrollments.append(enrollment)
-                sem_credits += course_info["credits"]
-    
-    return enrollments
-
-
-def create_survey_for_student(
-    student_id: int,
-    round_id: int,
-    first_choice_dept: int,
-    decision_scale: int,
-    round_year: int,
-    round_month: int,
-    second_choice_dept: Optional[int] = None
-) -> MajorSurvey:
-    """
-    Create a major survey entry for a student.
-    
-    Args:
-        student_id: Student database ID
-        round_id: Survey round ID
-        first_choice_dept: First choice department ID
-        decision_scale: Decision certainty (1-5)
-        round_year: Year of the survey round
-        round_month: Month of the survey round
-        second_choice_dept: Optional second choice department ID
-        
-    Returns:
-        MajorSurvey: Survey object
-    """
-    # Determine decision status based on scale
-    if decision_scale >= 4:
-        decision_status_id = 1  # 최종결정
-    elif decision_scale >= 3:
-        decision_status_id = 2  # 고민중
-    else:
-        decision_status_id = 3  # 조사중
-    
-    return MajorSurvey(
-        student_id=student_id,
-        round_id=round_id,
-        first_choice_dept_id=first_choice_dept,
-        second_choice_dept_id=second_choice_dept,
-        decision_status_id=decision_status_id,
-        decision_scale=decision_scale,
-        submitted_at=datetime(round_year, round_month, random.randint(1, 28))
-    )
-
+from services.seed_service import (
+    wait_for_db,
+    load_json_data,
+    create_course_enrollments,
+    create_survey_for_student,
+    update_student_gpa,
+    generate_random_grade,
+)
 
 
 # ============================================================================
@@ -380,7 +80,7 @@ def seed_database():
     - Department Entry Requirements
     """
     # Wait for database to be ready
-    if not wait_for_db():
+    if not wait_for_db(SessionLocal):
         print("Failed to connect to database")
         return
 
@@ -408,28 +108,10 @@ def seed_database():
 
         # Create Colleges
         print("Creating colleges...")
-        college1 = College(id=1, name="라이언스 칼리지")
-        college2 = College(id=2, name="공학대학")
-        college3 = College(id=3, name="소프트웨어융합대학")
-        college4 = College(id=4, name="첨단융합대학")
-        college5 = College(id=5, name="경상대학")
-        college6 = College(id=6, name="커뮤니케이션%컬쳐대학")
-        college7 = College(id=7, name="글로벌문화통상대학")
-        college8 = College(id=8, name="디자인대학")
-
-        db.add_all(
-            [
-                college1,
-                college2,
-                college3,
-                college4,
-                college5,
-                college6,
-                college7,
-                college8,
-            ]
-        )
+        colleges = [College(id=c["id"], name=c["name"]) for c in COLLEGES_DATA]
+        db.add_all(colleges)
         db.commit()
+        print(f"Created {len(colleges)} colleges")
 
         # ====================================================================
         # DEPARTMENTS
@@ -454,50 +136,10 @@ def seed_database():
 
         # Create Advisors
         print("Creating advisors...")
-        advisors = [
-            # 라이언스 칼리지
-            Advisor(id=1, name="박교수", email="park@hanyang.ac.kr", department_id=100),
-            Advisor(id=2, name="최교수", email="choi@hanyang.ac.kr", department_id=100),
-            Advisor(id=3, name="김교수", email="kim@hanyang.ac.kr", department_id=100),
-            # 공과대학
-            Advisor(
-                id=4, name="이교수", email="lee.ee@hanyang.ac.kr", department_id=205
-            ),  # 전자공학부
-            Advisor(
-                id=5, name="정교수", email="jung.me@hanyang.ac.kr", department_id=206
-            ),  # 기계공학과
-            Advisor(
-                id=6, name="강교수", email="kang.chem@hanyang.ac.kr", department_id=207
-            ),  # 배터리소재화학공학과
-            # 소프트웨어융합대학
-            Advisor(
-                id=7, name="송교수", email="song.cs@hanyang.ac.kr", department_id=300
-            ),  # 컴퓨터학부
-            Advisor(
-                id=8, name="윤교수", email="yoon.math@hanyang.ac.kr", department_id=306
-            ),  # 수리데이터사이언스학과
-            # 첨단융합대학
-            Advisor(
-                id=9, name="한교수", email="han.semi@hanyang.ac.kr", department_id=400
-            ),  # 차세대반도체융합공학부
-            Advisor(
-                id=10, name="오교수", email="oh.bio@hanyang.ac.kr", department_id=403
-            ),  # 바이오신양융합학부
-            # 경상대학
-            Advisor(
-                id=11, name="서교수", email="seo.biz@hanyang.ac.kr", department_id=500
-            ),  # 경영학부
-            # 글로벌문화통상대학
-            Advisor(
-                id=12,
-                name="안교수",
-                email="ahn.global@hanyang.ac.kr",
-                department_id=700,
-            ),  # 글로벌문화통상학부
-        ]
-
+        advisors = [Advisor(**advisor_data) for advisor_data in ADVISORS_DATA]
         db.add_all(advisors)
         db.commit()
+        print(f"Created {len(advisors)} advisors")
 
         # ====================================================================
         # STUDENTS

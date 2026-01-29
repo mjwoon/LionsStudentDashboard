@@ -18,6 +18,8 @@ def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[flo
     Returns:
         Tuple[float, int]: (current_gpa, total_credits)
     """
+    from constants import FAILING_GRADE, DEFAULT_CREDITS
+    
     # Get all completed enrollments with grades (exclude F and in-progress courses)
     enrollments = db.query(CourseEnrollment).filter(
         CourseEnrollment.student_id == student_id,
@@ -39,14 +41,14 @@ def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[flo
     total_earned_credits = 0
     
     for enrollment in enrollments:
-        credits = course_credits.get(enrollment.course_id, 3)  # Default to 3 if not found
+        credits = course_credits.get(enrollment.course_id, DEFAULT_CREDITS)
         
         # Total earned credits (including F)
-        if enrollment.grade != 'F':
+        if enrollment.grade != FAILING_GRADE:
             total_earned_credits += credits
         
         # GPA calculation (exclude F grades)
-        if enrollment.numeric_grade is not None and enrollment.grade != 'F':
+        if enrollment.numeric_grade is not None and enrollment.grade != FAILING_GRADE:
             # Convert Decimal to float for calculation
             numeric_grade_float = float(enrollment.numeric_grade)
             total_grade_points += numeric_grade_float * credits
@@ -101,6 +103,49 @@ def refresh_all_student_gpas(db: Session) -> int:
     return len(students)
 
 
+def calculate_first_year_completion(
+    db: Session,
+    student_id: int,
+    department_id: int
+) -> Tuple[int, int]:
+    """
+    Calculate first-year course completion for a student in a specific department.
+    
+    Args:
+        db: Database session
+        student_id: Student database ID
+        department_id: Department ID to check courses for
+        
+    Returns:
+        Tuple[int, int]: (completed_count, total_count)
+            - completed_count: Number of first-year courses completed (excluding F grades)
+            - total_count: Total number of first-year courses in the department
+    """
+    from constants import FIRST_YEAR, FAILING_GRADE
+    
+    # Get all first-year courses for the department
+    first_year_courses = db.query(Course).filter(
+        Course.department_id == department_id,
+        Course.course_year == FIRST_YEAR
+    ).all()
+    
+    if not first_year_courses:
+        return 0, 0
+    
+    total_count = len(first_year_courses)
+    first_year_course_ids = [c.id for c in first_year_courses]
+    
+    # Count completed courses (excluding F grades)
+    completed_count = db.query(CourseEnrollment).filter(
+        CourseEnrollment.student_id == student_id,
+        CourseEnrollment.course_id.in_(first_year_course_ids),
+        CourseEnrollment.grade.isnot(None),
+        CourseEnrollment.grade != FAILING_GRADE
+    ).count()
+    
+    return completed_count, total_count
+
+
 def get_student_grade_summary(db: Session, student_id: int) -> dict:
     """
     Get comprehensive grade summary for a student.
@@ -112,6 +157,8 @@ def get_student_grade_summary(db: Session, student_id: int) -> dict:
     Returns:
         dict: Summary including GPA, credits, grade distribution, etc.
     """
+    from constants import FAILING_GRADE
+    
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         return None
@@ -138,7 +185,7 @@ def get_student_grade_summary(db: Session, student_id: int) -> dict:
         course_type = course.course_type
         # Find enrollment for this course
         enrollment = next((e for e in enrollments if e.course_id == course.id), None)
-        if enrollment and enrollment.grade != 'F':
+        if enrollment and enrollment.grade != FAILING_GRADE:
             course_type_credits[course_type] = course_type_credits.get(course_type, 0) + course.credits
     
     return {
