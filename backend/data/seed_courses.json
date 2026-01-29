@@ -1,0 +1,132 @@
+[
+  {
+    "course_code": "CUL7124",
+    "course_name": "Ai리터러시",
+    "credits": 2,
+    "course_type": "교양필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CUL7125",
+    "course_name": "Esg와Sdgs이해",
+    "credits": 2,
+    "course_type": "교양필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "VCC1001",
+    "course_name": "Ic-Pbl과비전설계",
+    "credits": 1,
+    "course_type": "교양필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "GEN2052",
+    "course_name": "미분적분학1",
+    "credits": 3,
+    "course_type": "전공기초",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "GEN1030",
+    "course_name": "컴퓨터개론",
+    "credits": 3,
+    "course_type": "전공핵심",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CUL7133",
+    "course_name": "파이썬과인공지능",
+    "credits": 3,
+    "course_type": "교양필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CSE1017",
+    "course_name": "프로그래밍기초",
+    "credits": 3,
+    "course_type": "전공기초",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 1,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "ITE1009",
+    "course_name": "C프로그래밍",
+    "credits": 3,
+    "course_type": "전공핵심",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "COM2018",
+    "course_name": "객체지향프로그래밍",
+    "credits": 3,
+    "course_type": "전공핵심",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CSE1021",
+    "course_name": "소프트웨어엔지니어링커뮤니케이션",
+    "credits": 2,
+    "course_type": "전공기초",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CUL2100",
+    "course_name": "아카데믹글쓰기",
+    "credits": 2,
+    "course_type": "교양필수",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "CSE1019",
+    "course_name": "오픈소스Sw기초",
+    "credits": 2,
+    "course_type": "전공핵심",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  },
+  {
+    "course_code": "MAT2020",
+    "course_name": "이산수학",
+    "credits": 3,
+    "course_type": "전공기초",
+    "department_code": "CSE",
+    "course_year": 1,
+    "semester": 2,
+    "is_retake_only": false
+  }
+]
