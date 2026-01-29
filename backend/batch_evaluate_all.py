@@ -41,53 +41,51 @@ def batch_evaluate_all_students():
         success_count = 0
         error_count = 0
         evaluation_results = []
+        total_evaluations = total_students * len(departments)
+        current_eval = 0
         
-        # 각 학생에 대해 소속 학과 평가
-        for idx, student in enumerate(students, 1):
-            try:
-                # 진행 상황 표시
-                if idx % 10 == 0 or idx == 1:
-                    print(f"\n진행: {idx}/{total_students} ({idx/total_students*100:.1f}%)")
-                
-                # 학생의 소속 학과 정보 가져오기
-                department = db.query(Department).filter(
-                    Department.id == student.department_id
-                ).first()
-                
-                if not department:
-                    print(f"⚠️  {student.name} (ID: {student.student_id}): 소속 학과 없음")
+        # 각 학생에 대해 모든 학과 평가
+        for student_idx, student in enumerate(students, 1):
+            print(f"\n{'='*60}")
+            print(f"학생 {student_idx}/{total_students}: {student.name} ({student.student_id})")
+            print(f"{'='*60}")
+            
+            # 각 학과에 대해 평가
+            for dept_idx, department in enumerate(departments, 1):
+                try:
+                    current_eval += 1
+                    
+                    # 진행 상황 표시
+                    if current_eval % 50 == 0 or current_eval == 1:
+                        print(f"\n전체 진행: {current_eval}/{total_evaluations} ({current_eval/total_evaluations*100:.1f}%)")
+                    
+                    # 평가 실행 (save_to_db=True로 DB 저장)
+                    result = eval_service.evaluate_student(
+                        student_id=student.id,
+                        department_id=department.id,
+                        save_to_db=True
+                    )
+                    
+                    # 결과 저장 (result는 dict 형태)
+                    evaluation_results.append({
+                        'student_name': student.name,
+                        'student_id': student.student_id,
+                        'department_name': department.name,
+                        'overall_score': result['overall_score'],
+                        'grade': result['grade'],
+                        'is_satisfied': result['overall_score'] >= 70.0
+                    })
+                    
+                    success_count += 1
+                    
+                    # 학과별 간단한 진행 상황
+                    if dept_idx % 10 == 0:
+                        print(f"  ✅ {student.name}: {dept_idx}/{len(departments)} 학과 평가 완료")
+                    
+                except Exception as e:
+                    print(f"  ❌ {student.name} → {department.name} 평가 실패: {str(e)}")
                     error_count += 1
                     continue
-                
-                # 평가 실행 (save_to_db=True로 DB 저장)
-                result = eval_service.evaluate_student(
-                    student_id=student.id,
-                    department_id=department.id,
-                    save_to_db=True
-                )
-                
-                # 결과 저장 (result는 dict 형태)
-                evaluation_results.append({
-                    'student_name': student.name,
-                    'student_id': student.student_id,
-                    'department_name': department.name,
-                    'overall_score': result['overall_score'],
-                    'grade': result['grade'],
-                    'is_satisfied': result['overall_score'] >= 70.0
-                })
-                
-                success_count += 1
-                
-                # 간단한 진행 상황 (10명마다 한 줄 출력)
-                if idx % 10 == 0:
-                    recent_scores = [r['overall_score'] for r in evaluation_results[-10:]]
-                    avg_score = sum(recent_scores) / len(recent_scores)
-                    print(f"✅ 최근 10명 평균: {avg_score:.2f}점")
-                
-            except Exception as e:
-                print(f"❌ {student.name} (ID: {student.student_id}) 평가 실패: {str(e)}")
-                error_count += 1
-                continue
         
         # 결과 커밋 (이미 evaluate_student에서 커밋되었으므로 필요 없음)
         # db.commit()

@@ -31,11 +31,11 @@ class EvaluationService:
     """5개 메트릭 기반 평가 서비스"""
     
     # 가중치 설정 (합계 100%)
-    WEIGHT_GPA = 0.25  # GPA 25%
-    WEIGHT_REQUIRED_COURSES = 0.30  # 필수과목 학점 30%
+    WEIGHT_REQUIRED_COURSES = 0.40  # 필수과목 학점 40% (핵심)
+    WEIGHT_GPA = 0.20  # GPA 20%
     WEIGHT_RECOMMENDED_COMPLETION = 0.15  # 권장과목 이수 여부 15%
     WEIGHT_RECOMMENDED_GRADE = 0.15  # 권장과목 학점 15%
-    WEIGHT_CURRICULUM_COMPLETION = 0.15  # 교육과정 완성도 15%
+    WEIGHT_CURRICULUM_COMPLETION = 0.10  # 교육과정 완성도 10%
     
     # 성적 등급 -> 숫자 매핑
     GRADE_TO_NUMERIC = {
@@ -141,11 +141,18 @@ class EvaluationService:
         
         # 6. 종합 점수 계산
         overall_score = (
-            gpa_score * self.WEIGHT_GPA +
             required_score * self.WEIGHT_REQUIRED_COURSES +
+            gpa_score * self.WEIGHT_GPA +
             recommended_completion_score * self.WEIGHT_RECOMMENDED_COMPLETION +
             recommended_grade_score * self.WEIGHT_RECOMMENDED_GRADE +
             curriculum_completion_score * self.WEIGHT_CURRICULUM_COMPLETION
+        )
+        
+        # 7. 상세 분석 JSON 생성
+        analysis_json = self._build_analysis_json(
+            student, department, enrollments, entry_requirements,
+            gpa_score, required_score, recommended_completion_score,
+            recommended_grade_score, curriculum_completion_score
         )
         
         # 등급 판정
@@ -171,6 +178,7 @@ class EvaluationService:
             'curriculum_completion_score': round(curriculum_completion_score, 2),
             'overall_score': round(overall_score, 2),
             'grade': grade,
+            'analysis_json': analysis_json,
             'evaluated_at': datetime.utcnow()
         }
         
@@ -385,27 +393,23 @@ class EvaluationService:
         department_id: int
     ) -> float:
         """
-        교육과정 완성도 점수 (15%)
+        교육과정 완성도 점수 (10%)
         
-        해당 학과의 전공 과목 중 이수한 비율
+        해당 학과의 1학년 과목 중 이수한 비율
         """
-        # 해당 학과의 1학년 전공 과목 조회
+        # 해당 학과의 1학년 과목 조회
         dept_courses = self.db.query(Course).filter(
             Course.department_id == department_id,
-            Course.course_year == 1,
-            or_(
-                Course.course_type.like('%전공%'),
-                Course.course_type == '전공기초',
-                Course.course_type == '전공핵심'
-            )
+            Course.course_year == 1
         ).all()
         
+        # 1학년 과목이 없으면 0점 반환
         if not dept_courses:
-            return 100.0  # 전공과목 없으면 만점
+            return 0.0
         
         dept_course_ids = {c.id for c in dept_courses}
         
-        # 이수한 전공과목 개수
+        # 이수한 전공과목 개수 (F학점 제외)
         completed_count = sum(
             1 for enrollment in enrollments
             if enrollment.course_id in dept_course_ids and
@@ -467,12 +471,184 @@ class EvaluationService:
         status.recommended_grade_score = result['recommended_grade_score']
         status.curriculum_completion_score = result['curriculum_completion_score']
         status.overall_score = result['overall_score']
+        status.analysis_json = result.get('analysis_json')
         status.calculated_at = result['evaluated_at']
         
-        # 충족 여부 판정 (70점 이상)
-        status.is_satisfied = result['overall_score'] >= 70.0
+        # 충족 여부 판정 (required_courses_score가 100점이고 overall이 70점 이상)
+        status.is_satisfied = (
+            result['required_courses_score'] >= 100.0 and
+            result['overall_score'] >= 70.0
+        )
         
         self.db.commit()
+    
+    def _build_analysis_json(
+        self,
+        student: Student,
+        department: Department,
+        enrollments: List[CourseEnrollment],
+        entry_requirements: List[DepartmentEntryRequirement],
+        gpa_score: float,
+        required_score: float,
+        recommended_completion_score: float,
+        recommended_grade_score: float,
+        curriculum_completion_score: float
+    ) -> Dict:
+        """
+        상세 분석 JSON 생성
+        
+        Returns:
+            분석 데이터 딕셔너리
+        """
+        enrolled_courses_map = self._build_enrolled_courses_map(enrollments)
+        
+        # 진입요건 상세 분석
+        entry_requirements_details = []
+        completed_requirements = []
+        
+        for requirement in entry_requirements:
+            req_courses = self.db.query(RequirementCourse).filter(
+                RequirementCourse.requirement_id == requirement.id
+            ).all()
+            
+            if not req_courses:
+                continue
+            
+            # 요건 충족 여부 확인
+            if requirement.logic_operator == "OR":
+                is_satisfied = self._check_or_condition(
+                    requirement, req_courses, enrolled_courses_map
+                )
+            else:
+                is_satisfied = self._check_and_condition(
+                    requirement, req_courses, enrolled_courses_map
+                )
+            
+            if is_satisfied:
+                completed_requirements.append(requirement.requirement_text)
+            
+            # 각 과목별 상세 정보
+            course_details = []
+            for req_course in req_courses:
+                course_info = enrolled_courses_map.get(req_course.course_code, {})
+                course = self.db.query(Course).filter(
+                    Course.course_code == req_course.course_code
+                ).first()
+                
+                course_details.append({
+                    "course_code": req_course.course_code,
+                    "course_name": course.course_name if course else "Unknown",
+                    "grade": course_info.get('grade', 'Not Taken'),
+                    "numeric_grade": course_info.get('numeric_grade', 0),
+                    "satisfied": course_info.get('numeric_grade', 0) >= self.GRADE_LEVEL_MINIMUM.get(
+                        requirement.target_grade_level, 3.0
+                    ) if course_info else False
+                })
+            
+            entry_requirements_details.append({
+                "requirement_text": requirement.requirement_text,
+                "target_grade_level": requirement.target_grade_level.value,
+                "required_count": requirement.required_count,
+                "logic_operator": requirement.logic_operator,
+                "is_satisfied": is_satisfied,
+                "courses": course_details
+            })
+        
+        # 권장과목 분석
+        recommended_courses = self.recommended_courses_map.get(department.name, [])
+        enrolled_course_names = set()
+        for enrollment in enrollments:
+            course = self.db.query(Course).filter(
+                Course.id == enrollment.course_id
+            ).first()
+            if course:
+                enrolled_course_names.add(course.course_name)
+        
+        completed_recommended = [
+            course for course in recommended_courses
+            if course in enrolled_course_names
+        ]
+        
+        # 교육과정 완성도 상세 정보 계산 (1학년만)
+        dept_courses = self.db.query(Course).filter(
+            Course.department_id == department.id,
+            Course.course_year == 1,
+            or_(
+                Course.course_type.like('%전공%'),
+                Course.course_type == '전공기초',
+                Course.course_type == '전공핵심',
+                Course.course_type == '교양필수'
+            )
+        ).all()
+        
+        dept_course_ids = {c.id for c in dept_courses}
+        completed_curriculum_count = sum(
+            1 for enrollment in enrollments
+            if enrollment.course_id in dept_course_ids and
+            enrollment.grade and enrollment.grade != 'F'
+        )
+        
+        return {
+            "entry_requirements": {
+                "status": "satisfied" if required_score >= 100 else "not_satisfied",
+                "completed_requirements": completed_requirements,
+                "details": entry_requirements_details
+            },
+            "gpa": {
+                "current_gpa": float(student.current_gpa) if student.current_gpa else 0.0,
+                "max_gpa": 4.5,
+                "score": gpa_score
+            },
+            "recommended_courses": {
+                "total": len(recommended_courses),
+                "completed": len(completed_recommended),
+                "completion_rate": len(completed_recommended) / len(recommended_courses) if recommended_courses else 0,
+                "completed_list": completed_recommended,
+                "score": recommended_completion_score
+            },
+            "recommended_grades": {
+                "score": recommended_grade_score
+            },
+            "curriculum_completion": {
+                "score": curriculum_completion_score,
+                "completed_count": completed_curriculum_count,
+                "total_count": len(dept_courses),
+                "completion_rate": completed_curriculum_count / len(dept_courses) if dept_courses else 0,
+                "status": "완료" if curriculum_completion_score >= 100 else "진행중"
+            },
+            "overall": {
+                "score": (
+                    required_score * self.WEIGHT_REQUIRED_COURSES +
+                    gpa_score * self.WEIGHT_GPA +
+                    recommended_completion_score * self.WEIGHT_RECOMMENDED_COMPLETION +
+                    recommended_grade_score * self.WEIGHT_RECOMMENDED_GRADE +
+                    curriculum_completion_score * self.WEIGHT_CURRICULUM_COMPLETION
+                ),
+                "weights": {
+                    "required_courses": self.WEIGHT_REQUIRED_COURSES,
+                    "gpa": self.WEIGHT_GPA,
+                    "recommended_completion": self.WEIGHT_RECOMMENDED_COMPLETION,
+                    "recommended_grade": self.WEIGHT_RECOMMENDED_GRADE,
+                    "curriculum_completion": self.WEIGHT_CURRICULUM_COMPLETION
+                }
+            }
+        }
+    
+    @staticmethod
+    def get_admission_year_from_student_id(student_id_str: str) -> int:
+        """
+        학번에서 입학년도 추출
+        
+        Args:
+            student_id_str: 학번 문자열 (예: "20260001")
+            
+        Returns:
+            입학년도 (예: 2026)
+        """
+        try:
+            return int(student_id_str[:4])
+        except (ValueError, IndexError):
+            return 2026  # 기본값
     
     def batch_evaluate_students(
         self,

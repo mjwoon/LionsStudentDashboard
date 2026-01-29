@@ -823,6 +823,203 @@ export default function StudentDetailView() {
             </div>
           )}
 
+          {/* 평가 결과 상세 */}
+          {pathwayDept && evaluation && !loadingEvaluation && (
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4">
+                <h2 className="text-xl font-bold text-white">전공 진입 적합도 평가 결과</h2>
+                <p className="text-purple-100 text-sm mt-1">
+                  5개 메트릭 기반 종합 평가 | 최종 업데이트: {new Date(evaluation.evaluated_at).toLocaleString('ko-KR')}
+                </p>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* 종합 점수 */}
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-purple-900">종합 점수</h3>
+                      <p className="text-sm text-purple-700 mt-1">
+                        {evaluation.overall_score >= 100 ? '✅ 진입요건 충족' : 
+                         evaluation.overall_score >= 70 ? '⚠️ 부분 충족' : '❌ 미충족'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-5xl font-bold text-purple-700">
+                        {Math.round(evaluation.overall_score)}
+                      </div>
+                      <div className="text-lg font-semibold text-purple-600">
+                        등급: {evaluation.grade}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-purple-200 rounded-full h-4">
+                    <div
+                      className="h-4 rounded-full bg-gradient-to-r from-purple-500 to-purple-700 transition-all duration-500"
+                      style={{ width: `${Math.min(evaluation.overall_score, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 세부 점수 */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {/* 필수과목 충족도 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="text-xs font-medium text-gray-500 uppercase mb-2">필수과목 충족도 (40%)</div>
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {Math.round(evaluation.required_courses_score)}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          evaluation.required_courses_score >= 100 ? 'bg-green-500' : 
+                          evaluation.required_courses_score >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(evaluation.required_courses_score, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-600 mt-2">
+                      {evaluation.required_courses_score >= 100 ? '✅ 충족' : '⚠️ 미충족'}
+                    </div>
+                  </div>
+
+                  {/* GPA 점수 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="text-xs font-medium text-gray-500 uppercase mb-2">평균학점 (20%)</div>
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {Math.round(evaluation.gpa_score)}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full bg-blue-500 transition-all duration-500"
+                        style={{ width: `${Math.min(evaluation.gpa_score, 100)}%` }}
+                      />
+                    </div>
+                    {evaluation.analysis_json?.gpa && (
+                      <div className="text-xs text-gray-600 mt-2">
+                        현재: {evaluation.analysis_json.gpa.current_gpa.toFixed(2)} / 4.5
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 권장과목 이수 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="text-xs font-medium text-gray-500 uppercase mb-2">권장과목 이수 (15%)</div>
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {Math.round(evaluation.recommended_completion_score)}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full bg-indigo-500 transition-all duration-500"
+                        style={{ width: `${Math.min(evaluation.recommended_completion_score, 100)}%` }}
+                      />
+                    </div>
+                    {evaluation.analysis_json?.recommended_courses && (
+                      <div className="text-xs text-gray-600 mt-2">
+                        {evaluation.analysis_json.recommended_courses.completed} / {evaluation.analysis_json.recommended_courses.total} 과목
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 권장과목 학점 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="text-xs font-medium text-gray-500 uppercase mb-2">권장과목 학점 (15%)</div>
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {Math.round(evaluation.recommended_grade_score)}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full bg-teal-500 transition-all duration-500"
+                        style={{ width: `${Math.min(evaluation.recommended_grade_score, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 교육과정 완성도 */}
+                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="text-xs font-medium text-gray-500 uppercase mb-2">교육과정 완성도 (10%)</div>
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {Math.round(evaluation.curriculum_completion_score)}
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full bg-orange-500 transition-all duration-500"
+                        style={{ width: `${Math.min(evaluation.curriculum_completion_score, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 진입요건 상세 */}
+                {evaluation.analysis_json?.entry_requirements && evaluation.analysis_json.entry_requirements.details.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">진입요건 상세</h3>
+                    <div className="space-y-4">
+                      {evaluation.analysis_json.entry_requirements.details.map((detail: any, idx: number) => (
+                        <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                {detail.is_satisfied ? (
+                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                ) : (
+                                  <XCircle className="h-5 w-5 text-red-600" />
+                                )}
+                                <span className={`font-semibold ${detail.is_satisfied ? 'text-green-700' : 'text-red-700'}`}>
+                                  {detail.is_satisfied ? '충족' : '미충족'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700 font-medium">{detail.requirement_text}</p>
+                            </div>
+                          </div>
+                          
+                          {detail.courses && detail.courses.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {detail.courses.map((course: any, cidx: number) => (
+                                <div key={cidx} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs font-mono text-gray-500">{course.course_code}</span>
+                                    <span className="text-sm font-medium text-gray-900">{course.course_name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                      course.satisfied ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {course.grade}
+                                    </span>
+                                    {course.satisfied ? (
+                                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    ) : (
+                                      <XCircle className="h-4 w-4 text-gray-400" />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 평가 가중치 정보 */}
+                {evaluation.analysis_json?.overall?.weights && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 평가 가중치 정보</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs text-blue-800">
+                      <div>필수과목: {(evaluation.analysis_json.overall.weights.required_courses * 100)}%</div>
+                      <div>평균학점: {(evaluation.analysis_json.overall.weights.gpa * 100)}%</div>
+                      <div>권장이수: {(evaluation.analysis_json.overall.weights.recommended_completion * 100)}%</div>
+                      <div>권장학점: {(evaluation.analysis_json.overall.weights.recommended_grade * 100)}%</div>
+                      <div>교육과정: {(evaluation.analysis_json.overall.weights.curriculum_completion * 100)}%</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 과목 구분 안내 */}
           {pathwayDept && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">

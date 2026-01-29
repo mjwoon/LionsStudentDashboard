@@ -473,38 +473,67 @@ export interface TrendDataPoint {
 }
 // Evaluation Types
 export interface EvaluationResult {
-  student_id: number
+  student_id: string
   department_id: number
   department_name: string
-  admission_year: number
-  required_courses: {
-    score: number
-    total_requirements: number
-    satisfied_requirements: number
-    pass: boolean
-    message: string
-    details: any[]
-  }
-  recommended_courses: {
-    score: number
-    total_courses: number
-    completed_courses: number
-    total_credits: number
-    completed_credits: number
-    completion_rate: number
-    message: string
-    details: any[]
-  }
-  related_credits: {
-    score: number
-    total_available_credits: number
-    earned_credits: number
-    message: string
-  }
+  gpa_score: number
+  required_courses_score: number
+  recommended_completion_score: number
+  recommended_grade_score: number
+  curriculum_completion_score: number
   overall_score: number
   grade: string
-  summary_message: string
+  summary_message?: string
+  analysis_json?: {
+    entry_requirements: {
+      status: string
+      completed_requirements: string[]
+      details: {
+        requirement_text: string
+        target_grade_level: string
+        required_count: number
+        logic_operator: string
+        is_satisfied: boolean
+        courses: {
+          course_code: string
+          course_name: string
+          grade: string
+          numeric_grade: number
+          satisfied: boolean
+        }[]
+      }[]
+    }
+    gpa: {
+      current_gpa: number
+      max_gpa: number
+      score: number
+    }
+    recommended_courses: {
+      total: number
+      completed: number
+      completion_rate: number
+      completed_list: string[]
+      score: number
+    }
+    recommended_grades: {
+      score: number
+    }
+    curriculum_completion: {
+      score: number
+    }
+    overall: {
+      score: number
+      weights: {
+        required_courses: number
+        gpa: number
+        recommended_completion: number
+        recommended_grade: number
+        curriculum_completion: number
+      }
+    }
+  }
   evaluated_at: string
+  cached?: boolean
 }
 
 export interface EvaluationStatistics {
