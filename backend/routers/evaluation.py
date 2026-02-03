@@ -48,6 +48,10 @@ def evaluate_student_for_department(
         ).first()
         
         if cached_result and cached_result.overall_score is not None:
+            # 체계도 상세 정보 추가
+            evaluator = EvaluationService(db)
+            curriculum_details = evaluator.get_curriculum_details(student.id, department_id)
+            
             return {
                 "student_id": student_id,
                 "department_id": department_id,
@@ -57,7 +61,8 @@ def evaluate_student_for_department(
                 "grade": 'A' if cached_result.overall_score >= 90 else 'B' if cached_result.overall_score >= 80 else 'C' if cached_result.overall_score >= 70 else 'D' if cached_result.overall_score >= 60 else 'F',
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
-                "cached": True
+                "cached": True,
+                "curriculum_details": curriculum_details
             }
     
     # 새로 계산
@@ -68,6 +73,11 @@ def evaluate_student_for_department(
             student.id, department_id, admission_year, save_to_db=True
         )
         result["cached"] = False
+        
+        # 체계도 상세 정보 추가
+        curriculum_details = evaluator.get_curriculum_details(student.id, department_id)
+        result["curriculum_details"] = curriculum_details
+        
         return result
     
     except ValueError as e:

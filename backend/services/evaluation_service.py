@@ -35,6 +35,67 @@ class EvaluationService:
     
     def __init__(self, db: Session):
         self.db = db
+        self._necessary_data = None
+        self._recommended_data = None
+    
+    def _load_necessary_courses(self) -> Dict:
+        """necessary.json 파일 로드"""
+        if self._necessary_data is None:
+            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+            necessary_path = os.path.join(data_dir, 'necessary.json')
+            try:
+                with open(necessary_path, 'r', encoding='utf-8') as f:
+                    self._necessary_data = json.load(f)
+            except FileNotFoundError:
+                self._necessary_data = {"colleges": []}
+        return self._necessary_data
+    
+    def _load_recommended_courses(self) -> Dict:
+        """recommended.json 파일 로드"""
+        if self._recommended_data is None:
+            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+            recommended_path = os.path.join(data_dir, 'recommended.json')
+            try:
+                with open(recommended_path, 'r', encoding='utf-8') as f:
+                    self._recommended_data = json.load(f)
+            except FileNotFoundError:
+                self._recommended_data = {"colleges": []}
+        return self._recommended_data
+    
+    def _get_department_courses(self, department_id: int) -> Dict:
+        """학과의 필수/권장 과목 정보 조회"""
+        department = self.db.query(Department).filter(Department.id == department_id).first()
+        if not department:
+            return {"necessary_courses": [], "recommended_courses": []}
+        
+        dept_name = department.name
+        
+        # 필수 과목 조회
+        necessary_data = self._load_necessary_courses()
+        necessary_courses = []
+        for college in necessary_data.get("colleges", []):
+            for major in college.get("majors", []):
+                if major.get("name") == dept_name:
+                    # course_code 리스트 추출
+                    necessary_courses = [
+                        course["course_code"] 
+                        for course in major.get("necessary_courses", [])
+                    ]
+                    break
+        
+        # 권장 과목 조회
+        recommended_data = self._load_recommended_courses()
+        recommended_courses = []
+        for college in recommended_data.get("colleges", []):
+            for major in college.get("majors", []):
+                if major.get("name") == dept_name:
+                    recommended_courses = major.get("recommended_courses", [])
+                    break
+        
+        return {
+            "necessary_courses": necessary_courses,
+            "recommended_courses": recommended_courses
+        }
     
     def evaluate_student(
         self,
@@ -289,6 +350,75 @@ class EvaluationService:
         status.is_satisfied = result['overall_score'] >= MIN_SATISFACTION_SCORE
         
         self.db.commit()
+    
+    def get_curriculum_details(self, student_id: int, department_id: int) -> Dict[int, List[Dict]]:
+        """
+        전체 학년 전공이수체계도 상세 정보 반환 (학년별로 그룹화)
+        교양필수, 전공기초 과목도 포함
+        
+        Args:
+            student_id: 학생 ID
+            department_id: 학과 ID
+            
+        Returns:
+            학년별 체계도 과목 딕셔너리 {1: [...], 2: [...], 3: [...], 4: [...]}
+        """
+        # 해당 학과의 전체 과목 + 교양필수/전공기초 과목 조회 (1~4학년)
+        # course_type이 교양필수 또는 전공기초인 과목도 포함
+        dept_courses = self.db.query(Course).filter(
+            or_(
+                Course.department_id == department_id,
+                Course.course_type == '교양필수',
+                Course.course_type == '전공기초'
+            ),
+            Course.course_year.in_([1, 2, 3, 4])
+        ).order_by(Course.course_year, Course.semester, Course.course_code).all()
+        
+        if not dept_courses:
+            return {}
+        
+        # 학생의 수강 이력 조회
+        enrollments = self.db.query(CourseEnrollment).filter(
+            CourseEnrollment.student_id == student_id
+        ).all()
+        
+        # 수강 이력을 course_id로 매핑
+        enrollment_map = {e.course_id: e for e in enrollments}
+        
+        # 해당 학과의 필수/권장 과목 리스트 가져오기
+        department_courses_data = self._get_department_courses(department_id)
+        necessary_course_codes = set(department_courses_data.get('necessary_courses', []))
+        recommended_course_codes = set(department_courses_data.get('recommended_courses', []))
+        
+        # 학년별 체계도 과목 리스트 생성
+        curriculum_by_year = {1: [], 2: [], 3: [], 4: []}
+        for course in dept_courses:
+            enrollment = enrollment_map.get(course.id)
+            
+            # 해당 학과 기준으로 요건 분류 결정
+            requirement_type = None
+            if course.course_code in necessary_course_codes:
+                requirement_type = "전공진입"
+            elif course.course_code in recommended_course_codes or course.course_name in recommended_course_codes:
+                requirement_type = "권장과목"
+            
+            course_detail = {
+                "course_code": course.course_code,
+                "course_name": course.course_name,
+                "credits": course.credits,
+                "course_type": course.course_type,
+                "requirement_type": requirement_type,  # 해당 학과의 요건 분류
+                "semester": course.semester,
+                "year": course.course_year,
+                "enrolled": enrollment is not None,
+                "grade": enrollment.grade if enrollment else None,
+                "enrollment_year": enrollment.year if enrollment else None,
+                "enrollment_semester": enrollment.semester if enrollment else None
+            }
+            curriculum_by_year[course.course_year].append(course_detail)
+        
+        # 빈 학년은 제거
+        return {year: courses for year, courses in curriculum_by_year.items() if courses}
     
     def _build_analysis_json(
         self,

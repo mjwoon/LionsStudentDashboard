@@ -28,6 +28,7 @@ export interface Student {
   academic_info: {
     pride: string
     class_number: number
+    track?: string  // 전계열, 자연계열, 인문사회계열
     advisor_name?: string
     status: string
   }
@@ -259,6 +260,18 @@ export interface TrendDataPoint {
 // Evaluation Types
 // ============================================================================
 
+export interface CurriculumCourse {
+  course_code: string
+  course_name: string
+  credits: number
+  year: number
+  semester: number
+  enrolled: boolean
+  grade?: string
+  evaluation_type?: string
+  requirement_type?: string | null
+}
+
 export interface EvaluationResult {
   student_id: string
   department_id: number
@@ -271,6 +284,7 @@ export interface EvaluationResult {
   overall_score: number
   grade: string
   summary_message?: string
+  curriculum_details?: Record<number, CurriculumCourse[]>
   analysis_json?: {
     entry_requirements: {
       status: string

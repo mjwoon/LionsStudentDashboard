@@ -5,7 +5,12 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['Pretendard Variable', 'Hakgyoansim Bareondotum', 'Malgun Gothic', 'sans-serif'],
+        serif: ['Hakgyoansim Bareonbatang', 'Georgia', 'serif'],
+      },
+    },
   },
   plugins: [],
 }

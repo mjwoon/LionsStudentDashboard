@@ -118,6 +118,7 @@ def get_students(
             academic_info=AcademicInfo(
                 pride=student.pride,
                 class_number=student.class_number,
+                track=student.track,
                 advisor_name=student.advisor.name if student.advisor else None,
                 status=student.status,
                 updated_at=student.updated_at
@@ -161,6 +162,7 @@ def get_student_detail(student_id: str, db: Session = Depends(get_db)):
         academic_info=AcademicInfo(
             pride=student.pride,
             class_number=student.class_number,
+            track=student.track,
             advisor_id=student.advisor_id,
             advisor_name=student.advisor.name if student.advisor else None,
             status=student.status,
