@@ -1,17 +1,42 @@
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingUp, Users, Download, ChevronDown } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { api } from '../api';
 
+// 학과별 랜덤 색상 팔레트
+const COLOR_PALETTE = [
+  '#0e4a84', '#1e40af', '#2563eb', '#3b82f6', '#60a5fa',
+  '#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca',
+  '#7c3aed', '#a855f7', '#c084fc', '#e879f9', '#f0abfc',
+  '#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0',
+  '#d97706', '#f59e0b', '#fbbf24', '#fcd34d', '#fde68a',
+  '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff',
+  '#be123c', '#be185d', '#ec4899', '#f472b6', '#fbbbf9'
+];
+
+// 각 학과에 할당된 색상을 추적하는 Map
+const departmentColorMap = new Map<string | number, string>();
+
+function getRandomColor(deptId: string | number): string {
+  if (departmentColorMap.has(deptId)) {
+    return departmentColorMap.get(deptId)!;
+  }
+  const randomColor = COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
+  departmentColorMap.set(deptId, randomColor);
+  return randomColor;
+}
+
 export default function DashboardView() {
+  const [selectedSurvey, setSelectedSurvey] = useState('3');
   const [selectedCollege, setSelectedCollege] = useState('all');
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
-  const [showTopN, setShowTopN] = useState(10);
   const [loading, setLoading] = useState(true);
-  const [colleges, setColleges] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [currentData, setCurrentData] = useState<any[]>([]);
-  const [trendData, setTrendData] = useState<any[]>([]);
+  const [colleges, setColleges] = useState<{ id: string | number; name: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string | number; name: string; college?: string; color?: string }[]>([]);
+  const [currentData, setCurrentData] = useState<{ dept: string; students: number; percent: number; id: string | number }[]>([]);
+  const [trendData, setTrendData] = useState<Record<string, string | number>[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [topDept, setTopDept] = useState<{ dept: string; students: number; percent: number } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,13 +52,26 @@ export default function DashboardView() {
         ];
         
         setColleges(collegesWithAll);
-        setDepartments(data.departments);
-        setCurrentData(data.current_data.map(d => ({
+        // 각 학과에 랜덤 색상 할당
+        const departmentsWithRandomColors = data.departments.map(d => ({
+          ...d,
+          color: getRandomColor(d.id)
+        }));
+        setDepartments(departmentsWithRandomColors);
+        console.log('Departments with random colors:', departmentsWithRandomColors.map(d => ({ name: d.name, color: d.color })));
+        
+        const formattedCurrent = data.current_data.map(d => ({
           dept: d.name,
           students: d.students,
           percent: d.percent,
           id: d.id
-        })));
+        }));
+        setCurrentData(formattedCurrent);
+        
+        // Set statistics
+        const total = formattedCurrent.reduce((sum, d) => sum + d.students, 0);
+        setTotalStudents(total);
+        setTopDept(formattedCurrent[0] || null);
         
         // Convert trend data to format expected by chart
         const formattedTrend = data.trend_data.map(t => ({
@@ -54,34 +92,21 @@ export default function DashboardView() {
 
   if (loading) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+      <div className="bg-[#f5f7fa] min-h-screen flex items-center justify-center">
         <div className="text-gray-600">데이터를 불러오는 중...</div>
       </div>
     );
   }
 
-  // 단과대학별로 필터링
-  const filteredDepartments = selectedCollege === 'all' 
-    ? departments 
-    : departments.filter((d) => d.college === selectedCollege);
-
-  // 현재 데이터 필터링
+  // 현재 데이터 필터링 (상위 15개로 제한)
   const filteredCurrentData = currentData
     .filter((d) => {
       const dept = departments.find((dep) => dep.id === d.id);
       return selectedCollege === 'all' || dept?.college === selectedCollege;
     })
-    .slice(0, showTopN);
+    .slice(0, 15);
 
-  const handleDeptToggle = (deptId: string) => {
-    setSelectedDepts((prev) =>
-      prev.includes(deptId)
-        ? prev.filter((id) => id !== deptId)
-        : [...prev, deptId]
-    );
-  };
-
-  const downloadCSV = () => {
+  const downloadData = () => {
     const csv = [
       ['학과', '학생 수', '비율(%)'],
       ...filteredCurrentData.map((d) => [d.dept, d.students, d.percent])
@@ -98,169 +123,165 @@ export default function DashboardView() {
     document.body.removeChild(link);
   };
 
-  const totalStudents = filteredCurrentData.reduce((sum, d) => sum + d.students, 0);
-
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      {/* 헤더 */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">대시보드</h1>
-        <p className="text-gray-600">학과별 희망 학생 현황 및 트렌드를 확인할 수 있습니다.</p>
-      </div>
-
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md border-2 border-gray-300 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">총 희망 학생 수</h3>
-            <Users className="h-5 w-5 text-blue-600" />
-          </div>
-          <div className="text-3xl font-bold text-gray-900">{totalStudents}명</div>
-          <p className="text-sm text-gray-500 mt-2">전체 학과 기준</p>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md border-2 border-gray-300 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">가장 인기 있는 학과</h3>
-            <TrendingUp className="h-5 w-5 text-green-600" />
-          </div>
-          <div className="text-2xl font-bold text-gray-900">{filteredCurrentData[0]?.dept}</div>
-          <p className="text-sm text-gray-500 mt-2">{filteredCurrentData[0]?.students}명 ({filteredCurrentData[0]?.percent}%)</p>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md border-2 border-gray-300 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-600">전체 학과 수</h3>
-            <ChevronDown className="h-5 w-5 text-purple-600" />
-          </div>
-          <div className="text-3xl font-bold text-gray-900">{departments.length}개</div>
-          <p className="text-sm text-gray-500 mt-2">{colleges.length - 1}개 단과대학</p>
-        </div>
-      </div>
-
-
-      {/* 필터 영역 */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <div className="flex gap-4 items-center flex-wrap">
+    <div className="bg-[#f5f7fa] min-h-screen">
+      {/* Main Content */}
+      <div className="p-8 flex flex-col gap-6">
+        {/* Title Section */}
+        <div className="flex items-center justify-between">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">단과대학</label>
-            <select 
-              value={selectedCollege}
-              onChange={(e) => {
-                setSelectedCollege(e.target.value);
-                setSelectedDepts([]);
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {colleges.map((college) => (
-                <option key={college.id} value={college.id}>
-                  {college.name}
-                </option>
-              ))}
-            </select>
+            <h1 className="text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
+            <p className="text-lg text-[#6a7282]">전체 학과별 희망 학생 현황 및 추세를 확인합니다.</p>
+          </div>
+          <button 
+            onClick={downloadData}
+            className="flex items-center gap-2 px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition"
+          >
+            <Download className="w-5 h-5" />
+            <span className="text-sm font-medium">데이터 다운로드</span>
+          </button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="bg-white rounded-2xl border border-black/10 p-9">
+            <p className="text-[#6a7282] text-lg font-medium mb-3">전체 응답 학생</p>
+            <p className="text-[#101828] text-3xl font-bold mb-2">{totalStudents}명</p>
+            <p className="text-[#6a7282] text-lg font-medium">3차 조사 기준</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">표시 학과 수</label>
-            <select
-              value={showTopN}
-              onChange={(e) => setShowTopN(Number(e.target.value))}
-              className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value={5}>상위 5개</option>
-              <option value={10}>상위 10개</option>
-              <option value={15}>상위 15개</option>
-              <option value={29}>전체</option>
-            </select>
+          <div className="bg-white rounded-2xl border border-black/10 p-9">
+            <p className="text-[#6a7282] text-lg font-medium mb-3">최다 희망 학과</p>
+            <p className="text-[#101828] text-3xl font-bold mb-2">{topDept?.dept || '-'}</p>
+            <p className="text-[#6a7282] text-lg font-medium">{topDept?.students}명 ({topDept?.percent}%)</p>
           </div>
 
-          <div className="ml-auto">
-            <button
-              onClick={downloadCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              CSV 다운로드
-            </button>
+          <div className="bg-white rounded-2xl border border-black/10 p-9">
+            <p className="text-[#6a7282] text-lg font-medium mb-3">조사 진행률</p>
+            <p className="text-[#101828] text-3xl font-bold mb-2">3차 조사 완료</p>
+            <p className="text-[#6a7282] text-lg font-medium">2025.11.06 기준</p>
           </div>
         </div>
-      </div>
 
-    
-      {/* 차트 영역 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* 학과별 희망 학생 수 (Bar Chart) */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">학과별 희망 학생 현황</h2>
+        {/* Department Ratio Chart */}
+        <div className="bg-white rounded-2xl border border-black/10 p-7">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
+            <div className="flex gap-2">
+              <select 
+                value={selectedSurvey}
+                onChange={(e) => setSelectedSurvey(e.target.value)}
+                className="px-4 py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-lg font-medium cursor-pointer hover:border-black/20 transition"
+              >
+                <option value="1">1차 조사</option>
+                <option value="2">2차 조사</option>
+                <option value="3">3차 조사</option>
+              </select>
+              <select 
+                value={selectedCollege}
+                onChange={(e) => {
+                  setSelectedCollege(e.target.value);
+                  setSelectedDepts([]);
+                }}
+                className="px-4 py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-lg font-medium cursor-pointer hover:border-black/20 transition w-44"
+              >
+                {colleges.map((college) => (
+                  <option key={college.id} value={college.id}>
+                    {college.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={filteredCurrentData}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis 
                 dataKey="dept" 
-                angle={-45}
-                textAnchor="end"
-                height={120}
-                interval={0}
-                tick={{ fontSize: 12 }}
+                angle={0}
+                tick={{ fontSize: 12, fill: '#6a7282' }}
               />
-              <YAxis />
+              <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
               <Tooltip />
-              <Bar dataKey="students" name="학생 수">
+              <Bar dataKey="students" fill="#0e4a84" radius={[8, 8, 0, 0]}>
                 {filteredCurrentData.map((entry) => {
                   const dept = departments.find((d) => d.id === entry.id);
-                  return <Cell key={entry.id} fill={dept?.color || '#3b82f6'} />;
+                  return <Cell key={entry.id} fill={dept?.color || '#0e4a84'} />;
                 })}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
 
-      {/* 트렌드 차트 */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">시점별 변화 트렌드</h2>
-        
-        {/* 학과 선택 체크박스 */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <p className="text-sm font-medium text-gray-700 mb-3">비교할 학과 선택 (최대 5개 권장)</p>
-          <div className="flex flex-wrap gap-3">
-            {filteredDepartments.slice(0, 15).map((dept) => (
-              <label key={dept.id} className="flex items-center gap-2 cursor-pointer">
+        {/* Trend Chart */}
+        <div className="bg-white rounded-2xl border border-black/10 p-7">
+          <div className="mb-8">
+            <h2 className="text-2xl font-semibold text-[#101828] mb-2">시점별 변화 추세</h2>
+            <p className="text-lg text-[#6a7282]">비교할 학과를 선택하세요</p>
+          </div>
+
+          {/* Department Selection */}
+          <div className="mb-6 flex gap-2 flex-wrap">
+            {[
+              { id: 'college-eng', name: '공과대학', checked: true },
+              { id: 'college-sci', name: '자연과학대학', checked: false },
+              { id: 'college-bus', name: '경영대학', checked: false },
+              { id: 'college-hum', name: '인문대학', checked: false },
+              { id: 'college-social', name: '사회과학대학', checked: false }
+            ].map(college => (
+              <label key={college.id} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={selectedDepts.includes(dept.id)}
-                  onChange={() => handleDeptToggle(dept.id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  defaultChecked={college.checked}
+                  className="w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-sm text-gray-700">{dept.name}</span>
+                <span className="text-lg text-[#101828]">{college.name}</span>
               </label>
             ))}
           </div>
-        </div>
 
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={trendData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            {selectedDepts.map((deptId) => {
-              const dept = departments.find((d) => d.id === deptId);
-              return (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="period" tick={{ fontSize: 12, fill: '#6a7282' }} />
+              <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
+              <Tooltip />
+              <Legend />
+              {selectedDepts.length === 0 ? (
+                // Show a default line if no departments are selected
                 <Line
-                  key={deptId}
                   type="monotone"
-                  dataKey={deptId}
-                  name={dept?.name}
-                  stroke={dept?.color}
+                  dataKey={currentData[0]?.id}
+                  stroke="#3b82f6"
                   strokeWidth={2}
                   dot={{ r: 4 }}
+                  name={currentData[0]?.dept}
                 />
-              );
-            })}
-          </LineChart>
-        </ResponsiveContainer>
+              ) : (
+                selectedDepts.map((deptId) => {
+                  const dept = departments.find((d) => d.id === deptId);
+                  return (
+                    <Line
+                      key={deptId}
+                      type="monotone"
+                      dataKey={deptId}
+                      stroke={dept?.color}
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      name={dept?.name}
+                    />
+                  );
+                })
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Footer */}
+        <div className="h-12 flex items-center justify-center">
+          <p className="text-gray-500 text-sm">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
+        </div>
       </div>
     </div>
   );

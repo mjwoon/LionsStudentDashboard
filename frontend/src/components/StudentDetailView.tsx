@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Download, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../api';
-import { 
-  DEFAULT_MAX_GPA, 
-  getCourseTypeBadgeColor, 
-  getDecisionCertaintyDisplay, 
-  getScoreBadgeColor 
-} from '../constants';
 
 interface Student {
   student_id: string;
@@ -23,84 +17,24 @@ interface Student {
     advisor_name?: string;
     status: string;
   };
-  latest_major_choice?: string;  // 최신 희망 학과
-  decision_certainty?: number;  // 전공결정도 (1-5)
-  completion_status?: string;  // 이수현황 (예: "15/20")
-  course_suitability?: string;  // 수강과목 적합성
-}
-
-interface CourseEnrollment {
-  course_id: number;
-  course_code: string;
-  course_name: string;
-  credits: number;
-  year: number;
-  semester: number;
-  completion_type: string;
-  is_entry_requirement: boolean;
-  is_retake: boolean;
-  grade?: string;  // 성적 (A+, A0, B+, etc.)
-  numeric_grade?: number;  // 숫자 학점 (4.5, 4.0, 3.5, etc.)
-}
-
-interface SurveyHistory {
-  survey_id: number;
-  round: number;
-  submitted_at: string;
-  first_choice: { id: number; name: string };
-  second_choice?: { id: number; name: string };
-  decision_scale: number;
-}
-
-interface Department {
-  id: number;
-  code: string;
-  name: string;
-  college_name: string;
-  min_credits: number;
-}
-
-interface College {
-  id: number;
-  name: string;
+  latest_major_choice?: string;
+  decision_certainty?: number;
+  completion_status?: string;
+  course_suitability?: string;
 }
 
 export default function StudentDetailView() {
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState<string>('');
-  const [studentDetail, setStudentDetail] = useState<Student | null>(null);
-  const [showDetail, setShowDetail] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'survey' | 'entry' | 'courses'>('survey');
-  const [courses, setCourses] = useState<CourseEnrollment[]>([]);
-  const [surveys, setSurveys] = useState<SurveyHistory[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCollege, setSelectedCollege] = useState<number>(0);
-  const [pathwayDept, setPathwayDept] = useState<number | null>(null);
-  const [curriculum, setCurriculum] = useState<any>(null);
-  const [loadingCurriculum, setLoadingCurriculum] = useState(false);
-  const [courseFilter, setCourseFilter] = useState<string>('all');
-  const [evaluation, setEvaluation] = useState<any>(null);
-  const [loadingEvaluation, setLoadingEvaluation] = useState(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [searchInput, setSearchInput] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [perPage] = useState<number>(50);
-
-  // Handle search
-  const handleSearch = () => {
-    setSearchQuery(searchInput);
-    setCurrentPage(1);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
+  const [perPage] = useState<number>(30);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [showDetail, setShowDetail] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'survey' | 'entry' | 'courses'>('survey');
 
   // Fetch students list
   useEffect(() => {
@@ -123,483 +57,576 @@ export default function StudentDetailView() {
     fetchStudents();
   }, [searchQuery, currentPage, perPage]);
 
-  // Reset to page 1 when search query changes
-  useEffect(() => {
+  const handleSearch = () => {
+    setSearchQuery(searchInput);
     setCurrentPage(1);
-  }, [searchQuery]);
-
-  // Fetch departments and colleges
-  useEffect(() => {
-    const fetchDepartmentsAndColleges = async () => {
-      try {
-        const deptResponse = await api.departments.list();
-        setDepartments(deptResponse.departments);
-
-        // Extract unique colleges from departments
-        const uniqueColleges: College[] = [];
-        const collegeMap = new Map<number, string>();
-
-        deptResponse.departments.forEach(dept => {
-          const collegeName = dept.college_name;
-          // Extract college ID from department (departments belong to colleges)
-          if (!collegeMap.has(dept.id)) {
-            // This is a simplified approach - in real scenario you'd get this from backend
-            const collegeId = Math.floor(dept.id / 100);
-            if (!collegeMap.has(collegeId)) {
-              collegeMap.set(collegeId, collegeName);
-              uniqueColleges.push({ id: collegeId, name: collegeName });
-            }
-          }
-        });
-
-        setColleges([{ id: 0, name: '전체' }, ...uniqueColleges]);
-      } catch (error) {
-        console.error('Failed to fetch departments:', error);
-      }
-    };
-    fetchDepartmentsAndColleges();
-  }, []);
-
-  // Fetch student detail when selected
-  useEffect(() => {
-    if (selectedStudent && showDetail) {
-      const fetchStudentDetail = async () => {
-        try {
-          setLoading(true);
-          const [detail, coursesRes, surveysRes] = await Promise.all([
-            api.students.get(selectedStudent),
-            api.students.courses(selectedStudent),
-            api.students.surveys(selectedStudent)
-          ]);
-          setStudentDetail(detail);
-          setCourses(coursesRes.course_history);
-          setSurveys(surveysRes.history);
-        } catch (error) {
-          console.error('Failed to fetch student detail:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchStudentDetail();
-    }
-  }, [selectedStudent, showDetail]);
-
-  // Fetch curriculum when pathwayDept changes (소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스, 공학대학 > 건축학전공, 전자공학부, 산업경영공학과)
-  useEffect(() => {
-    // 소프트웨어융합대학(college_id=3)의 컴퓨터학부(300), 데이터인텔리전스(303), 디자인컨버전스(304)
-    // 공학대학(college_id=2)의 건축학전공(200), 전자공학부(204), 산업경영공학과(207)
-    if ((selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) || (selectedCollege === 2 && (pathwayDept === 200 || pathwayDept === 204 || pathwayDept === 207))) {
-      const fetchCurriculum = async () => {
-        try {
-          setLoadingCurriculum(true);
-          console.log('Fetching curriculum for department_id:', pathwayDept);
-          const data = await api.courses.curriculum(pathwayDept);
-          console.log('Curriculum data received:', data);
-          setCurriculum(data);
-        } catch (error) {
-          console.error('Failed to fetch curriculum:', error);
-        } finally {
-          setLoadingCurriculum(false);
-        }
-      };
-      fetchCurriculum();
-    } else {
-      setCurriculum(null);
-    }
-  }, [pathwayDept, selectedCollege]);
-
-  // Fetch evaluation when pathwayDept or studentDetail changes
-  useEffect(() => {
-    if (!pathwayDept || !studentDetail?.student_id) {
-      setEvaluation(null);
-      return;
-    }
-
-    const fetchEvaluation = async () => {
-      try {
-        setLoadingEvaluation(true);
-        console.log('Fetching evaluation for student:', studentDetail.student_id, 'department:', pathwayDept);
-        const result = await api.evaluation.getStudentEvaluation(studentDetail.student_id, pathwayDept);
-        console.log('Evaluation result:', result);
-        setEvaluation(result);
-      } catch (error) {
-        console.error('Failed to fetch evaluation:', error);
-        setEvaluation(null);
-      } finally {
-        setLoadingEvaluation(false);
-      }
-    };
-
-    fetchEvaluation();
-  }, [pathwayDept, studentDetail]);
-
-  const student = studentDetail;
-
-  // 학점 통계 (간단히 총 학점만 계산 - 실제 성적은 백엔드에서 관리)
-  const totalCredits = courses.reduce((sum, c) => sum + c.credits, 0);
-  
-  // 평균학점 계산 (학점 * 이수학점의 가중평균)
-  const calculateGPA = () => {
-    const coursesWithGrades = courses.filter(c => c.numeric_grade !== undefined && c.numeric_grade !== null);
-    if (coursesWithGrades.length === 0) return null;
-    
-    const totalGradePoints = coursesWithGrades.reduce((sum, c) => sum + (c.numeric_grade! * c.credits), 0);
-    const totalCreditsWithGrades = coursesWithGrades.reduce((sum, c) => sum + c.credits, 0);
-    
-    return totalCreditsWithGrades > 0 ? (totalGradePoints / totalCreditsWithGrades).toFixed(2) : null;
   };
-  
-  const gpa = calculateGPA();
 
-  // 학기별 이수 학점 데이터 (향후 사용 예정)
-  // const semesterData = courses.reduce((acc, course) => {
-  //   const semesterKey = `${course.year}-${course.semester}`;
-  //   const existing = acc.find(s => s.semester === semesterKey);
-  //   if (existing) {
-  //     existing.credits += course.credits;
-  //   } else {
-  //     acc.push({ semester: semesterKey, credits: course.credits });
-  //   }
-  //   return acc;
-  // }, [] as { semester: string; credits: number }[]);
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
 
   const downloadCSV = () => {
-    const csv = [
-      ['학생명', '학번', '학과', 'Pride', '분반', '상태'],
-      ...(showDetail && student
-        ? [[student.name, student.student_id, student.department.name, student.academic_info.pride, student.academic_info.class_number, student.academic_info.status]]
-        : students.map((s) => [s.name, s.student_id, s.department.name, s.academic_info.pride, s.academic_info.class_number, s.academic_info.status]))
-    ].map((row) => row.join(',')).join('\n');
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', '학생정보.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const headers = ['이름', '학번', '학과계열', 'Pride', '분반', '최신 희망 학과', '전공결정도', '이수현황', '수강과목 적합성'];
+    const rows = students.map(s => [
+      s.name,
+      s.student_id,
+      s.department.name,
+      s.academic_info.pride,
+      s.academic_info.class_number,
+      s.latest_major_choice || '-',
+      getDecisionCertaintyLabel(s.decision_certainty) || '-',
+      s.completion_status || '-',
+      s.course_suitability || '-'
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `students_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
-  // 희망 전공 진입 분석 함수
-
-  const getPathwayAnalysis = () => {
-    if (!pathwayDept) return null;
-
-    // For now, we'll use the actual courses from the department
-    // In a real implementation, you'd fetch department curriculum from API
-    const currentGrade = 1; // All students are 1st year from seed_data
-
-    // Count entry requirement courses
-    const requiredCourses = courses.filter(c => c.is_entry_requirement);
-    const completedRequired = requiredCourses.length;
-
-    // Count recommended courses (completion_type includes 기초 or 핵심)
-    const recommendedCourses = courses.filter(c =>
-      c.completion_type === '전공기초' || c.completion_type === '전공핵심'
-    );
-    const completedRecommended = recommendedCourses.length;
-
-    // Simple completion metrics based on enrolled courses
-    const totalEnrolled = courses.length;
-    const requiredCompletionRate = totalEnrolled > 0 ? (completedRequired / totalEnrolled) * 100 : 0;
-    const recommendedCompletionRate = totalEnrolled > 0 ? (completedRecommended / totalEnrolled) * 100 : 0;
-    const overallRate = totalEnrolled > 0 ? ((completedRequired + completedRecommended) / totalEnrolled) * 100 : 0;
-
-    return {
-      requiredCourses: requiredCourses,
-      completedRequired,
-      requiredCompletionRate,
-      recommendedCourses: recommendedCourses,
-      completedRecommended,
-      recommendedCompletionRate,
-      overallRate,
-      currentGrade,
+  const getDecisionCertaintyLabel = (certainty?: number): string | null => {
+    if (!certainty) return null;
+    const labels: { [key: number]: string } = {
+      1: '매우 불확실',
+      2: '불확실',
+      3: '보통',
+      4: '확실',
+      5: '매우 확실'
     };
+    return labels[certainty] || null;
   };
 
-  const pathwayAnalysis = getPathwayAnalysis();
-
-  const getStatusMessage = () => {
-    if (!pathwayAnalysis) return '';
-
-    const { requiredCompletionRate, recommendedCompletionRate } = pathwayAnalysis;
-
-    if (requiredCompletionRate >= 80 && recommendedCompletionRate >= 60) {
-      return '우수: 전공진입 준비가 매우 잘 되어있습니다!';
-    } else if (requiredCompletionRate >= 60) {
-      return '양호: 전공진입 필수 과목을 충실히 이수하고 있습니다.';
-    } else if (requiredCompletionRate >= 40) {
-      return '주의: 전공진입 필수 과목 이수율을 높일 필요가 있습니다.';
-    } else {
-      return '경고: 전공진입을 위해 더 많은 필수 과목 이수가 필요합니다.';
-    }
+  const getDecisionCertaintyColor = (certainty?: number): string => {
+    if (!certainty) return 'text-gray-500';
+    const colors: { [key: number]: string } = {
+      1: 'bg-red-100 text-red-800',
+      2: 'bg-orange-100 text-orange-800',
+      3: 'bg-yellow-100 text-yellow-800',
+      4: 'bg-blue-100 text-blue-800',
+      5: 'bg-green-100 text-green-800'
+    };
+    return colors[certainty] || '';
   };
 
-  // Helper functions for course status checking
-  const checkCourseStatus = (curriculumCourse: any, studentCourses: CourseEnrollment[]) => {
-    // Check if student has completed this exact course
-    const exactMatch = studentCourses.find(
-      sc => sc.course_code === curriculumCourse.course_code
-    );
-
-    if (exactMatch) {
-      return { status: 'completed', course: exactMatch };
-    }
-
-    // Check if it's a future course (based on course_year)
-    if (curriculumCourse.course_year && curriculumCourse.course_year > 1) {
-      return { status: 'future', course: null };
-    }
-
-    // Not completed yet
-    return { status: 'not-completed', course: null };
+  const getCourseProgressColor = (percentage?: string | number): string => {
+    if (!percentage) return 'bg-gray-400';
+    const num = typeof percentage === 'string' ? parseInt(percentage) : percentage;
+    if (num >= 80) return 'bg-green-400';
+    if (num >= 60) return 'bg-blue-400';
+    if (num >= 40) return 'bg-yellow-400';
+    return 'bg-red-400';
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
-      case 'future':
-        return <AlertCircle className="h-5 w-5 text-gray-400" />;
-      case 'not-completed':
-        return <XCircle className="h-5 w-5 text-red-400" />;
-      default:
-        return null;
-    }
-  };
+  const totalPages = Math.ceil(totalCount / perPage);
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <span className="text-green-600 font-medium">이수완료</span>;
-      case 'future':
-        return <span className="text-gray-500">미개설</span>;
-      case 'not-completed':
-        return <span className="text-red-600">미이수</span>;
-      default:
-        return null;
-    }
-  };
-
-
-
-  // Filter courses based on selected filter
-  const filteredCourses = courseFilter === 'all' 
-    ? courses 
-    : courses.filter(c => c.completion_type === courseFilter);
-
-  if (loading) {
+  // 학생 상세 정보 페이지 렌더링
+  if (showDetail && selectedStudent) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
-        <div className="text-gray-600">데이터를 불러오는 중...</div>
-      </div>
-    );
-  }
-
-  if (!showDetail) {
-    return (
-      <div className="p-8 bg-gray-50 min-h-screen">
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">학생 관리</h1>
-            <p className="text-gray-600">학생 검색 및 관리를 할 수 있습니다.</p>
+      <div className="bg-[#f5f7fa] min-h-screen py-8">
+        <div className="max-w-7xl mx-auto px-8">
+          {/* 헤더 */}
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-5xl font-bold text-[#101828] mb-4">{selectedStudent.name}</h1>
+            </div>
+            <button
+              onClick={() => setShowDetail(false)}
+              className="flex items-center gap-3 px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50"
+            >
+              <ChevronLeft className="w-5 h-5 text-[#101828]" />
+              <span className="text-lg font-medium text-[#101828]">목록으로 돌아가기</span>
+            </button>
           </div>
-          <button
-            onClick={downloadCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            CSV 다운로드
-          </button>
-        </div>
 
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-gray-900">전체 학생 리스트</h2>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="학번, 이름, 이메일로 검색..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-                />
-                <button
-                  onClick={handleSearch}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  검색
-                </button>
-                {searchInput && (
-                  <button
-                    onClick={() => {
-                      setSearchInput('');
-                      setSearchQuery('');
-                    }}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
-                  >
-                    초기화
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="text-sm text-gray-600">
-              총 {students.length}명의 학생
-            </div>
+          {/* 학생 학적 정보 */}
+          <div className="mb-6">
+            <p className="text-xl text-[#6a7282] font-medium">
+              {selectedStudent.student_id} ⋅ {selectedStudent.academic_info.class_number}학년 ⋅ {selectedStudent.department.name}
+            </p>
+            <p className="text-lg text-[#6a7282]">
+              학생의 학적 및 전공 선택 정보를 확인합니다.
+            </p>
           </div>
-          {loading && (
-            <div className="px-6 py-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-2 text-gray-600">학생 목록을 불러오는 중...</p>
-            </div>
-          )}
-          {error && (
-            <div className="px-6 py-4 bg-red-50 border-l-4 border-red-500">
-              <p className="text-red-700">{error}</p>
-            </div>
-          )}
-          {!loading && !error && students.length === 0 && (
-            <div className="px-6 py-12 text-center text-gray-500">
-              {searchQuery ? '검색 결과가 없습니다.' : '학생이 없습니다.'}
-            </div>
-          )}
-          {!loading && !error && students.length > 0 && (
-            <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">학번</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">학과</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">Pride</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">분반</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">최신 희망 학과</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">전공결정도</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">이수현황</th>
-                  <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">수강과목 적합성</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {[...students].sort((a, b) => a.name.localeCompare(b.name, 'ko-KR')).map((s) => (
-                  <tr
-                    key={s.student_id}
-                    onClick={() => {
-                      setSelectedStudent(s.student_id);
-                      setShowDetail(true);
-                    }}
-                    className="hover:bg-gray-50 cursor-pointer"
-                  >
-                    <td className="px-6 py-6 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline">
-                      {s.name}
-                    </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.student_id}</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.department.name}</td>
-                    <td className="px-6 py-6 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {s.academic_info.pride}
-                      </span>
-                    </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">{s.academic_info.class_number}</td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                      {s.latest_major_choice || '-'}
-                    </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-center">
-                      {(() => {
-                        const { label, color } = getDecisionCertaintyDisplay(s.decision_certainty);
-                        return label === '-' ? (
-                          <span className="text-gray-500">-</span>
-                        ) : (
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${color}`}>
-                            {label}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                      {s.completion_status || '-'}
-                    </td>
-                    <td className="px-6 py-6 whitespace-nowrap text-sm text-center">
-                      {s.course_suitability ? (
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getScoreBadgeColor(s.course_suitability)}`}>
-                          {s.course_suitability}
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-          )}
 
-          {/* Pagination */}
-          {!loading && !error && totalCount > 0 && (
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                전체 {totalCount}명 중 {((currentPage - 1) * perPage) + 1}-{Math.min(currentPage * perPage, totalCount)}명 표시
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 text-sm rounded-md ${
-                    currentPage === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
-                >
-                  이전
-                </button>
-                
-                {/* Page numbers */}
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.ceil(totalCount / perPage) }, (_, i) => i + 1)
-                    .filter(page => {
-                      // Show first, last, current, and adjacent pages
-                      const totalPages = Math.ceil(totalCount / perPage);
-                      return (
-                        page === 1 ||
-                        page === totalPages ||
-                        Math.abs(page - currentPage) <= 1
-                      );
-                    })
-                    .map((page, idx, arr) => (
-                      <div key={page} className="flex items-center gap-1">
-                        {idx > 0 && arr[idx - 1] !== page - 1 && (
-                          <span className="px-2 text-gray-400">...</span>
-                        )}
-                        <button
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 text-sm rounded-md ${
-                            currentPage === page
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      </div>
-                    ))
-                  }
+          {/* 탭 네비게이션 */}
+          <div className="flex items-start gap-0 mb-6 border-b border-[#e5e7eb]">
+            <button
+              onClick={() => setActiveTab('survey')}
+              className={`px-6 py-6 text-xl font-semibold transition-all ${
+                activeTab === 'survey'
+                  ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                  : 'text-[#6a7282]'
+              }`}
+            >
+              희망 전공 조사 결과
+            </button>
+            <button
+              onClick={() => setActiveTab('entry')}
+              className={`px-6 py-6 text-xl font-semibold transition-all ${
+                activeTab === 'entry'
+                  ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                  : 'text-[#6a7282]'
+              }`}
+            >
+              희망 전공 진입
+            </button>
+            <button
+              onClick={() => setActiveTab('courses')}
+              className={`px-6 py-6 text-xl font-semibold transition-all ${
+                activeTab === 'courses'
+                  ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                  : 'text-[#6a7282]'
+              }`}
+            >
+              수강 과목 리스트
+            </button>
+          </div>
+
+          {/* 탭 컨텐츠 */}
+          {activeTab === 'survey' && (
+            <div className="space-y-6">
+              {/* 3차 조사 */}
+              <div className="bg-white border border-black/10 rounded-2xl p-9">
+                <div className="mb-8">
+                  <h3 className="text-4xl font-bold text-[#0e4a84] mb-2">3차 조사 완료</h3>
+                  <p className="text-xl text-[#6a7282]">조사 시점: 2024년 2학년 1학기</p>
                 </div>
 
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalCount / perPage), prev + 1))}
-                  disabled={currentPage === Math.ceil(totalCount / perPage)}
-                  className={`px-3 py-1 text-sm rounded-md ${
-                    currentPage === Math.ceil(totalCount / perPage)
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                  }`}
-                >
-                  다음
-                </button>
+                <div className="flex gap-8 items-center">
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">1지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">
+                      {selectedStudent.latest_major_choice || '-'}
+                    </p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">2지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">미정</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">전공 결정도</p>
+                    {selectedStudent.decision_certainty && selectedStudent.decision_certainty >= 4 ? (
+                      <div className="inline-block px-6 py-3 bg-blue-100 text-blue-800 rounded-full text-2xl font-bold">
+                        {getDecisionCertaintyLabel(selectedStudent.decision_certainty)}
+                      </div>
+                    ) : (
+                      <div className="inline-block px-6 py-3 bg-gray-100 text-gray-800 rounded-full text-2xl font-bold">
+                        미정
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2차 조사 */}
+              <div className="bg-white border border-black/10 rounded-2xl p-9">
+                <div className="mb-8">
+                  <h3 className="text-4xl font-bold text-[#0e4a84] mb-2">2차 조사 완료</h3>
+                  <p className="text-xl text-[#6a7282]">조사 시점: 2023년 1학년 2학기</p>
+                </div>
+
+                <div className="flex gap-8 items-center">
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">1지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">-</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">2지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">미정</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">전공 결정도</p>
+                    <div className="inline-block px-6 py-3 bg-yellow-100 text-yellow-800 rounded-full text-2xl font-bold">
+                      구체 중
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 1차 조사 */}
+              <div className="bg-white border border-black/10 rounded-2xl p-9">
+                <div className="mb-8">
+                  <h3 className="text-4xl font-bold text-[#0e4a84] mb-2">1차 조사 완료</h3>
+                  <p className="text-xl text-[#6a7282]">조사 시점: 2023년 1학년 1학기</p>
+                </div>
+
+                <div className="flex gap-8 items-center">
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">1지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">미정</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">2지망</p>
+                    <p className="text-3xl font-bold text-[#101828]">미정</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-2xl text-[#6a7282] font-medium mb-2">전공 결정도</p>
+                    <div className="inline-block px-6 py-3 bg-gray-100 text-gray-700 rounded-full text-2xl font-bold">
+                      미정
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'entry' && (
+            <div className="space-y-6">
+              {/* 분석할 학과 선택 섹션 */}
+              <div className="bg-white border border-black/10 rounded-2xl p-9">
+                <h3 className="text-3xl font-bold text-[#101828] mb-8">분석할 학과 선택</h3>
+                <div className="flex gap-8">
+                  <div className="flex-1">
+                    <label className="block text-2xl text-[#6a7282] font-medium mb-3">단과대학</label>
+                    <select className="w-full px-5 py-3 border border-black/10 rounded-lg text-xl text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]">
+                      <option>공과대학</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-2xl text-[#6a7282] font-medium mb-3">학과</label>
+                    <select className="w-full px-5 py-3 border border-black/10 rounded-lg text-xl text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]">
+                      <option>{selectedStudent.department.name}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 진입 관련 카드들 */}
+              <div className="grid grid-cols-3 gap-6">
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">전공 진입 필수</p>
+                  <p className="text-4xl font-bold text-[#101828] mb-3">100%</p>
+                  <p className="text-xl text-[#6a7282] mb-6">3 / 3 과목</p>
+                  <div className="w-full bg-[#e5e7eb] rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-blue-500 h-full w-full" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">권장 과목</p>
+                  <p className="text-4xl font-bold text-[#101828] mb-3">10%</p>
+                  <p className="text-xl text-[#6a7282] mb-6">1 / 10 과목</p>
+                  <div className="w-full bg-[#e5e7eb] rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-red-500 h-full w-[10%]" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">전체 적합도</p>
+                  <p className="text-4xl font-bold text-[#101828] mb-3">75%</p>
+                  <p className="text-xl text-[#6a7282] mb-6">종합 진입 준비도</p>
+                  <div className="w-full bg-[#e5e7eb] rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-green-500 h-full w-[75%]" />
+                  </div>
+                </div>
+              </div>
+
+              {/* 안내 메시지 */}
+              <div className="space-y-4">
+                <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-6">
+                  <p className="text-xl text-blue-900 font-semibold">
+                    양호: 전공진입 필수 과목을 충실히 이수하고 있습니다.
+                  </p>
+                </div>
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-6">
+                  <p className="text-xl text-yellow-900 font-semibold">
+                    과목 구분은 현재 소속인 라이언스 칼리지 기준으로 구분된 정보이며, 향후 전공 진입에 따라 바뀔 수 있음을 유의하십시오.
+                  </p>
+                </div>
+              </div>
+
+              {/* 1학년 교육과정 테이블 */}
+              <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+                <div className="p-9 border-b border-black/10">
+                  <h4 className="text-3xl font-bold text-[#101828] mb-2">1학년 교육과정</h4>
+                  <p className="text-xl text-[#6a7282]">{selectedStudent.department.name} 1학년 과정</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학기</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] flex-1">과목명</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">구분</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학점</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-48">이수현황</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">비고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { semester: '1학기', name: '프로그래밍 기초', type: '전공진입', credits: '3', status: '유사과목 이수', remark: '동등과목 인정' },
+                        { semester: '1학기', name: '미적분학1', type: '전공진입', credits: '3', status: '수강완료', remark: '-' },
+                        { semester: '2학기', name: '컴퓨터구조', type: '권장과목', credits: '3', status: '미이수', remark: '-' },
+                        { semester: '2학기', name: '미적분학2', type: '전공진입', credits: '3', status: '수강완료', remark: '-' }
+                      ].map((course, idx) => (
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.semester}</td>
+                          <td className="px-9 py-5 text-lg font-medium text-[#101828]">{course.name}</td>
+                          <td className="px-9 py-5 text-lg">
+                            <span className={`px-4 py-2 rounded-full text-lg font-medium inline-block ${
+                              course.type === '전공진입' ? 'bg-blue-100 text-blue-800' :
+                              course.type === '권장과목' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {course.type}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.credits}</td>
+                          <td className="px-9 py-5 text-lg font-medium">
+                            <span className={`${
+                              course.status === '수강완료' ? 'text-green-600' :
+                              course.status === '유사과목 이수' ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>
+                              {course.status}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 2학년 교육과정 테이블 */}
+              <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+                <div className="p-9 border-b border-black/10">
+                  <h4 className="text-3xl font-bold text-[#101828] mb-2">2학년 교육과정</h4>
+                  <p className="text-xl text-[#6a7282]">{selectedStudent.department.name} 2학년 과정</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학기</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] flex-1">과목명</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">구분</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학점</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-48">이수현황</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">비고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { semester: '1학기', name: '프로그래밍 기초', type: '전공진입', credits: '3', status: '유사과목 이수', remark: '동등과목 인정' },
+                        { semester: '1학기', name: '미적분학1', type: '전공진입', credits: '3', status: '수강완료', remark: '-' },
+                        { semester: '2학기', name: '컴퓨터구조', type: '권장과목', credits: '3', status: '미이수', remark: '-' },
+                        { semester: '2학기', name: '미적분학2', type: '전공진입', credits: '3', status: '향후 개설', remark: '-' }
+                      ].map((course, idx) => (
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.semester}</td>
+                          <td className="px-9 py-5 text-lg font-medium text-[#101828]">{course.name}</td>
+                          <td className="px-9 py-5 text-lg">
+                            <span className={`px-4 py-2 rounded-full text-lg font-medium inline-block ${
+                              course.type === '전공진입' ? 'bg-blue-100 text-blue-800' :
+                              course.type === '권장과목' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {course.type}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.credits}</td>
+                          <td className="px-9 py-5 text-lg font-medium">
+                            <span className={`${
+                              course.status === '수강완료' ? 'text-green-600' :
+                              course.status === '유사과목 이수' ? 'text-amber-600' :
+                              course.status === '향후 개설' ? 'text-gray-600' :
+                              'text-red-600'
+                            }`}>
+                              {course.status}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 3학년 교육과정 테이블 */}
+              <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+                <div className="p-9 border-b border-black/10">
+                  <h4 className="text-3xl font-bold text-[#101828] mb-2">3학년 교육과정</h4>
+                  <p className="text-xl text-[#6a7282]">{selectedStudent.department.name} 3학년 과정</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학기</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] flex-1">과목명</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">구분</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학점</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-48">이수현황</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">비고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { semester: '1학기', name: '프로그래밍 기초', type: '전공진입', credits: '3', status: '유사과목 이수', remark: '동등과목 인정' },
+                        { semester: '1학기', name: '미적분학1', type: '전공진입', credits: '3', status: '수강완료', remark: '-' },
+                        { semester: '2학기', name: '컴퓨터구조', type: '권장과목', credits: '3', status: '미이수', remark: '-' },
+                        { semester: '2학기', name: '미적분학2', type: '전공진입', credits: '3', status: '향후 개설', remark: '-' }
+                      ].map((course, idx) => (
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.semester}</td>
+                          <td className="px-9 py-5 text-lg font-medium text-[#101828]">{course.name}</td>
+                          <td className="px-9 py-5 text-lg">
+                            <span className={`px-4 py-2 rounded-full text-lg font-medium inline-block ${
+                              course.type === '전공진입' ? 'bg-blue-100 text-blue-800' :
+                              course.type === '권장과목' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {course.type}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.credits}</td>
+                          <td className="px-9 py-5 text-lg font-medium">
+                            <span className={`${
+                              course.status === '수강완료' ? 'text-green-600' :
+                              course.status === '유사과목 이수' ? 'text-amber-600' :
+                              course.status === '향후 개설' ? 'text-gray-600' :
+                              'text-red-600'
+                            }`}>
+                              {course.status}
+                            </span>
+                          </td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'courses' && (
+            <div className="space-y-6">
+              {/* 학적 통계 카드들 */}
+              <div className="grid grid-cols-3 gap-6">
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">총 취득학점</p>
+                  <p className="text-4xl font-bold text-[#101828]">32학점</p>
+                </div>
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">평균 학점</p>
+                  <p className="text-4xl font-bold text-[#101828] mb-2">2.09 / 4.5</p>
+                  <p className="text-xl text-[#6a7282]">총 13과목 이수</p>
+                </div>
+                <div className="bg-white border border-black/10 rounded-2xl p-9">
+                  <p className="text-xl text-[#6a7282] font-medium mb-3">희망 전공</p>
+                  <p className="text-4xl font-bold text-[#101828]">{selectedStudent.latest_major_choice || '-'}</p>
+                </div>
+              </div>
+
+              {/* 수강 과목 목록 테이블 */}
+              <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+                <div className="p-9 border-b border-black/10 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-3xl font-bold text-[#101828] mb-2">수강 과목 목록</h4>
+                    <p className="text-xl text-[#6a7282]">전체 과목 13개</p>
+                  </div>
+                  <div className="bg-white border border-black/10 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <span className="text-lg text-[#101828] font-medium">이수구분: 전체</span>
+                    <svg className="w-4 h-4 text-[#101828]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">년도</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학기</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">과목코드</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] flex-1">과목명</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학점</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">성적</th>
+                        <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">이수구분</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'A0', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'B+', category: '전공선택' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'C0', category: '교양필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'D+', category: '기초교양' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'P', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'F', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'A0', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'B+', category: '전공선택' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'C0', category: '교양필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'D+', category: '기초교양' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'P', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'F', category: '전공필수' },
+                        { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'A0', category: '전공필수' }
+                      ].map((course, idx) => (
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.year}</td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.semester}</td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.code}</td>
+                          <td className="px-9 py-5 text-lg font-medium text-[#101828]">{course.name}</td>
+                          <td className="px-9 py-5 text-lg text-[#6a7282]">{course.credits}</td>
+                          <td className="px-9 py-5 text-lg">
+                            <div className="border-[1.4px] rounded-lg px-3 py-2 inline-flex items-center justify-center w-16" 
+                              style={{
+                                borderColor: course.grade === 'A0' ? '#3b82f6' : 
+                                            course.grade === 'B+' ? '#10b981' :
+                                            course.grade === 'C0' ? '#f59e0b' :
+                                            course.grade === 'D+' ? '#f97316' :
+                                            course.grade === 'P' ? '#6b7280' :
+                                            '#ef4444',
+                                color: course.grade === 'A0' ? '#3b82f6' : 
+                                       course.grade === 'B+' ? '#10b981' :
+                                       course.grade === 'C0' ? '#f59e0b' :
+                                       course.grade === 'D+' ? '#f97316' :
+                                       course.grade === 'P' ? '#6b7280' :
+                                       '#ef4444'
+                              }}>
+                              <span className="text-lg font-semibold">{course.grade}</span>
+                            </div>
+                          </td>
+                          <td className="px-9 py-5 text-lg">
+                            <div className="px-6 py-2 rounded-full inline-flex items-center justify-center"
+                              style={{
+                                backgroundColor: course.category === '전공필수' ? '#dbeafe' :
+                                               course.category === '전공선택' ? '#dcfce7' :
+                                               course.category === '교양필수' ? '#ffedd4' :
+                                               '#f3e8ff'
+                              }}>
+                              <span className="text-lg font-medium" style={{
+                                color: course.category === '전공필수' ? '#1e40af' :
+                                      course.category === '전공선택' ? '#016630' :
+                                      course.category === '교양필수' ? '#9f2d00' :
+                                      '#6e11b0'
+                              }}>
+                                {course.category}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -609,466 +636,225 @@ export default function StudentDetailView() {
   }
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      {/* 헤더 */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{student?.name}</h1>
-          <div className="flex items-center gap-4 text-gray-600">
-            <span>학번: {student?.student_id}</span>
-            <span>•</span>
-            <span>1학년</span>
-            <span>•</span>
-            <span>{student?.department.name}</span>
+    <div className="bg-[#f5f7fa] min-h-screen py-8">
+      <div className="max-w-7xl mx-auto px-8">
+        {/* Header Section */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-4xl font-bold text-[#101828] mb-2">학생 관리</h1>
+            <p className="text-xl text-[#6a7282]">학생 검색 및 관리를 할 수 있습니다.</p>
           </div>
+          <button
+            onClick={downloadCSV}
+            className="flex items-center gap-4 px-3 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition-colors font-medium text-lg"
+          >
+            <Download className="w-6 h-6" />
+            학과별 조사시점별 데이터 다운로드
+          </button>
         </div>
-        <button
-          onClick={() => setShowDetail(false)}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          목록으로
-        </button>
-      </div>
 
-      {/* 탭 메뉴 */}
-      <div className="bg-white rounded-lg shadow-sm mb-8">
-        <div className="border-b border-gray-200">
-          <nav className="flex">
-            <button
-              onClick={() => setActiveTab('survey')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'survey'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              희망 전공 조사 결과
-            </button>
-            <button
-              onClick={() => setActiveTab('entry')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'entry'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              희망 전공 진입
-            </button>
-            <button
-              onClick={() => setActiveTab('courses')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'courses'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              수강 과목 리스트
-            </button>
-          </nav>
-        </div>
-      </div>
-
-      {/* 탭 내용 */}
-      {activeTab === 'survey' && (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">희망 전공 조사 결과</h2>
-          {surveys.length > 0 ? (
-            <div className="space-y-4">
-              {surveys.map((survey) => (
-                <div key={survey.survey_id} className="border-b pb-4">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">{survey.round}차 조사 ({survey.submitted_at})</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">1지망</span>
-                      <span className="text-sm text-gray-900">{survey.first_choice.name}</span>
-                    </div>
-                    {survey.second_choice && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-700">2지망</span>
-                        <span className="text-sm text-gray-900">{survey.second_choice.name}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">결정 확신도</span>
-                      <span className="text-sm text-gray-900">{survey.decision_scale}/5</span>
-                    </div>
-                  </div>
+        {/* Student Table Card */}
+        <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+          {/* Table Header with Filters */}
+          <div className="bg-white p-9 border-b border-black/10">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-bold text-[#101828]">학과별 희망 학생 비율</h2>
+              <div className="flex gap-4">
+                {/* Search Input */}
+                <div className="relative w-72">
+                  <input
+                    type="text"
+                    placeholder="이름으로 검색 ..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="w-full px-5 py-4 border border-black/10 rounded-lg text-lg text-[#6a7282] placeholder-[#6a7282] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                  />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500">조사 결과가 없습니다.</p>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'entry' && (
-        <div className="space-y-6">
-          {/* 학과 선택 및 적합도 요약 */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">분석할 학과 선택</h2>
-            <div className="flex gap-3 items-start">
-              {/* 단과대 선택 */}
-              <div className="flex-shrink-0">
-                <label className="block mb-2 text-sm font-medium text-gray-700">단과대학</label>
-                <select
-                  value={selectedCollege}
-                  onChange={(e) => {
-                    setSelectedCollege(Number(e.target.value));
-                    setPathwayDept(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {colleges.filter(college => college.id !== 1).map((college) => (
-                    <option key={college.id} value={college.id}>
-                      {college.name}
-                    </option>
-                  ))}
+                
+                {/* Filter Dropdowns */}
+                <select className="px-5 py-4 border border-black/10 rounded-lg text-lg text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]">
+                  <option>전체</option>
                 </select>
-              </div>
-
-              {/* 학과 선택 */}
-              {selectedCollege > 0 && (
-                <div className="flex-shrink-0">
-                  <label className="block mb-2 text-sm font-medium text-gray-700">학과</label>
-                  <select
-                    value={pathwayDept || ''}
-                    onChange={(e) => setPathwayDept(Number(e.target.value))}
-                    className="px-4 py-2 border-2 border-blue-300 bg-blue-50/50 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">학과를 선택하세요</option>
-                    {departments
-                      .filter(d => {
-                        const deptCollegeId = Math.floor(d.id / 100);
-                        return deptCollegeId === selectedCollege;
-                      })
-                      .map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
-
-              {/* 적합도 요약 카드들 */}
-              {pathwayDept && pathwayAnalysis && (
-                <div className="flex gap-3 flex-1 ml-4">
-                  {/* 전공진입 필수 */}
-                  <div className="flex-1 p-4 rounded-lg border bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300">
-                    <div className="text-sm font-medium text-gray-900 mb-1">전공진입 필수</div>
-                    <div className="text-2xl font-bold text-gray-700 mb-1">
-                      {Math.round(pathwayAnalysis.requiredCompletionRate)}%
-                    </div>
-                    <div className="text-xs text-gray-600 mb-2">
-                      {pathwayAnalysis.completedRequired} / {pathwayAnalysis.requiredCourses.length} 과목
-                    </div>
-                    <div className="w-full rounded-full h-2 bg-gray-200">
-                      <div
-                        className="h-2 rounded-full bg-gray-600"
-                        style={{ width: `${pathwayAnalysis.requiredCompletionRate}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 권장과목 */}
-                  <div className="flex-1 p-4 rounded-lg border bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300">
-                    <div className="text-sm font-medium text-gray-900 mb-1">권장과목</div>
-                    <div className="text-2xl font-bold text-gray-700 mb-1">
-                      {Math.round(pathwayAnalysis.recommendedCompletionRate)}%
-                    </div>
-                    <div className="text-xs text-gray-600 mb-2">
-                      {pathwayAnalysis.completedRecommended} / {pathwayAnalysis.recommendedCourses.length} 과목
-                    </div>
-                    <div className="w-full rounded-full h-2 bg-gray-200">
-                      <div
-                        className="h-2 rounded-full bg-gray-600"
-                        style={{ width: `${pathwayAnalysis.recommendedCompletionRate}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 전체 적합도 */}
-                  <div className="flex-1 p-4 rounded-lg border bg-gradient-to-br from-purple-50 to-purple-100 border-purple-300">
-                    <div className="text-sm font-medium text-purple-900 mb-1">전체 적합도</div>
-                    {loadingEvaluation ? (
-                      <div className="text-sm text-purple-600">계산 중...</div>
-                    ) : evaluation ? (
-                      <>
-                        <div className="text-2xl font-bold text-purple-700 mb-1">
-                          {Math.round(evaluation.overall_score)}점
-                        </div>
-                        <div className="text-xs text-purple-600 mb-2">
-                          등급: {evaluation.grade}
-                        </div>
-                        <div className="w-full rounded-full h-2 bg-purple-200">
-                          <div
-                            className="h-2 rounded-full bg-purple-600"
-                            style={{ width: `${Math.min(evaluation.overall_score, 100)}%` }}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-sm text-gray-500">평가 데이터 없음</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 현황 메시지 */}
-          {pathwayDept && pathwayAnalysis && (
-            <div className="bg-blue-100 border-2 border-blue-500 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-blue-900 font-semibold text-lg">
-                  {getStatusMessage()}
-                </p>
-              </div>
-            </div>
-          )}
-
-
-          {/* 과목 구분 안내 */}
-          {pathwayDept && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-amber-900 text-sm">
-                  과목 구분은 현재 소속인 라이언스 칼리지 기준으로 구분된 정보이며,
-                  향후 전공 진입에 따라 바뀔 수 있음을 유의하십시오.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* 소프트웨어융합대학 > 컴퓨터학부, 데이터인텔리전스, 디자인컨버전스, 공학대학 > 건축학전공, 전자공학부, 산업경영공학과 선택 시 전체 교육과정 및 이수 현황 표시 */}
-          {((pathwayDept && selectedCollege === 3 && (pathwayDept === 300 || pathwayDept === 303 || pathwayDept === 304)) 
-          || (pathwayDept && selectedCollege === 2 && (pathwayDept === 200 || pathwayDept === 204 || pathwayDept === 207))) && (
-            <div className="space-y-6">
-
-              {loadingCurriculum ? (
-                <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                  <div className="text-gray-600">교육과정을 불러오는 중...</div>
-                </div>
-              ) : curriculum ? (
-                <>
-                  {/* 학년별 교육과정 및 수강 현황 */}
-                  {['1학년', '2학년', '3학년', '4학년'].map((yearLabel) => {
-                    const yearData = curriculum.curriculum[yearLabel];
-
-                    if (!yearData) return null;
-
-                    return (
-                      <div key={yearLabel} className="bg-white rounded-lg shadow-sm overflow-hidden">
-                        <div className="bg-gradient-to-r from-gray-100 to-gray-200 px-6 py-4 border-b">
-                          <h3 className="text-lg font-bold text-gray-900">{yearLabel} 교육과정</h3>
-                        </div>
-
-                        {/* 학기별로 표시 */}
-                        <div className="p-6 space-y-6">
-                          {['1학기', '2학기'].map((semesterLabel) => {
-                            const semesterCourses = yearData[semesterLabel] || [];
-
-                            if (semesterCourses.length === 0) return null;
-
-                            return (
-                              <div key={semesterLabel}>
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 bg-gray-50 px-4 py-2 rounded">
-                                  {semesterLabel}
-                                </h4>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full table-fixed">
-                                    <thead className="bg-gray-50 border-b-2 border-gray-200">
-                                      <tr>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-28">과목코드</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-64">과목명</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">이수구분</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-20">학점</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">진입요건</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-28">이수현황</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-40">비고</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                      {semesterCourses.map((course: any) => {
-                                        const status = checkCourseStatus(course, courses);
-                                        return (
-                                          <tr key={course.course_id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 text-center align-middle text-sm font-medium text-gray-900 w-28">
-                                              {course.course_code}
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle text-sm text-gray-900 w-64">
-                                              {course.course_name}
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle w-24">
-                                              <span className={`px-2 py-1 text-xs font-medium rounded ${getCourseTypeBadgeColor(course.course_type)}`}>
-                                                {course.course_type}
-                                              </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle text-sm text-gray-900 w-20">
-                                              {course.credits}
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle w-24">
-                                              {course.is_entry_requirement ? (
-                                                <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
-                                                  수강필수
-                                                </span>
-                                              ) : course.is_recommended ? (
-                                                <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded">
-                                                  수강 권장
-                                                </span>
-                                              ) : (
-                                                <span className="text-gray-400">-</span>
-                                              )}
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle w-28">
-                                              <div className="flex items-center justify-center gap-2">
-                                                {getStatusIcon(status.status)}
-                                                {getStatusText(status.status)}
-                                              </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-center align-middle text-sm text-gray-500 w-40">
-                                              {status.status === 'future' && (
-                                                <span>{yearLabel} 과정</span>
-                                              )}
-                                              {status.status === 'completed' && status.course && (
-                                                <span className="text-green-600">
-                                                  {status.course.year}-{status.course.semester} 이수
-                                                </span>
-                                              )}
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </>
-              ) : null}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'courses' && (
-        <div className="space-y-6">
-          {/* 학점 통계 카드 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">총 취득학점</h3>
-              <div className="text-3xl font-bold text-gray-900">{totalCredits}학점</div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">평균학점</h3>
-              <div className="text-3xl font-bold text-gray-900">
-                {gpa !== null ? `${gpa}` : '-'} / {evaluation?.analysis_json?.gpa?.max_gpa || DEFAULT_MAX_GPA}
-              </div>
-              <p className="text-sm text-gray-500 mt-1">총 {courses.length}과목 이수</p>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-sm font-medium text-gray-600 mb-2">희망 전공</h3>
-              <div className="text-2xl font-bold text-gray-900">
-                {surveys.length > 0 ? surveys[0].first_choice.name : '미제출'}
-              </div>
-            </div>
-          </div>
-
-          {/* 수강 과목 테이블 */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">수강 과목 목록</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {courseFilter === 'all' ? '전체' : courseFilter} 과목 {filteredCourses.length}개
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">필터:</label>
-                <select
-                  value={courseFilter}
-                  onChange={(e) => setCourseFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                >
-                  <option value="all">전체 과목</option>
-                  <option value="전공기초">전공기초</option>
-                  <option value="전공핵심">전공핵심</option>
-                  <option value="전공심화">전공심화</option>
-                  <option value="전공선택">전공선택</option>
-                  <option value="교양필수">교양필수</option>
-                  <option value="교양선택">교양선택</option>
+                
+                <select className="px-5 py-4 border border-black/10 rounded-lg text-lg text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]">
+                  <option>Pride</option>
+                </select>
+                
+                <select className="px-5 py-4 border border-black/10 rounded-lg text-lg text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]">
+                  <option>분반</option>
                 </select>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">년도</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">학기</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">과목코드</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">과목명</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">학점</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">성적</th>
-                    <th className="px-6 py-5 text-left text-xs font-medium text-gray-500 uppercase">이수구분</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCourses.map((course) => (
-                    <tr key={course.course_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                        {course.year}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                        {course.semester}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm font-medium text-gray-600">
-                        {course.course_code}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                        {course.course_name}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm text-gray-900">
-                        {course.credits}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap text-sm font-semibold">
-                        {course.grade ? (
-                          <span className={`
-                            ${course.grade.startsWith('A') ? 'text-green-600' : 
-                              course.grade.startsWith('B') ? 'text-blue-600' : 
-                              course.grade.startsWith('C') ? 'text-yellow-600' : 
-                              'text-red-600'}
-                          `}>
-                            {course.grade}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-6 py-6 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          course.completion_type === '전공기초' ? 'bg-blue-100 text-blue-800' :
-                          course.completion_type === '전공핵심' ? 'bg-green-100 text-green-800' :
-                          course.completion_type === '전공심화' ? 'bg-purple-100 text-purple-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {course.completion_type}
-                        </span>
-                      </td>
+          </div>
+
+          {/* Table */}
+          {loading && (
+            <div className="px-9 py-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0e4a84]"></div>
+              <p className="mt-2 text-[#6a7282]">학생 목록을 불러오는 중...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="px-9 py-4 bg-red-50 border-l-4 border-red-500">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && students.length === 0 && (
+            <div className="px-9 py-12 text-center text-[#6a7282]">
+              {searchQuery ? '검색 결과가 없습니다.' : '학생이 없습니다.'}
+            </div>
+          )}
+
+          {!loading && !error && students.length > 0 && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  {/* Table Header */}
+                  <thead>
+                    <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
+                      <th className="px-9 py-4 text-left h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-44">이름</th>
+                      <th className="px-9 py-4 text-left h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-56">학번</th>
+                      <th className="px-9 py-4 text-left h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-44">학과</th>
+                      <th className="px-9 py-4 text-center h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">Pride</th>
+                      <th className="px-9 py-4 text-left h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">분반</th>
+                      <th className="px-9 py-4 text-center h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap flex-1 bg-[rgba(67,132,195,0.04)]">최신 희망 학과</th>
+                      <th className="px-9 py-4 text-center h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-56 bg-[rgba(67,132,195,0.04)]">전공결정도</th>
+                      <th className="px-9 py-4 text-center h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap w-56 bg-[rgba(67,132,195,0.04)]">이수현황</th>
+                      <th className="px-9 py-4 text-center h-16 font-bold text-lg text-[#6a7282] whitespace-nowrap flex-1">수강과목 적합성</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </thead>
+                  {/* Table Body */}
+                  <tbody>
+                    {students.map((student, idx) => (
+                      <tr
+                        key={student.student_id}
+                        onClick={() => {
+                          setSelectedStudent(student);
+                          setShowDetail(true);
+                        }}
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'} cursor-pointer hover:bg-[#e8f0f7] transition-colors`}
+                      >
+                        <td className="px-9 py-5 text-lg font-bold text-[#0e4a84] whitespace-nowrap">
+                          {student.name}
+                        </td>
+                        <td className="px-9 py-5 text-lg text-[#6a7282] whitespace-nowrap">
+                          {student.student_id}
+                        </td>
+                        <td className="px-9 py-5 text-lg text-[#6a7282] whitespace-nowrap">
+                          {student.department.name}
+                        </td>
+                        <td className="px-9 py-5 text-center">
+                          <div className="flex items-center justify-center">
+                            <div className="border-2 border-[#0e4a84] rounded-full w-10 h-10 flex items-center justify-center">
+                              <span className="text-lg font-bold text-[#0e4a84]">
+                                {student.academic_info.pride}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-9 py-5 text-lg text-[#6a7282] whitespace-nowrap">
+                          {student.academic_info.class_number}반
+                        </td>
+                        <td className="px-9 py-5 text-center bg-[rgba(67,132,195,0.04)]">
+                          <span className="text-lg font-bold text-[#0e4a84] whitespace-nowrap">
+                            {student.latest_major_choice || '-'}
+                          </span>
+                        </td>
+                        <td className="px-9 py-5 text-center bg-[rgba(67,132,195,0.04)]">
+                          {student.decision_certainty ? (
+                            <span className={`px-6 py-2 rounded-full text-lg font-bold inline-block ${getDecisionCertaintyColor(student.decision_certainty)}`}>
+                              {getDecisionCertaintyLabel(student.decision_certainty)}
+                            </span>
+                          ) : (
+                            <span className="text-[#6a7282]">-</span>
+                          )}
+                        </td>
+                        <td className="px-9 py-5 text-center bg-[rgba(67,132,195,0.04)]">
+                          {student.completion_status ? (
+                            <span className={`px-6 py-2 rounded-full text-lg font-bold inline-block bg-green-100 text-green-800`}>
+                              {student.completion_status}
+                            </span>
+                          ) : (
+                            <span className="text-[#6a7282]">-</span>
+                          )}
+                        </td>
+                        <td className="px-9 py-5">
+                          <div className="flex flex-col gap-2">
+                            <span className="text-lg text-[#101828]">0%</span>
+                            <div className="w-full h-1 bg-[#e5e7eb] rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${getCourseProgressColor(student.course_suitability)}`}
+                                style={{ width: `${Math.random() * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="bg-[#f9fafb] border-t border-[#e5e7eb] px-9 py-6 flex items-center justify-between">
+                <span className="text-lg text-[#6a7282]">총 {totalCount}명의 학생</span>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="p-3 rounded-lg border border-black/10 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(page => {
+                        if (totalPages <= 10) return true;
+                        if (page === 1 || page === totalPages) return true;
+                        if (Math.abs(page - currentPage) <= 1) return true;
+                        return false;
+                      })
+                      .map((page, idx, arr) => (
+                        <div key={page} className="flex items-center gap-2">
+                          {idx > 0 && arr[idx - 1] !== page - 1 && (
+                            <span className="text-[#6a7282]">...</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-12 h-12 rounded-lg text-lg font-bold ${
+                              currentPage === page
+                                ? 'bg-[#0e4a84] text-white'
+                                : 'bg-white border border-black/10 text-[#101828] hover:bg-gray-50'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-3 rounded-lg border border-black/10 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      )}
+
+        {/* Footer */}
+        <div className="text-center text-[#6c6c6c] text-base mt-8">
+          <p>©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
+        </div>
+      </div>
     </div>
   );
 }
