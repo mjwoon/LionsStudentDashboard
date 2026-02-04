@@ -32,7 +32,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgresql://user:password@db:5432/my_db
+      DATABASE_URL: postgresql+psycopg://user:password@db:5432/my_db
       REDIS_URL: redis://redis:6379/0
       OLLAMA_HOST: http://ollama:11434
       # Neo4j Graph DB 설정

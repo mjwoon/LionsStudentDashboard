@@ -14,6 +14,8 @@ ENV PYTHONPATH=/app
 COPY pyproject.toml uv.lock ./
 
 # 5. 의존성 설치 (가상환경 없이 시스템에 직접 설치하여 이미지 크기 최적화)
+# 네트워크 타임아웃을 600초로 증가 (ARM64용 대용량 패키지 대응)
+ENV UV_HTTP_TIMEOUT=600
 RUN uv sync --frozen --no-cache
 
 # 6. 소스 코드 복사
