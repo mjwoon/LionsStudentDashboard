@@ -73,7 +73,7 @@ export default function SystemStatsTab() {
       {/* 안내 메시지 */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">시스템 현황 안내</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
@@ -96,9 +96,9 @@ export default function SystemStatsTab() {
         >
           <div className="flex items-start gap-2">
             {message.type === 'success' ? (
-              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
             )}
             <p
               className={`text-sm font-medium ${
@@ -136,11 +136,11 @@ export default function SystemStatsTab() {
           <div className="space-y-6">
             {/* 전체 통계 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6">
+              <div className="bg-linear-to-br from-blue-50 to-blue-100 rounded-lg p-6">
                 <p className="text-sm text-blue-600 font-medium mb-2">총 캐시된 진단 수</p>
                 <p className="text-4xl font-bold text-blue-900">{stats.total_cached.toLocaleString()}</p>
               </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6">
+              <div className="bg-linear-to-br from-purple-50 to-purple-100 rounded-lg p-6">
                 <p className="text-sm text-purple-600 font-medium mb-2">마지막 업데이트</p>
                 <p className="text-lg font-semibold text-purple-900">
                   {formatDate(stats.last_update)}

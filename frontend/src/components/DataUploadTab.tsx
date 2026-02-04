@@ -214,9 +214,9 @@ export default function DataUploadTab() {
           >
             <div className="flex items-start gap-2">
               {state.result.success ? (
-                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
               )}
               <div className="flex-1">
                 <p
@@ -259,7 +259,7 @@ export default function DataUploadTab() {
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">데이터 업로드 안내</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">

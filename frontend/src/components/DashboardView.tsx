@@ -92,7 +92,7 @@ export default function DashboardView() {
 
   if (loading) {
     return (
-      <div className="bg-[#f5f7fa] min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-600">데이터를 불러오는 중...</div>
       </div>
     );
@@ -124,54 +124,60 @@ export default function DashboardView() {
   };
 
   return (
-    <div className="bg-[#f5f7fa] min-h-screen">
+    <div className="min-h-screen">
       {/* Main Content */}
-      <div className="p-8 flex flex-col gap-6">
+      <div className="flex flex-col gap-4 md:gap-6 py-4 md:py-6">
         {/* Title Section */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
-            <p className="text-lg text-[#6a7282]">전체 학과별 희망 학생 현황 및 추세를 확인합니다.</p>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
+            <p className="text-sm md:text-base lg:text-lg text-[#6a7282]">전체 학과별 희망 학생 현황 및 추세를 확인합니다.</p>
           </div>
           <button 
             onClick={downloadData}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto"
           >
-            <Download className="w-5 h-5" />
-            <span className="text-sm font-medium">데이터 다운로드</span>
+            <Download className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="text-xs md:text-sm font-medium">데이터 다운로드</span>
           </button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl border border-black/10 p-9">
-            <p className="text-[#6a7282] text-lg font-medium mb-3">전체 응답 학생</p>
-            <p className="text-[#101828] text-3xl font-bold mb-2">{totalStudents}명</p>
-            <p className="text-[#6a7282] text-lg font-medium">3차 조사 기준</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+          <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
+            <div className="flex items-center gap-2 mb-1 md:mb-2">
+              <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">전체 응답 학생</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">3차 조사 기준</p>
+            </div>
+            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{totalStudents}명</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-black/10 p-9">
-            <p className="text-[#6a7282] text-lg font-medium mb-3">최다 희망 학과</p>
-            <p className="text-[#101828] text-3xl font-bold mb-2">{topDept?.dept || '-'}</p>
-            <p className="text-[#6a7282] text-lg font-medium">{topDept?.students}명 ({topDept?.percent}%)</p>
+          <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
+            <div className="flex items-center gap-2 mb-1 md:mb-2">
+              <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">최다 희망 학과</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{topDept?.students}명 ({topDept?.percent}%)</p>
+            </div>
+            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{topDept?.dept || '-'}</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-black/10 p-9">
-            <p className="text-[#6a7282] text-lg font-medium mb-3">조사 진행률</p>
-            <p className="text-[#101828] text-3xl font-bold mb-2">3차 조사 완료</p>
-            <p className="text-[#6a7282] text-lg font-medium">2025.11.06 기준</p>
+          <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5 sm:col-span-2 lg:col-span-1">
+            <div className="flex items-center gap-2 mb-1 md:mb-2">
+              <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">조사 진행률</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">2025.11.06 기준</p>
+            </div>
+            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">3차 조사 완료</p>
           </div>
         </div>
 
         {/* Department Ratio Chart */}
-        <div className="bg-white rounded-2xl border border-black/10 p-7">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
-            <div className="flex gap-2">
+        <div className="bg-white rounded-2xl border border-black/10 p-4 md:p-5 lg:p-7">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
+            <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
+            <div className="flex flex-wrap gap-2">
               <select 
                 value={selectedSurvey}
                 onChange={(e) => setSelectedSurvey(e.target.value)}
-                className="px-4 py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-lg font-medium cursor-pointer hover:border-black/20 transition"
+                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition"
               >
                 <option value="1">1차 조사</option>
                 <option value="2">2차 조사</option>
@@ -183,7 +189,7 @@ export default function DashboardView() {
                   setSelectedCollege(e.target.value);
                   setSelectedDepts([]);
                 }}
-                className="px-4 py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-lg font-medium cursor-pointer hover:border-black/20 transition w-44"
+                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-44"
               >
                 {colleges.map((college) => (
                   <option key={college.id} value={college.id}>
@@ -194,15 +200,19 @@ export default function DashboardView() {
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="h-[300px] md:h-[350px] lg:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={filteredCurrentData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis 
                 dataKey="dept" 
-                angle={0}
-                tick={{ fontSize: 12, fill: '#6a7282' }}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fontSize: 10, fill: '#6a7282' }}
+                interval={0}
               />
-              <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
+              <YAxis tick={{ fontSize: 10, fill: '#6a7282' }} />
               <Tooltip />
               <Bar dataKey="students" fill="#0e4a84" radius={[8, 8, 0, 0]}>
                 {filteredCurrentData.map((entry) => {
@@ -212,13 +222,14 @@ export default function DashboardView() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Trend Chart */}
-        <div className="bg-white rounded-2xl border border-black/10 p-7">
-          <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-[#101828] mb-2">시점별 변화 추세</h2>
-            <p className="text-lg text-[#6a7282]">비교할 학과를 선택하세요</p>
+        <div className="bg-white rounded-2xl border border-black/10 p-4 md:p-5 lg:p-7">
+          <div className="mb-6 md:mb-8">
+            <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828] mb-2">시점별 변화 추세</h2>
+            <p className="text-sm md:text-base lg:text-lg text-[#6a7282]">비교할 학과를 선택하세요</p>
           </div>
 
           {/* Department Selection */}
@@ -230,18 +241,19 @@ export default function DashboardView() {
               { id: 'college-hum', name: '인문대학', checked: false },
               { id: 'college-social', name: '사회과학대학', checked: false }
             ].map(college => (
-              <label key={college.id} className="flex items-center gap-2 cursor-pointer">
+              <label key={college.id} className="flex items-center gap-1.5 md:gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   defaultChecked={college.checked}
-                  className="w-4 h-4 rounded border-gray-300"
+                  className="w-3.5 h-3.5 md:w-4 md:h-4 rounded border-gray-300"
                 />
-                <span className="text-lg text-[#101828]">{college.name}</span>
+                <span className="text-sm md:text-base lg:text-lg text-[#101828]">{college.name}</span>
               </label>
             ))}
           </div>
 
-          <ResponsiveContainer width="100%" height={400}>
+          <div className="h-[300px] md:h-[350px] lg:h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="period" tick={{ fontSize: 12, fill: '#6a7282' }} />
@@ -276,11 +288,12 @@ export default function DashboardView() {
               )}
             </LineChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="h-12 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
+          <p className="text-gray-500 text-xs md:text-sm">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
         </div>
       </div>
     </div>

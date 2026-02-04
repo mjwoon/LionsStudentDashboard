@@ -81,17 +81,17 @@ export default function CurriculumView() {
 
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       
       {/* 학과 선택 */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">분석할 학과 선택</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6">
+        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">분석할 학과 선택</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
           {AVAILABLE_DEPARTMENTS.map(dept => (
             <button
               key={dept.id}
               onClick={() => setSelectedDepartment(dept.id)}
-              className={`px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+              className={`px-2 md:px-4 py-2 md:py-3 rounded-lg text-xs md:text-sm font-medium transition-all ${
                 selectedDepartment === dept.id
                   ? 'bg-blue-600 text-white shadow-md transform scale-105'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -104,15 +104,15 @@ export default function CurriculumView() {
       </div>
 
       {/* 필터 */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="flex items-center gap-4">
-          <Filter className="h-5 w-5 text-gray-500" />
-          <div className="flex gap-2 flex-wrap">
+      <div className="bg-white rounded-lg shadow-sm p-3 md:p-4 mb-4 md:mb-6">
+        <div className="flex items-center gap-2 md:gap-4">
+          <Filter className="h-4 w-4 md:h-5 md:w-5 text-gray-500 shrink-0" />
+          <div className="flex gap-1.5 md:gap-2 flex-wrap">
             {courseTypes.map(type => (
               <button
                 key={type}
                 onClick={() => setSelectedType(type)}
-                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                   selectedType === type
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -126,17 +126,17 @@ export default function CurriculumView() {
       </div>
 
       {/* 교육과정 */}
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {Object.entries(curriculum).sort(([a], [b]) => a.localeCompare(b)).map(([year, semesters]) => (
           <div key={year} className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <BookOpen className="h-5 w-5" />
+            <div className="bg-linear-to-r from-blue-600 to-blue-700 px-4 md:px-6 py-3 md:py-4">
+              <h2 className="text-base md:text-xl font-bold text-white flex items-center gap-2">
+                <BookOpen className="h-4 w-4 md:h-5 md:w-5" />
                 {year}
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 p-4 md:p-6">
               {Object.entries(semesters).sort(([a], [b]) => a.localeCompare(b)).map(([semester, courses]) => {
                 const filteredCourses = filterCourses(courses);
                 const totalCredits = filteredCourses.reduce((sum, c) => sum + c.credits, 0);
