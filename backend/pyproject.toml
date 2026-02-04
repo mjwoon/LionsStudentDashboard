@@ -12,4 +12,6 @@ dependencies = [
     "python-multipart>=0.0.6",
     "psycopg2-binary>=2.9.0",
     "requests>=2.31.0",
+    # Neo4j Graph DB
+    "neo4j>=5.0.0",
 ]

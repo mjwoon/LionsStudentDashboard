@@ -4,7 +4,7 @@
 
 ## 📋 프로젝트 개요
 
-이 프로젝트는 학생 정보, 학과 정보, 강좌 정보, 그리고 전공 설문조사를 관리하는 풀스택 웹 애플리케이션입니다.
+이 프로젝트는 학생 정보, 학과 정보, 강좌 정보, 그리고 전공 설문조사를 관리하는 풀스택 웹 애플리케이션입니다. Neo4j 그래프 데이터베이스를 활용한 교과목 유사도 분석 및 추천 기능도 포함되어 있습니다.
 
 ### 기술 스택
 
@@ -12,6 +12,7 @@
 - FastAPI (Python 3.12)
 - SQLAlchemy 2.0 (ORM)
 - PostgreSQL (pgvector)
+- Neo4j (그래프 DB - 교과목 유사도 분석)
 - uv (패키지 관리자)
 - Pydantic (데이터 검증)
 
@@ -19,7 +20,7 @@
 - React 19.2.0
 - TypeScript
 - Vite
-- CSS
+- Tailwind CSS
 
 **Infrastructure:**
 - Docker & Docker Compose
@@ -39,11 +40,7 @@ git clone https://github.com/mjwoon/LionsStudentDashboard.git
 cd LionsStudentDashboard
 ```
 
-### 2. 환경 설정
-
-Docker Compose를 사용하므로 별도의 환경 설정이 필요하지 않습니다. 모든 종속성은 컨테이너 내에서 관리됩니다.
-
-### 3. 프로젝트 빌드 및 실행
+### 2. 프로젝트 빌드 및 실행
 
 **전체 프로젝트 빌드 및 실행:**
 
@@ -57,234 +54,176 @@ docker-compose up --build
 docker-compose up -d --build
 ```
 
-**특정 서비스만 빌드:**
+### 3. 초기 데이터 설정
 
 ```bash
-# 백엔드만 빌드
-docker-compose build backend
+# 데이터베이스 시드 데이터 삽입
+docker exec fastapi_backend uv run python seed_data.py
 
-# 프론트엔드만 빌드
-docker-compose build frontend
+# 배치 평가 실행 (학생별 학과 적합도 계산)
+docker exec fastapi_backend uv run python batch_evaluate_all.py
 ```
 
-### 4. 접속
+### 4. Neo4j 그래프 데이터 로드 (선택사항)
 
-프로젝트가 실행되면 다음 주소로 접속할 수 있습니다:
+```bash
+# graphDB 폴더에서 Neo4j에 교과목 유사도 그래프 생성
+cd graphDB
+uv run python quick_start.py
+```
 
-- **Frontend (React)**: http://localhost:5173
-- **Backend API**: http://localhost:8080
-- **API 문서 (Swagger)**: http://localhost:8080/docs
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+### 5. 접속
+
+| 서비스 | URL | 설명 |
+|--------|-----|------|
+| **Frontend** | http://localhost:5173 | React 웹 애플리케이션 |
+| **Backend API** | http://localhost:8080 | FastAPI REST API |
+| **API 문서** | http://localhost:8080/docs | Swagger UI |
+| **Neo4j Browser** | http://localhost:7474 | 그래프 DB 관리 콘솔 |
+| **PostgreSQL** | localhost:5432 | 관계형 DB |
+| **Redis** | localhost:6379 | 캐시/메시지 브로커 |
 
 ## 📁 프로젝트 구조
 
 ```
 LionsStudentDashboard/
-├── backend/                 # FastAPI 백엔드
-│   ├── models/             # 데이터베이스 모델 및 스키마
-│   │   ├── database.py     # SQLAlchemy ORM 모델
-│   │   └── schemas.py      # Pydantic 스키마
-│   ├── routers/            # API 라우터
-│   │   ├── students.py     # 학생 관리 API
-│   │   ├── courses.py      # 강좌/학과 관리 API
-│   │   └── surveys.py      # 설문조사 API
-│   ├── main.py             # FastAPI 애플리케이션 엔트리포인트
-│   ├── database.py         # 데이터베이스 연결 설정
-│   ├── seed_data.py        # 샘플 데이터 생성 스크립트
-│   ├── pyproject.toml      # Python 의존성 (uv)
-│   └── Dockerfile          # 백엔드 Docker 이미지
+├── backend/                    # FastAPI 백엔드
+│   ├── models/                # 데이터베이스 모델 및 스키마
+│   │   ├── models.py          # SQLAlchemy ORM 모델
+│   │   └── schemas.py         # Pydantic 스키마
+│   ├── routers/               # API 라우터
+│   │   ├── students.py        # 학생 관리 API
+│   │   ├── courses.py         # 강좌/학과 관리 API
+│   │   ├── surveys.py         # 설문조사 API
+│   │   ├── evaluation.py      # 학생 평가 API
+│   │   ├── dashboard.py       # 대시보드 통계 API
+│   │   ├── admin.py           # 관리자 API
+│   │   └── graph.py           # 그래프 분석 API (Neo4j)
+│   ├── services/              # 비즈니스 로직
+│   │   ├── evaluation_service.py  # 평가 알고리즘
+│   │   ├── student_service.py     # 학생 서비스
+│   │   ├── admin_service.py       # 관리자 서비스
+│   │   └── graph_service.py       # Neo4j 그래프 서비스
+│   ├── data/                  # 커리큘럼 JSON 데이터
+│   ├── main.py                # FastAPI 앱 진입점
+│   ├── database.py            # DB 연결 설정
+│   └── Dockerfile
 │
-├── frontend/               # React 프론트엔드
+├── frontend/                   # React 프론트엔드
 │   ├── src/
-│   │   ├── App.tsx         # 메인 애플리케이션 컴포넌트
-│   │   ├── api.ts          # API 클라이언트 유틸리티
-│   │   ├── App.css         # 스타일시트
-│   │   └── main.tsx        # React 엔트리포인트
-│   ├── package.json        # npm 의존성
-│   ├── vite.config.ts      # Vite 설정
-│   └── Dockerfile          # 프론트엔드 Docker 이미지
+│   │   ├── components/        # React 컴포넌트
+│   │   │   ├── DashboardView.tsx      # 대시보드
+│   │   │   ├── StudentDetailView.tsx  # 학생 상세
+│   │   │   ├── CurriculumView.tsx     # 커리큘럼
+│   │   │   └── AdminView.tsx          # 관리자
+│   │   ├── App.tsx            # 메인 앱
+│   │   ├── api.ts             # API 클라이언트
+│   │   └── types.ts           # TypeScript 타입
+│   └── Dockerfile
 │
-└── docker-compose.yml      # Docker Compose 설정
+├── graphDB/                    # Neo4j 그래프 DB 모듈
+│   ├── course_similarity_graph.py  # 그래프 빌더
+│   ├── course_graph_analysis.py    # 그래프 분석
+│   ├── quick_start.py              # 빠른 시작 스크립트
+│   ├── final_course.csv            # 교과목 데이터
+│   └── README.md
+│
+├── docker-compose.yml          # Docker 구성
+├── ARCHITECTURE.md             # 아키텍처 문서
+└── README.md                   # 프로젝트 문서
 ```
 
 ## 🛠️ 개발 가이드
 
-### Backend 개발
-
-**로컬에서 백엔드 실행 (Docker 없이):**
+### Docker 컨테이너 관리
 
 ```bash
+# 컨테이너 중지
+docker-compose down
+
+# 특정 서비스 재시작
+docker-compose restart backend
+
+# 로그 확인
+docker-compose logs -f backend
+docker-compose logs -f neo4j
+
+# 컨테이너 상태 확인
+docker-compose ps
+
+# 볼륨 포함 완전 초기화
+docker-compose down -v
+```
+
+### 로컬 개발 (Docker 없이)
+
+**백엔드:**
+```bash
 cd backend
-
-# uv 설치 (없는 경우)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 의존성 설치
 uv sync
-
-# 데이터베이스 초기화 및 샘플 데이터 생성
-uv run python seed_data.py
-
-# 개발 서버 실행
 uv run fastapi dev main.py --host 0.0.0.0 --port 8080
 ```
 
-**주요 API 엔드포인트:**
-
-- `GET /api/students` - 학생 목록 조회 (페이지네이션, 필터링)
-- `GET /api/students/{student_id}` - 학생 상세 정보
-- `POST /api/students` - 새 학생 등록
-- `GET /api/departments` - 학과 목록
-- `GET /api/departments/{dept_id}/curriculum` - 학과 커리큘럼
-- `GET /api/surveys/summary` - 설문조사 통계
-- `POST /api/surveys/submit` - 설문 제출
-
-### Frontend 개발
-
-**로컬에서 프론트엔드 실행 (Docker 없이):**
-
+**프론트엔드:**
 ```bash
 cd frontend
-
-# 의존성 설치
 npm install
-
-# 개발 서버 실행
 npm run dev
 ```
 
-**빌드:**
+## 📊 주요 API 엔드포인트
 
-```bash
-npm run build
-```
+### 학생 API (`/api/students`)
+- `GET /students` - 학생 목록 (페이지네이션, 검색)
+- `GET /students/{id}` - 학생 상세 정보
 
-### Docker 컨테이너 관리
+### 평가 API (`/api/evaluation`)
+- `GET /student/{id}/department/{dept_id}` - 학생 학과 적합도 평가
+- `GET /student/{id}/all-departments` - 전체 학과 평가
 
-**컨테이너 중지:**
-
-```bash
-docker-compose down
-```
-
-**컨테이너 재시작:**
-
-```bash
-docker-compose restart
-```
-
-**특정 서비스 재시작:**
-
-```bash
-docker-compose restart backend
-docker-compose restart frontend
-```
-
-**로그 확인:**
-
-```bash
-# 전체 로그
-docker-compose logs -f
-
-# 특정 서비스 로그
-docker-compose logs -f backend
-docker-compose logs -f frontend
-```
-
-**컨테이너 상태 확인:**
-
-```bash
-docker-compose ps
-```
-
-## 📊 데이터베이스
-
-### 데이터 모델
-
-- **College**: 단과대학 정보
-- **Department**: 학과 정보
-- **Advisor**: 지도교수 정보
-- **Student**: 학생 정보
-- **Course**: 강좌 정보
-- **CourseEnrollment**: 수강 신청 정보
-- **SurveyRound**: 설문조사 회차
-- **MajorSurvey**: 전공 설문 응답
-
-### 샘플 데이터
-
-초기 실행 시 자동으로 생성되는 샘플 데이터:
-- 4개 단과대학
-- 5개 학과
-- 3명의 지도교수
-- 50명의 학생
-- 7개 강좌
-- 수강신청 데이터
-- 2개의 설문조사 회차 및 응답
+### 그래프 API (`/graph`) - Neo4j
+- `GET /graph/health` - Neo4j 연결 상태
+- `GET /graph/statistics` - 그래프 통계
+- `GET /graph/courses/search` - 교과목 검색
+- `GET /graph/recommend/similar/{course_name}` - 유사 교과목 추천
+- `POST /graph/recommend/multiple` - 복수 교과목 기반 추천
+- `GET /graph/analysis/centrality` - 연결 중심성 분석
+- `GET /graph/curriculum` - 교과과정 구조 분석
 
 ## 🐛 트러블슈팅
 
 ### 포트 충돌
-
-이미 사용 중인 포트가 있다면 `docker-compose.yml` 파일에서 포트를 변경하세요:
-
 ```yaml
-services:
-  backend:
-    ports:
-      - "8080:8080"  # 왼쪽 숫자를 변경 (예: "8081:8080")
-  
-  frontend:
-    ports:
-      - "5173:5173"  # 왼쪽 숫자를 변경
+# docker-compose.yml에서 포트 변경
+backend:
+  ports:
+    - "8081:8080"  # 왼쪽 숫자 변경
 ```
 
-### Docker 볼륨 초기화
+### Neo4j 연결 실패
+```bash
+# Neo4j 컨테이너 상태 확인
+docker logs neo4j-course-graph
 
-데이터베이스를 완전히 초기화하려면:
+# Neo4j 재시작
+docker-compose restart neo4j
+```
 
+### 데이터베이스 완전 초기화
 ```bash
 docker-compose down -v
 docker-compose up --build
 ```
 
-### 백엔드가 시작되지 않는 경우
-
-로그를 확인하세요:
-
-```bash
-docker-compose logs backend
-```
-
-데이터베이스 연결 문제일 수 있으니 PostgreSQL 컨테이너가 정상 실행 중인지 확인:
-
-```bash
-docker-compose ps
-```
-
 ## 📝 API 문서
 
-API의 상세한 문서는 서버 실행 후 다음 주소에서 확인할 수 있습니다:
-
-- Swagger UI: http://localhost:8080/docs
-- ReDoc: http://localhost:8080/redoc
-
-## 🤝 기여
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-This project is licensed under the MIT License.
+- **Swagger UI**: http://localhost:8080/docs
+- **ReDoc**: http://localhost:8080/redoc
 
 ## 👥 개발자
 
 - GitHub: [@mjwoon](https://github.com/mjwoon)
 
-## 📧 문의
+## 📄 라이선스
 
-프로젝트에 대한 문의사항은 Issues 탭을 이용해주세요.
+This project is licensed under the MIT License.
