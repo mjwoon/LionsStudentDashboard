@@ -21,7 +21,7 @@ def evaluate_student_for_department(
     db: Session = Depends(get_db)
 ):
     """
-    특정 학생의 특정 학과에 대한 진입 적합도 평가 (2개 메트릭)
+    특정 학생의 특정 학과에 대한 진입 적합도 평가 (3개 메트릭)
     
     - **student_id**: 학생 학번
     - **department_id**: 평가할 학과 ID
@@ -30,8 +30,11 @@ def evaluate_student_for_department(
     
     Returns:
         {
-            "curriculum_completion_score": float,  # 1학년 전공체계도 완성도 (70%)
-            "related_courses_score": float,  # 유사과목 점수 (30%)
+            "entry_requirement_score": float,  # 진입요건 충족 (있으면 %, 없으면 100%)
+            "recommended_exact_rate": float,  # 권장과목 동일과목 이수율
+            "recommended_similar_rate": float,  # 권장과목 유사과목 인정 이수율
+            "curriculum_exact_rate": float,  # 1학년 교육과정 동일과목 이수율
+            "curriculum_similar_rate": float,  # 1학년 교육과정 유사과목 인정 이수율
             "overall_score": float  # 종합 점수 (100점 만점)
         }
     """
@@ -52,16 +55,30 @@ def evaluate_student_for_department(
             evaluator = EvaluationService(db)
             curriculum_details = evaluator.get_curriculum_details(student.id, department_id)
             
+            # analysis_json에서 상세 정보 추출
+            analysis = cached_result.analysis_json or {}
+            entry_req = analysis.get("entry_requirement", {})
+            recommended = analysis.get("recommended_courses", {})
+            curriculum = analysis.get("curriculum_completion", {})
+            
             return {
                 "student_id": student_id,
                 "department_id": department_id,
-                "curriculum_completion_score": float(cached_result.curriculum_completion_score or 0),
-                "related_courses_score": float(cached_result.related_courses_score or 0),
+                # 진입요건 충족
+                "entry_requirement_score": entry_req.get("score", 100.0),
+                # 권장과목 이수
+                "recommended_exact_rate": recommended.get("exact_rate", 0),
+                "recommended_similar_rate": recommended.get("similar_rate", 0),
+                # 교육과정 이수
+                "curriculum_exact_rate": curriculum.get("exact_rate", 0),
+                "curriculum_similar_rate": curriculum.get("similar_rate", 0),
+                # 종합
                 "overall_score": float(cached_result.overall_score or 0),
                 "grade": 'A' if cached_result.overall_score >= 90 else 'B' if cached_result.overall_score >= 80 else 'C' if cached_result.overall_score >= 70 else 'D' if cached_result.overall_score >= 60 else 'F',
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
                 "cached": True,
+                "analysis_json": analysis,
                 "curriculum_details": curriculum_details
             }
     
