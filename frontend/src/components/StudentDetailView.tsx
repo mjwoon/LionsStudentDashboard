@@ -87,7 +87,7 @@ export default function StudentDetailView() {
             </div>
             <button
               onClick={handleBackToList}
-              className="flex items-center gap-3 px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50"
+              className="flex items-center gap-3 px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50 cursor-pointer"
             >
               <ChevronLeft className="w-5 h-5 text-[#101828]" />
               <span className="text-lg font-medium text-[#101828]">목록으로 돌아가기</span>
@@ -108,7 +108,7 @@ export default function StudentDetailView() {
           <div className="flex items-start gap-0 mb-6 border-b border-[#e5e7eb]">
             <button
               onClick={() => setActiveTab('survey')}
-              className={`px-6 py-6 text-xl font-semibold transition-all ${activeTab === 'survey'
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'survey'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
                 : 'text-[#6a7282]'
                 }`}
@@ -117,7 +117,7 @@ export default function StudentDetailView() {
             </button>
             <button
               onClick={() => setActiveTab('entry')}
-              className={`px-6 py-6 text-xl font-semibold transition-all ${activeTab === 'entry'
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'entry'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
                 : 'text-[#6a7282]'
                 }`}
@@ -126,7 +126,7 @@ export default function StudentDetailView() {
             </button>
             <button
               onClick={() => setActiveTab('courses')}
-              className={`px-6 py-6 text-xl font-semibold transition-all ${activeTab === 'courses'
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'courses'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
                 : 'text-[#6a7282]'
                 }`}

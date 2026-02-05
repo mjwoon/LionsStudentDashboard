@@ -43,13 +43,13 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
           <table className="w-full">
             <thead>
               <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">년도</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학기</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">과목코드</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">과목명</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">학점</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-32">성적</th>
-                <th className="px-9 py-4 text-left font-bold text-lg text-[#6a7282] whitespace-nowrap w-40">이수구분</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">년도</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">학기</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">과목코드</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-44">과목명</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-20">학점</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-20  bg-[#F2F5F9] ">성적</th>
+                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-40  bg-[#F2F5F9] ">이수구분</th>
               </tr>
             </thead>
             <tbody>
@@ -69,13 +69,13 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
                 { year: '2026', semester: '1학기', code: 'SW101', name: '프로그래밍 기초', credits: '3', grade: 'A0', category: '전공필수' }
               ].map((course, idx) => (
                 <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
-                  <td className="px-9 py-5 text-lg text-[#6a7282]">{course.year}</td>
-                  <td className="px-9 py-5 text-lg text-[#6a7282]">{course.semester}</td>
-                  <td className="px-9 py-5 text-lg text-[#6a7282]">{course.code}</td>
-                  <td className="px-9 py-5 text-lg font-medium text-[#101828]">{course.name}</td>
-                  <td className="px-9 py-5 text-lg text-[#6a7282]">{course.credits}</td>
-                  <td className="px-9 py-5 text-lg">
-                    <div className="border-[1.4px] rounded-lg px-3 py-2 inline-flex items-center justify-center w-16"
+                  <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.year}</td>
+                  <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.semester}</td>
+                  <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.code}</td>
+                  <td className="px-9 py-5 text-center text-lg font-medium text-[#101828]">{course.name}</td>
+                  <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.credits}</td>
+                  <td className="px-9 py-5 text-center text-lg bg-[#F8FAFD]">
+                    <div className="rounded-lg px-3 py-2 inline-flex items-center justify-center w-16"
                       style={{
                         borderColor: course.grade === 'A0' ? '#3b82f6' :
                           course.grade === 'B+' ? '#10b981' :
@@ -93,7 +93,7 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
                       <span className="text-lg font-semibold">{course.grade}</span>
                     </div>
                   </td>
-                  <td className="px-9 py-5 text-lg">
+                  <td className="px-9 py-5 text-center text-lg bg-[#F8FAFD]">
                     <div className="px-6 py-2 rounded-full inline-flex items-center justify-center"
                       style={{
                         backgroundColor: course.category === '전공필수' ? '#dbeafe' :

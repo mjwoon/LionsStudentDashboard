@@ -523,15 +523,15 @@ class EvaluationService:
         Returns:
             학년별 체계도 과목 딕셔너리 {1: [...], 2: [...], 3: [...], 4: [...]}
         """
-        # 해당 학과의 전체 과목 + 교양필수/전공기초 과목 조회 (1~4학년)
-        # course_type이 교양필수 또는 전공기초인 과목도 포함
+        # 해당 학과의 전체 과목 조회 (1~4학년)
+        # 1. 해당 학과 소속 과목 (전공기초 포함) OR
+        # 2. 교양필수 과목 (다른 학과 소속이어도 포함)
         dept_courses = self.db.query(Course).filter(
+            Course.course_year.in_([1, 2, 3, 4]),
             or_(
                 Course.department_id == department_id,
-                Course.course_type == '교양필수',
-                Course.course_type == '전공기초'
-            ),
-            Course.course_year.in_([1, 2, 3, 4])
+                Course.course_type == '교양필수'
+            )
         ).order_by(Course.course_year, Course.semester, Course.course_code).all()
         
         if not dept_courses:

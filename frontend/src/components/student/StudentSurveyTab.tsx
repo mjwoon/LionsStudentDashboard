@@ -60,7 +60,7 @@ export default function StudentSurveyTab({ student }: StudentSurveyTabProps) {
           <div className="flex-1">
             <p className="text-lg text-[#6a7282] font-medium mb-1">전공 결정도</p>
             <div className="inline-block px-4 py-1.5 bg-yellow-100 text-yellow-800 rounded-full text-lg font-bold">
-              구체 중
+              보통
             </div>
           </div>
         </div>
@@ -85,7 +85,7 @@ export default function StudentSurveyTab({ student }: StudentSurveyTabProps) {
           <div className="flex-1">
             <p className="text-lg text-[#6a7282] font-medium mb-1">전공 결정도</p>
             <div className="inline-block px-4 py-1.5 bg-gray-100 text-gray-700 rounded-full text-[15pt] font-bold">
-              미정
+              불확실
             </div>
           </div>
         </div>

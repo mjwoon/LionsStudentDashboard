@@ -88,9 +88,10 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
           <div className="flex-1">
             <label className="block text-[14pt] text-[#6a7282] font-medium mb-3">학과</label>
             <select
-              className="w-full px-5 py-3 border border-black/10 rounded-lg text-xl text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+              className="w-full px-5 py-3 border border-black/10 rounded-lg text-xl text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84] disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
               value={selectedDepartmentId || ''}
               onChange={(e) => setSelectedDepartmentId(Number(e.target.value))}
+              disabled={!selectedCollege}
             >
               <option value="">학과를 선택하세요</option>
               {departments
@@ -171,10 +172,10 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
                     <table className="w-full">
                       <thead>
                         <tr className="bg-[#F9FAFB] border-t border-b border-[#E5E7EB]">
-                          <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[160px]">학기</th>
-                          <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[320px]">과목명</th>
-                          <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[160px]">구분</th>
-                          <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[120px]">학점</th>
+                          <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[160px]">학기</th>
+                          <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[320px]">과목명</th>
+                          <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] bg-[#F2F5F9] w-[160px]">구분</th>
+                          <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[120px]">학점</th>
                           <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[200px]">이수현황</th>
                           <th className="px-7 py-0 h-12 text-left text-lg font-bold leading-5 text-[#6A7282] w-[200px]">비고</th>
                         </tr>
@@ -182,27 +183,41 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
                       <tbody>
                         {courses.map((course: any, idx: number) => (
                           <tr key={idx} className={`h-16 ${idx % 2 === 0 ? '' : 'bg-white'}`}>
-                            <td className="px-7 py-0 text-lg font-normal leading-5 text-[#6A7282]">
+                            <td className="px-7 py-0 text-center text-lg font-normal leading-5 text-[#6A7282]">
                               {course.semester === 1 ? '1학기' : '2학기'}
                             </td>
-                            <td className="px-7 py-0">
+                            <td className="px-7 py-0 text-center">
                               <p className="text-lg font-medium leading-5 text-[#101828]">{course.course_name}</p>
                             </td>
-                            <td className="px-7 py-0">
-                              <span className={`inline-flex items-center justify-center px-5 py-2 rounded-full text-lg font-medium leading-5 ${(course.requirement_type || course.evaluation_type || course.course_type) === '전공진입' || (course.requirement_type || course.evaluation_type || course.course_type) === '필수'
-                                ? 'bg-[#DBEAFE] text-[#1E40AF]'
-                                : (course.requirement_type || course.evaluation_type || course.course_type) === '권장과목' ||
-                                  (course.requirement_type || course.evaluation_type || course.course_type) === '필수과목'
-                                  ? 'bg-[#FEF9C3] text-[#8D601F]'
-                                  : '-'
-                                }`}>
-                                {course.requirement_type || course.evaluation_type}
-                              </span>
+                            <td className="px-7 py-0 text-center bg-[#F8FAFD]">
+                              {(() => {
+                                const displayType = course.requirement_type;
+                                if (!displayType) return <span className="text-lg font-normal leading-5 text-[#6A7282]">-</span>;
+                                
+                                // 전공진입 (파란색)
+                                if (displayType === '전공진입') {
+                                  return (
+                                    <span className="inline-flex items-center justify-center px-5 py-2 rounded-full text-lg font-medium leading-5 bg-[#DBEAFE] text-[#1E40AF]">
+                                      {displayType}
+                                    </span>
+                                  );
+                                }
+                                // 권장과목 (노란색)
+                                if (displayType === '권장과목') {
+                                  return (
+                                    <span className="inline-flex items-center justify-center px-5 py-2 rounded-full text-lg font-medium leading-5 bg-[#FEF9C3] text-[#8D601F]">
+                                      {displayType}
+                                    </span>
+                                  );
+                                }
+                                // 기타
+                                return <span className="text-lg font-normal leading-5 text-[#6A7282]">-</span>;
+                              })()}
                             </td>
-                            <td className="px-7 py-0 text-lg font-normal leading-5 text-[#6A7282]">
+                            <td className="px-7 py-0 text-center text-lg font-normal leading-5 text-[#6A7282]">
                               {course.credits}
                             </td>
-                            <td className="px-7 py-0">
+                            <td className="px-7 py-0 text-left">
                               <div className="flex items-center gap-2">
                                 {course.enrolled && course.grade ? (
                                   <>
@@ -223,7 +238,7 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
                                 )}
                               </div>
                             </td>
-                            <td className="px-7 py-0 text-lg font-normal leading-5 text-[#6A7282]">
+                            <td className="px-7 py-0 text-left text-lg font-normal leading-5 text-[#6A7282]">
                               {course.enrolled && course.grade ? '!' : '-'}
                             </td>
                           </tr>
@@ -236,20 +251,6 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
             </div>
           )}
         </>
-      )}
-
-      {/* 캐시 정보 */}
-      {evaluationData && evaluationData.cached && evaluationData.evaluated_at && isEvaluationAvailable && (
-        <div className="bg-gray-50 border-l-4 border-gray-400 rounded-lg p-6 mt-6">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 text-gray-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-base text-gray-700">
-              캐시된 평가 결과 (평가 시점: {new Date(evaluationData.evaluated_at).toLocaleString('ko-KR')})
-            </p>
-          </div>
-        </div>
       )}
     </div>
   );
