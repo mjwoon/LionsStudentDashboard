@@ -69,7 +69,7 @@ export default function StudentDetailView() {
   // 로딩 중
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center">
         <p className="text-xl text-[#6a7282]">로딩 중...</p>
       </div>
     );
@@ -78,12 +78,12 @@ export default function StudentDetailView() {
   // 학생 상세 정보 페이지 렌더링
   if (studentId && selectedStudent) {
     return (
-      <div className="min-h-screen py-4 md:py-6">
+      <div className="py-4 md:py-6">
         <div>
           {/* 헤더 */}
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-[32pt] font-bold text-[#101828] mb-4">{selectedStudent.name}</h1>
+              <h1 className="text-4xl font-bold text-[#101828] mb-4">{selectedStudent.name}</h1>
             </div>
             <button
               onClick={handleBackToList}
@@ -99,9 +99,6 @@ export default function StudentDetailView() {
             <p className="text-xl text-[#6a7282] font-medium">
               {selectedStudent.student_id} ⋅ {selectedStudent.academic_info.class_number}반 ⋅ {selectedStudent.department.name}
             </p>
-            <p className="text-lg text-[#BBBFC8]">
-              학생의 학적 및 전공 선택 정보를 확인합니다.
-            </p>
           </div>
 
           {/* 탭 네비게이션 */}
@@ -109,7 +106,7 @@ export default function StudentDetailView() {
             <button
               onClick={() => setActiveTab('survey')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'survey'
-                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
                 : 'text-[#6a7282]'
                 }`}
             >
@@ -118,7 +115,8 @@ export default function StudentDetailView() {
             <button
               onClick={() => setActiveTab('entry')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'entry'
-                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
+
                 : 'text-[#6a7282]'
                 }`}
             >
@@ -127,7 +125,7 @@ export default function StudentDetailView() {
             <button
               onClick={() => setActiveTab('courses')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'courses'
-                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84]'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
                 : 'text-[#6a7282]'
                 }`}
             >

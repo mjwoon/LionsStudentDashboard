@@ -9,14 +9,14 @@ const SYMBOL_URL = '/HYU_logotype_ERICA_white_kor.png';
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const getActiveView = () => {
     const path = location.pathname;
     if (path.startsWith('/student')) return 'student';
     if (path === '/admin') return 'admin';
     return 'dashboard';
   };
-  
+
   const activeView = getActiveView();
 
   return (
@@ -31,37 +31,33 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <div className="text-[#fafafa] text-base md:text-xl lg:text-2xl font-semibold hidden sm:block">학생 관리 시스템</div>
-              <div className="text-[#fafafa] text-sm font-semibold sm:hidden">학생관리</div>
             </div>
           </div>
           <nav className="flex gap-1 md:gap-2 lg:gap-4">
             <button
               onClick={() => navigate('/')}
-              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${
-                activeView === 'dashboard'
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'dashboard'
                   ? 'bg-white/15'
                   : 'hover:bg-white/10'
-              }`}
+                }`}
             >
               <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">전체 현황</span>
             </button>
             <button
               onClick={() => navigate('/student')}
-              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${
-                activeView === 'student'
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'student'
                   ? 'bg-white/15'
                   : 'hover:bg-white/10'
-              }`}
+                }`}
             >
-              <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">학생 관리</span>
+              <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">학생 목록</span>
             </button>
             <button
               onClick={() => navigate('/admin')}
-              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${
-                activeView === 'admin'
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'admin'
                   ? 'bg-white/15'
                   : 'hover:bg-white/10'
-              }`}
+                }`}
             >
               <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">관리자</span>
             </button>
@@ -77,7 +73,12 @@ export default function App() {
           <Route path="/student/:studentId" element={<StudentDetailView />} />
           <Route path="/admin" element={<AdminView />} />
         </Routes>
-      </main>
+      </main>  
+      
+      {/* Footer */}
+      <footer className="h-20 flex items-center justify-center animate-fade-in-up">
+        <p className="text-gray-500 text-[14pt] transition-opacity duration-300">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
+      </footer>
     </div>
   );
 }

@@ -15,8 +15,7 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
         </div>
         <div className="bg-white border border-black/10 rounded-2xl p-9">
           <p className="text-xl text-[#6a7282] font-medium mb-3">평균 학점</p>
-          <p className="text-[22pt] font-bold text-[#101828] mb-2">2.09 / 4.5</p>
-          <p className="text-xl text-[#6a7282]">총 13과목 이수</p>
+          <p className="text-[22pt] font-bold text-[#101828] mb-2">2.09 / 4.5</p>        
         </div>
         <div className="bg-white border border-black/10 rounded-2xl p-9">
           <p className="text-xl text-[#6a7282] font-medium mb-3">희망 전공</p>
@@ -28,7 +27,7 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
       <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
         <div className="p-9 border-b border-black/10 flex items-center justify-between">
           <div>
-            <h4 className="text-[22pt] font-bold text-[#101828] mb-2">수강 과목 목록</h4>
+            <h4 className="text-[22pt] font-bold text-[#101828] mb-2">이수 완료 목록</h4>
             <p className="text-xl text-[#6a7282]">전체 과목 13개</p>
           </div>
           <div className="bg-white border border-black/10 rounded-lg px-4 py-3 flex items-center gap-3">

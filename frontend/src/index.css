@@ -32,3 +32,17 @@
   font-weight: 700;
   font-style: normal;
 }
+
+/* Footer fade-in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeIn 0.5s ease-out forwards;
+}

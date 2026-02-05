@@ -1,6 +1,10 @@
+
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
 import type { Student } from './types';
+
+// DepartmentCurriculum 타입 import (없으면 any로 대체)
+import type { DepartmentCurriculum } from '../../types';
 
 interface StudentEntryTabProps {
   student: Student;
@@ -13,6 +17,8 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(initialDepartmentId || null);
   const [departments, setDepartments] = useState<any[]>([]);
   const [selectedCollege, setSelectedCollege] = useState<string>('');
+  const [curriculum, setCurriculum] = useState<DepartmentCurriculum | null>(null);
+  const [curriculumLoading, setCurriculumLoading] = useState(false);
 
   // 평가 가능한 학과 ID 목록
   const EVALUATION_AVAILABLE_DEPARTMENTS = [304, 303, 207, 204, 600];
@@ -30,6 +36,27 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
     };
     fetchDepartments();
   }, []);
+
+  // Fetch curriculum when department changes
+  useEffect(() => {
+    if (!selectedDepartmentId) {
+      setCurriculum(null);
+      return;
+    }
+    const fetchCurriculum = async () => {
+      try {
+        setCurriculumLoading(true);
+        const data = await api.departments.curriculum(selectedDepartmentId);
+        setCurriculum(data.curriculum || data); // data.curriculum 구조일 수도 있음
+      } catch (error) {
+        setCurriculum(null);
+        console.error('Failed to fetch curriculum:', error);
+      } finally {
+        setCurriculumLoading(false);
+      }
+    };
+    fetchCurriculum();
+  }, [selectedDepartmentId]);
 
   // Fetch evaluation data
   useEffect(() => {
@@ -118,9 +145,48 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
           <p className="text-xl text-[#6a7282]">평가 데이터를 불러오는 중...</p>
         </div>
       ) : !evaluationData ? (
-        <div className="bg-white border border-black/10 rounded-2xl p-9 text-center">
-          <p className="text-xl text-[#6a7282]">평가 데이터가 없습니다.</p>
-        </div>
+        curriculum && Object.keys(curriculum).length > 0 ? (
+          <div className="space-y-6">
+            {Object.entries(curriculum).sort(([a], [b]) => a.localeCompare(b)).map(([year, semesters]) => (
+              <div key={year} className="bg-white border border-black/10 rounded-[14px] overflow-hidden">
+                {/* 학년 헤더 */}
+                <div className="bg-white px-7 py-6">
+                  <h3 className="text-2xl font-semibold leading-7 text-[#101828] mb-1.5">{year}학년 커리큘럼</h3>
+                </div>
+                {/* 테이블 */}
+                <div className="overflow-x-auto">
+                  {Object.entries(semesters).sort(([a], [b]) => a.localeCompare(b)).map(([semester, courses]) => (
+                    <div key={semester} className="mb-6">
+                      <div className="font-bold text-lg text-blue-700 mb-2">{semester}</div>
+                      <table className="w-full mb-2">
+                        <thead>
+                          <tr className="bg-[#F9FAFB] border-t border-b border-[#E5E7EB]">
+                            <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[320px]">과목명</th>
+                            <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[120px]">학점</th>
+                            <th className="px-7 py-0 h-12 text-center text-lg font-bold leading-5 text-[#6A7282] w-[160px]">구분</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(Array.isArray(courses) ? courses : []).map((course: any, idx: number) => (
+                            <tr key={idx} className={`h-14 ${idx % 2 === 0 ? '' : 'bg-white'}`}>
+                              <td className="px-7 py-0 text-center text-lg font-medium leading-5 text-[#101828]">{course.course_name}</td>
+                              <td className="px-7 py-0 text-center text-lg font-normal leading-5 text-[#6A7282]">{course.credits}</td>
+                              <td className="px-7 py-0 text-center text-lg font-normal leading-5 text-[#6A7282]">{course.course_type}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white border border-black/10 rounded-2xl p-9 text-center">
+            <p className="text-xl text-[#6a7282]">평가 데이터가 없습니다.</p>
+          </div>
+        )
       ) : (
         <>
           {/* 안내 배너 */}

@@ -66,7 +66,7 @@ export default function CurriculumView() {
 
   if (loading) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+      <div className="p-8 bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">교육과정을 불러오는 중...</div>
       </div>
     );

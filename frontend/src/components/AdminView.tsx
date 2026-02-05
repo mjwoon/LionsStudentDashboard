@@ -45,7 +45,7 @@ export default function AdminView() {
   // 인증되지 않은 경우 로그인 화면 표시
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 w-full max-w-sm md:max-w-md">
           <div className="text-center mb-6 md:mb-8">
             <div className="inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full mb-3 md:mb-4">

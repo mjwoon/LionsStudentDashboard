@@ -102,20 +102,19 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
   });
 
   return (
-    <div className="min-h-screen py-4 md:py-6">
+    <div className="py-4 md:py-6">
       <div>
         {/* Header Section */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-[#101828] mb-4">학생 관리</h1>
-            <p className="text-xl text-[#6a7282]">학생 검색 및 관리를 할 수 있습니다.</p>
+            <h1 className="text-4xl font-bold text-[#101828]">LIONS칼리지 학생 목록</h1>
           </div>
           <button
             onClick={downloadCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto"
           >
-            <Download className="w-6 h-6" />
-            학과별 조사시점별 데이터 다운로드
+            <Download className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="text-xs md:text-sm font-medium">학과별 조사시점별 데이터 다운로드</span>
           </button>
         </div>
 
@@ -124,7 +123,6 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
           {/* Table Header with Filters */}
           <div className="bg-white p-6 border-b border-black/10">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-[#101828]">LIONS칼리지 전체 학생 목록</h2>
               <div className="flex gap-3">
                 {/* Search Input */}
                 <div className="relative w-56">
@@ -336,11 +334,6 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
               </div>
             </>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="text-center text-[#6c6c6c] text-base mt-8">
-          <p>©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
         </div>
       </div>
     </div>

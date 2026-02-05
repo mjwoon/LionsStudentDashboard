@@ -43,14 +43,14 @@ export default function DashboardView() {
       try {
         setLoading(true);
         const data = await api.dashboard.stats();
-        
+
         // Filter out college with id=1 (라이언스 칼리지) and add 'all' option
         const filteredColleges = data.colleges.filter(c => c.id !== 1);
         const collegesWithAll = [
           { id: 'all', name: '전체' },
           ...filteredColleges.map(c => ({ id: String(c.id), name: c.name }))
         ];
-        
+
         setColleges(collegesWithAll);
         // 각 학과에 랜덤 색상 할당
         const departmentsWithRandomColors = data.departments.map(d => ({
@@ -59,7 +59,7 @@ export default function DashboardView() {
         }));
         setDepartments(departmentsWithRandomColors);
         console.log('Departments with random colors:', departmentsWithRandomColors.map(d => ({ name: d.name, color: d.color })));
-        
+
         const formattedCurrent = data.current_data.map(d => ({
           dept: d.name,
           students: d.students,
@@ -67,32 +67,32 @@ export default function DashboardView() {
           id: d.id
         }));
         setCurrentData(formattedCurrent);
-        
+
         // Set statistics
         const total = formattedCurrent.reduce((sum, d) => sum + d.students, 0);
         setTotalStudents(total);
         setTopDept(formattedCurrent[0] || null);
-        
+
         // Convert trend data to format expected by chart
         const formattedTrend = data.trend_data.map(t => ({
           period: t.period,
           ...t.data
         }));
         setTrendData(formattedTrend);
-        
+
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center">
         <div className="text-gray-600">데이터를 불러오는 중...</div>
       </div>
     );
@@ -111,7 +111,7 @@ export default function DashboardView() {
       ['학과', '학생 수', '비율(%)'],
       ...filteredCurrentData.map((d) => [d.dept, d.students, d.percent])
     ].map((row) => row.join(',')).join('\n');
-    
+
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -124,24 +124,23 @@ export default function DashboardView() {
   };
 
   return (
-    <div className="min-h-screen">
-      {/* Main Content */}
-      <div className="flex flex-col gap-4 md:gap-6 py-4 md:py-6">
-        {/* Title Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
-            <p className="text-sm md:text-base lg:text-lg text-[#6a7282]">전체 학과별 희망 학생 현황 및 추세를 확인합니다.</p>
-          </div>
-          <button 
-            onClick={downloadData}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto"
-          >
-            <Download className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-xs md:text-sm font-medium">데이터 다운로드</span>
-          </button>
+    <div className="py-4 md:py-6">
+      {/* Title Section */}
+      <div className="flex items-start justify-between  mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
         </div>
+        <button
+          onClick={downloadData}
+          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto"
+        >
+          <Download className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="text-xs md:text-sm font-medium">데이터 다운로드</span>
+        </button>
+      </div>
 
+      {/*Main body */}
+      <div className="flex flex-col gap-4 md:gap-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
@@ -174,7 +173,7 @@ export default function DashboardView() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
             <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
             <div className="flex flex-wrap gap-2">
-              <select 
+              <select
                 value={selectedSurvey}
                 onChange={(e) => setSelectedSurvey(e.target.value)}
                 className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition"
@@ -183,7 +182,7 @@ export default function DashboardView() {
                 <option value="2">2차 조사</option>
                 <option value="3">3차 조사</option>
               </select>
-              <select 
+              <select
                 value={selectedCollege}
                 onChange={(e) => {
                   setSelectedCollege(e.target.value);
@@ -201,27 +200,27 @@ export default function DashboardView() {
           </div>
 
           <div className="h-[300px] md:h-[350px] lg:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={filteredCurrentData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="dept" 
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                tick={{ fontSize: 10, fill: '#6a7282' }}
-                interval={0}
-              />
-              <YAxis tick={{ fontSize: 10, fill: '#6a7282' }} />
-              <Tooltip />
-              <Bar dataKey="students" fill="#0e4a84" radius={[8, 8, 0, 0]}>
-                {filteredCurrentData.map((entry) => {
-                  const dept = departments.find((d) => d.id === entry.id);
-                  return <Cell key={entry.id} fill={dept?.color || '#0e4a84'} />;
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={filteredCurrentData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="dept"
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  tick={{ fontSize: 10, fill: '#6a7282' }}
+                  interval={0}
+                />
+                <YAxis tick={{ fontSize: 10, fill: '#6a7282' }} />
+                <Tooltip />
+                <Bar dataKey="students" fill="#0e4a84" radius={[8, 8, 0, 0]}>
+                  {filteredCurrentData.map((entry) => {
+                    const dept = departments.find((d) => d.id === entry.id);
+                    return <Cell key={entry.id} fill={dept?.color || '#0e4a84'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -229,7 +228,6 @@ export default function DashboardView() {
         <div className="bg-white rounded-2xl border border-black/10 p-4 md:p-5 lg:p-7">
           <div className="mb-6 md:mb-8">
             <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828] mb-2">시점별 변화 추세</h2>
-            <p className="text-sm md:text-base lg:text-lg text-[#6a7282]">비교할 학과를 선택하세요</p>
           </div>
 
           {/* Department Selection */}
@@ -253,47 +251,42 @@ export default function DashboardView() {
           </div>
 
           <div className="h-[300px] md:h-[350px] lg:h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="period" tick={{ fontSize: 12, fill: '#6a7282' }} />
-              <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
-              <Tooltip />
-              <Legend />
-              {selectedDepts.length === 0 ? (
-                // Show a default line if no departments are selected
-                <Line
-                  type="monotone"
-                  dataKey={currentData[0]?.id}
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  name={currentData[0]?.dept}
-                />
-              ) : (
-                selectedDepts.map((deptId) => {
-                  const dept = departments.find((d) => d.id === deptId);
-                  return (
-                    <Line
-                      key={deptId}
-                      type="monotone"
-                      dataKey={deptId}
-                      stroke={dept?.color}
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      name={dept?.name}
-                    />
-                  );
-                })
-              )}
-            </LineChart>
-          </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="period" tick={{ fontSize: 12, fill: '#6a7282' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
+                <Tooltip />
+                <Legend />
+                {selectedDepts.length === 0 ? (
+                  // Show a default line if no departments are selected
+                  <Line
+                    type="monotone"
+                    dataKey={currentData[0]?.id}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    name={currentData[0]?.dept}
+                  />
+                ) : (
+                  selectedDepts.map((deptId) => {
+                    const dept = departments.find((d) => d.id === deptId);
+                    return (
+                      <Line
+                        key={deptId}
+                        type="monotone"
+                        dataKey={deptId}
+                        stroke={dept?.color}
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        name={dept?.name}
+                      />
+                    );
+                  })
+                )}
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="h-12 flex items-center justify-center">
-          <p className="text-gray-500 text-xs md:text-sm">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>
         </div>
       </div>
     </div>
