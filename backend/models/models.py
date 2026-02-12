@@ -83,7 +83,7 @@ class Course(Base):
     __tablename__ = "courses"
     
     id = Column(Integer, primary_key=True, index=True)
-    course_code = Column(String(20), unique=True, nullable=False, index=True)
+    course_code = Column(String(20), nullable=False, index=True)
     course_name = Column(String(100), nullable=False)
     credits = Column(Integer, nullable=False)
     course_type = Column(String(50))  # 전공기초, 전공필수, 전공선택, 교양필수 등
@@ -96,6 +96,10 @@ class Course(Base):
     
     department = relationship("Department", back_populates="courses")
     enrollments = relationship("CourseEnrollment", back_populates="course")
+    
+    __table_args__ = (
+        UniqueConstraint('course_code', 'department_id', name='uq_course_code_dept'),
+    )
 
 
 class CourseEnrollment(Base):
@@ -190,10 +194,9 @@ class RequirementCourse(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     requirement_id = Column(Integer, ForeignKey("department_entry_requirements.id", ondelete="CASCADE"), nullable=False)
-    course_code = Column(String(20), ForeignKey("courses.course_code"), nullable=False)
+    course_code = Column(String(20), nullable=False)
     
     requirement = relationship("DepartmentEntryRequirement", back_populates="requirement_courses")
-    course = relationship("Course")
 
 
 class StudentRequirementStatus(Base):

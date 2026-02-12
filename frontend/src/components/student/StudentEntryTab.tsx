@@ -136,9 +136,6 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
           <p className="text-xl text-[#6a7282]">
             선택한 학과는 현재 평가가 지원되지 않습니다.
           </p>
-          <p className="text-lg text-[#6a7282] mt-2">
-            평가 가능 학과: 디자인컨버전스전공, 데이터사이언스학과, 산업경영공학과, 전자공학부, 광고홍보학과
-          </p>
         </div>
       ) : evaluationLoading ? (
         <div className="bg-white border border-black/10 rounded-2xl p-9 text-center">
@@ -293,6 +290,14 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
                                     </svg>
                                     <span className="text-lg font-normal leading-5 text-[#26BD89]">수강완료</span>
                                   </>
+                                ) : course.enrolled && !course.grade ? (
+                                  <>
+                                    <svg className="w-5 h-5" fill="none" stroke="#898F99" viewBox="0 0 24 24">
+                                      <circle cx="12" cy="12" r="10" strokeWidth={2.33} />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.33} d="M12 8v4m0 4h.01" />
+                                    </svg>
+                                    <span className="text-lg font-normal leading-5" style={{ color: '#898F99' }}>수강중</span>
+                                  </>
                                 ) : (
                                   <>
                                     <svg className="w-5 h-5" fill="none" stroke="#F04462" viewBox="0 0 24 24">
@@ -305,7 +310,9 @@ export default function StudentEntryTab({ student, initialDepartmentId }: Studen
                               </div>
                             </td>
                             <td className="px-7 py-0 text-left text-lg font-normal leading-5 text-[#6A7282]">
-                              {course.enrolled && course.grade ? '!' : '-'}
+                              {course.enrolled_department_name && course.course_type !== '교양필수'
+                                ? `유사과목 이수 (${course.enrolled_department_name})`
+                                : course.enrolled && course.grade ? '!' : '-'}
                             </td>
                           </tr>
                         ))}

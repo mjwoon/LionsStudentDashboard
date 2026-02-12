@@ -61,6 +61,8 @@ export interface CourseEnrollment {
   completion_type: string
   is_entry_requirement: boolean
   is_retake: boolean
+  grade?: string
+  numeric_grade?: number
 }
 
 export interface StudentSurveysResponse {

@@ -46,7 +46,6 @@ from fixtures.seed_config import (
     ADVISORS_DATA,
     COLLEGES_DATA,
     MAX_CREDITS_PER_SEMESTER,
-    TARGET_ADDITIONAL_ENROLLMENTS,
 )
 from services.seed_service import (
     wait_for_db,
@@ -210,30 +209,110 @@ def seed_database():
         print(f"Created {len(students)} regular students + {len(special_students)} special test students")
 
         # ====================================================================
-        # COURSES
+        # COURSES - Load ALL courses from ALL JSON files (no deduplication)
         # ====================================================================
         print("Creating courses...")
 
-        # Load SW curriculum
-        sw_data = load_json_data("sw.json")
+        # Define all curriculum JSON files and their department mappings
+        curriculum_files = [
+            ("sw.json", DEPT_COMPUTER_SCIENCE),
+            ("dataIntelli.json", DEPT_DATA_INTELLIGENCE),
+            ("designConverge.json", DEPT_DESIGN_CONVERGENCE),
+            ("arch.json", DEPT_ARCHITECTURE),
+            ("elec.json", DEPT_ELECTRONICS),
+            ("ime.json", DEPT_INDUSTRIAL_MGMT),
+        ]
 
         courses = []
-        for idx, course_data in enumerate(sw_data["curriculum"], start=1):
-            course = Course(
-                id=idx,
-                course_code=course_data["course_code"],
-                course_name=course_data["course_name"],
-                credits=course_data["credits"],
-                course_type=course_data["course_type"],
-                department_id=DEPT_COMPUTER_SCIENCE,
-                course_year=course_data.get("course_year"),
-                semester=course_data.get("semester"),
-            )
-            courses.append(course)
+        course_id = 1
+        dept_course_counts = {}  # Track per-department counts
+
+        for filename, dept_id in curriculum_files:
+            data = load_json_data(filename)
+            department_name = data.get("department", filename)
+            dept_count = 0
+
+            for course_data in data["curriculum"]:
+                course = Course(
+                    id=course_id,
+                    course_code=course_data["course_code"],
+                    course_name=course_data["course_name"],
+                    credits=course_data["credits"],
+                    course_type=course_data["course_type"],
+                    department_id=dept_id,
+                    course_year=course_data.get("course_year"),
+                    semester=course_data.get("semester"),
+                )
+                courses.append(course)
+                course_id += 1
+                dept_count += 1
+
+            dept_course_counts[department_name] = dept_count
+
+        # Load courses from necessary.json (entry requirement courses)
+        necessary_data = load_json_data("necessary.json")
+        necessary_count = 0
+        # Track (course_code, department_id) pairs already loaded to avoid
+        # duplicating necessary courses that are already in curriculum files
+        existing_pairs = {(c.course_code, c.department_id) for c in courses}
+
+        for college in necessary_data.get("colleges", []):
+            for major in college.get("majors", []):
+                for course_info in major.get("necessary_courses", []):
+                    pair = (course_info["course_code"], DEPT_LIONS_COLLEGE)
+                    if pair in existing_pairs:
+                        continue
+                    course = Course(
+                        id=course_id,
+                        course_code=course_info["course_code"],
+                        course_name=course_info["course_name"],
+                        credits=course_info["credits"],
+                        course_type=course_info.get("course_type", "전공기초"),
+                        department_id=DEPT_LIONS_COLLEGE,
+                        course_year=course_info.get("course_year"),
+                        semester=course_info.get("semester"),
+                    )
+                    courses.append(course)
+                    existing_pairs.add(pair)
+                    course_id += 1
+                    necessary_count += 1
 
         db.add_all(courses)
         db.commit()
-        print(f"Created {len(courses)} courses from sw.json")
+
+        print(f"Created {len(courses)} total courses (no deduplication):")
+        for dept_name, count in dept_course_counts.items():
+            print(f"  - {dept_name}: {count}")
+        print(f"  - necessary.json (진입요건): {necessary_count}")
+
+        # ====================================================================
+        # RECOMMENDED COURSES - Load and validate recommended.json
+        # ====================================================================
+        print("Loading recommended courses data...")
+        recommended_data = load_json_data("recommended.json")
+        all_course_names = {c.course_name for c in courses}
+        
+        total_recommended = 0
+        matched_recommended = 0
+        unmatched_courses = []
+        
+        for college in recommended_data.get("colleges", []):
+            for major in college.get("majors", []):
+                major_name = major.get("name", "unknown")
+                for course_name in major.get("recommended_courses", []):
+                    total_recommended += 1
+                    if course_name in all_course_names:
+                        matched_recommended += 1
+                    else:
+                        unmatched_courses.append((major_name, course_name))
+        
+        print(f"Recommended courses validation:")
+        print(f"  - Total recommended: {total_recommended}")
+        print(f"  - Matched in Course table: {matched_recommended}")
+        if unmatched_courses:
+            print(f"  - Unmatched ({len(unmatched_courses)}):")
+            for major_name, course_name in unmatched_courses:
+                print(f"    ⚠ {major_name} → {course_name}")
 
         # ====================================================================
         # COURSE ENROLLMENTS - Regular Students
@@ -241,16 +320,16 @@ def seed_database():
         print("Creating course enrollments for regular students...")
         enrollments = []
 
-        # Categorize 1st year courses by semester
+        # Categorize 1st year courses by semester from unified courses list
         first_year_sem1_courses = [
-            {"id": idx + 1, "credits": course["credits"], "course_type": course["course_type"]}
-            for idx, course in enumerate(sw_data["curriculum"])
-            if course["course_year"] == 1 and course["semester"] == 1
+            {"id": c.id, "credits": c.credits, "course_type": c.course_type}
+            for c in courses
+            if c.course_year == 1 and c.semester == 1
         ]
         first_year_sem2_courses = [
-            {"id": idx + 1, "credits": course["credits"], "course_type": course["course_type"]}
-            for idx, course in enumerate(sw_data["curriculum"])
-            if course["course_year"] == 1 and course["semester"] == 2
+            {"id": c.id, "credits": c.credits, "course_type": c.course_type}
+            for c in courses
+            if c.course_year == 1 and c.semester == 2
         ]
 
         print(f"  - 1st year, 1st semester: {len(first_year_sem1_courses)} courses")
@@ -271,7 +350,7 @@ def seed_database():
             enrollments.extend(student_enrollments)
 
             # Progress indicator
-            if (idx + 1) % 50 == 0:
+            if (idx + 1) % 10 == 0:
                 print(f"  Processed {idx + 1}/{len(student_ids)} students...")
 
         print(f"Adding {len(enrollments)} enrollments to database...")
@@ -283,7 +362,7 @@ def seed_database():
         print("Calculating GPA and total credits for regular students...")
         for idx, student_id in enumerate(student_ids):
             update_student_gpa(db, student_id)
-            if (idx + 1) % 50 == 0:
+            if (idx + 1) % 10 == 0:
                 print(f"  Updated {idx + 1}/{len(student_ids)} students...")
         db.commit()
         print("Student GPA and credits updated successfully!")
@@ -314,8 +393,54 @@ def seed_database():
         print(f"  - Fixed course set: {len(sem1_selected_courses)} in sem1, {len(sem2_selected_courses)} in sem2")
         
         # Each special student gets enrollments with their unique grade pattern
+        # Build course lookup by course_code for manual enrollment matching
+        course_by_code = {}
+        for c in courses:
+            if c.course_code not in course_by_code:
+                course_by_code[c.course_code] = c
+
         for idx, config in enumerate(SPECIAL_STUDENTS_CONFIG):
             student_id = special_student_ids[idx]
+            
+            # Handle students with manual enrollments (e.g. 홍길동)
+            if config.get("manual_enrollments"):
+                print(f"  - {config['name']}: Creating manual enrollments...")
+                for enrollment_data in config["manual_enrollments"]:
+                    course_code = enrollment_data["course_code"]
+                    course_obj = course_by_code.get(course_code)
+                    
+                    if not course_obj:
+                        # Create course on-the-fly if not found
+                        new_course = Course(
+                            id=course_id,
+                            course_code=course_code,
+                            course_name=course_code,  # placeholder name
+                            credits=3,  # default
+                            course_type=enrollment_data.get("completion_type", "교양선택"),
+                            department_id=DEPT_LIONS_COLLEGE,
+                        )
+                        db.add(new_course)
+                        db.flush()
+                        course_by_code[course_code] = new_course
+                        course_obj = new_course
+                        course_id += 1
+                        print(f"    ⚠ Created missing course: {course_code}")
+                    
+                    enrollment = CourseEnrollment(
+                        student_id=student_id,
+                        course_id=course_obj.id,
+                        year=enrollment_data["year"],
+                        semester=enrollment_data["semester"],
+                        completion_type=enrollment_data["completion_type"],
+                        is_retake=False,
+                        grade=enrollment_data["grade"],
+                        numeric_grade=enrollment_data["numeric_grade"],
+                    )
+                    special_enrollments.append(enrollment)
+                print(f"    → {len(config['manual_enrollments'])} enrollments added")
+                continue
+            
+            # Standard grade-profile based enrollments
             grade_profile = config["grade_profile"]
             grade_seed = config["grade_seed"]
             
@@ -342,9 +467,8 @@ def seed_database():
         db.add_all(special_enrollments)
         db.commit()
         print("Special student enrollments created successfully!")
-        print(f"  - 강우수 ({SPECIAL_STUDENTS_CONFIG[0]['description']})")
-        print(f"  - 강보통 ({SPECIAL_STUDENTS_CONFIG[1]['description']})")
-        print(f"  - 강고민 ({SPECIAL_STUDENTS_CONFIG[2]['description']})")
+        for config in SPECIAL_STUDENTS_CONFIG:
+            print(f"  - {config['name']} ({config['description']})")
         
         # Update GPA and credits for special students
         print("Calculating GPA and total credits for special students...")
@@ -354,216 +478,7 @@ def seed_database():
             print(f"  - {student.name}: GPA {student.current_gpa:.2f}, Credits {student.total_credits}")
         db.commit()
 
-        # ====================================================================
-        # ADDITIONAL COURSES (Data Intelligence, Design Convergence, Architecture, Electronics)
-        # ====================================================================
-        print("Loading additional department courses...")
-        data_intelli_data = load_json_data("dataIntelli.json")
-        design_converge_data = load_json_data("designConverge.json")
-        arch_data = load_json_data("arch.json")
-        elec_data = load_json_data("elec.json")
-        ime_data = load_json_data("ime.json")
-        necessary_data = load_json_data("necessary.json")
-        
-        # Track existing course codes to avoid duplicates (e.g., shared general education courses)
-        existing_course_codes = {}
-        for c in sw_data["curriculum"]:
-            existing_course_codes[c["course_code"]] = (c["course_name"], c["credits"], c["course_type"], DEPT_COMPUTER_SCIENCE)
-        
-        # Consolidate additional courses from multiple departments
-        additional_course_data = []
-        
-        # Add Data Intelligence courses (dept_id: 303)
-        for course_info in data_intelli_data["curriculum"]:
-            code = course_info["course_code"]
-            if code in existing_course_codes:
-                continue  # Skip duplicate courses
-            
-            additional_course_data.append({
-                "course_code": code,
-                "course_name": course_info["course_name"],
-                "course_type": course_info["course_type"],
-                "credits": course_info["credits"],
-                "course_year": course_info["course_year"],
-                "semester": course_info["semester"],
-                "department_id": DEPT_DATA_INTELLIGENCE
-            })
-            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_DATA_INTELLIGENCE)
-        
-        # Add Design Convergence courses (dept_id: 304)
-        for course_info in design_converge_data["curriculum"]:
-            code = course_info["course_code"]
-            if code in existing_course_codes:
-                continue
-                
-            additional_course_data.append({
-                "course_code": code,
-                "course_name": course_info["course_name"],
-                "course_type": course_info["course_type"],
-                "credits": course_info["credits"],
-                "course_year": course_info["course_year"],
-                "semester": course_info["semester"],
-                "department_id": DEPT_DESIGN_CONVERGENCE
-            })
-            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_DESIGN_CONVERGENCE)
-        
-        # Add Architecture courses (dept_id: 200)
-        for course_info in arch_data["curriculum"]:
-            code = course_info["course_code"]
-            if code in existing_course_codes:
-                continue
-                
-            additional_course_data.append({
-                "course_code": code,
-                "course_name": course_info["course_name"],
-                "course_type": course_info["course_type"],
-                "credits": course_info["credits"],
-                "course_year": course_info["course_year"],
-                "semester": course_info["semester"],
-                "department_id": DEPT_ARCHITECTURE
-            })
-            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_ARCHITECTURE)
-        
-        # Add Electronics courses (dept_id: 204)
-        for course_info in elec_data["curriculum"]:
-            code = course_info["course_code"]
-            if code in existing_course_codes:
-                continue
-                
-            additional_course_data.append({
-                "course_code": code,
-                "course_name": course_info["course_name"],
-                "course_type": course_info["course_type"],
-                "credits": course_info["credits"],
-                "course_year": course_info["course_year"],
-                "semester": course_info["semester"],
-                "department_id": DEPT_ELECTRONICS
-            })
-            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_ELECTRONICS)
-        
-        # Add Industrial Management Engineering courses (dept_id: 207)
-        for course_info in ime_data["curriculum"]:
-            code = course_info["course_code"]
-            if code in existing_course_codes:
-                continue
-                
-            additional_course_data.append({
-                "course_code": code,
-                "course_name": course_info["course_name"],
-                "course_type": course_info["course_type"],
-                "credits": course_info["credits"],
-                "course_year": course_info["course_year"],
-                "semester": course_info["semester"],
-                "department_id": DEPT_INDUSTRIAL_MGMT
-            })
-            existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info["course_type"], DEPT_INDUSTRIAL_MGMT)
-        
-        # Add courses from necessary.json (entry requirement courses)
-        # These courses may not have department_id, so we use a general department (100 = Lions College)
-        for college in necessary_data.get("colleges", []):
-            for major in college.get("majors", []):
-                for course_info in major.get("necessary_courses", []):
-                    code = course_info["course_code"]
-                    if code in existing_course_codes:
-                        continue  # Skip if already exists
-                    
-                    additional_course_data.append({
-                        "course_code": code,
-                        "course_name": course_info["course_name"],
-                        "course_type": course_info.get("course_type", "전공기초"),
-                        "credits": course_info["credits"],
-                        "course_year": course_info["course_year"],
-                        "semester": course_info["semester"],
-                        "department_id": DEPT_LIONS_COLLEGE  # General department for shared courses
-                    })
-                    existing_course_codes[code] = (course_info["course_name"], course_info["credits"], course_info.get("course_type", "전공기초"), DEPT_LIONS_COLLEGE)
-        
-        # Create course objects
-        course_start_id = len(courses) + 1
-        additional_courses = []
-        for idx, course_data in enumerate(additional_course_data):
-            course = Course(
-                id=course_start_id + idx,
-                course_code=course_data["course_code"],
-                course_name=course_data["course_name"],
-                credits=course_data["credits"],
-                course_type=course_data["course_type"],
-                department_id=course_data["department_id"],
-                course_year=course_data["course_year"],
-                semester=course_data["semester"],
-            )
-            additional_courses.append(course)
-        
-        db.add_all(additional_courses)
-        db.commit()
-        print(f"Created {len(additional_courses)} additional courses:")
-        print(f"  - Data Intelligence: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_DATA_INTELLIGENCE)}")
-        print(f"  - Design Convergence: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_DESIGN_CONVERGENCE)}")
-        print(f"  - Architecture: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_ARCHITECTURE)}")
-        print(f"  - Electronics: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_ELECTRONICS)}")
-        print(f"  - Industrial Management Engineering: {sum(1 for c in additional_course_data if c['department_id'] == DEPT_INDUSTRIAL_MGMT)}")
-        print(f"  - Entry Requirements (necessary.json): {sum(1 for c in additional_course_data if c['department_id'] == DEPT_LIONS_COLLEGE)}")
 
-
-        # ====================================================================
-        # ADDITIONAL COURSE ENROLLMENTS
-        # ====================================================================
-        print("Creating additional course enrollments...")
-        print(f"Target: ~{TARGET_ADDITIONAL_ENROLLMENTS} enrollments from additional departments")
-        
-        # Categorize 1st year additional courses by semester
-        additional_courses_by_sem = {1: [], 2: []}
-        for course_data, course in zip(additional_course_data, additional_courses):
-            if course_data["course_year"] == 1:  # Only 1st year courses
-                sem = course_data["semester"]
-                additional_courses_by_sem[sem].append({
-                    "id": course.id,
-                    "credits": course_data["credits"],
-                    "course_type": course_data["course_type"]
-                })
-
-        print(f"  - Additional 1st year, 1st semester: {len(additional_courses_by_sem[1])} courses")
-        print(f"  - Additional 1st year, 2nd semester: {len(additional_courses_by_sem[2])} courses")
-
-        # Distribute additional courses to students
-        additional_enrollments = []
-        enrolled_students = set()
-        
-        for student_id in student_ids:
-            if len(additional_enrollments) >= TARGET_ADDITIONAL_ENROLLMENTS:
-                break
-            
-            # Skip if student already has additional enrollments
-            if student_id in enrolled_students:
-                continue
-            
-            # Randomly assign a few additional courses (1-3 courses per semester)
-            num_courses_sem1 = random.randint(0, min(3, len(additional_courses_by_sem[1])))
-            num_courses_sem2 = random.randint(0, min(3, len(additional_courses_by_sem[2])))
-            
-            # Select random courses for each semester
-            selected_courses_by_sem = {}
-            if num_courses_sem1 > 0:
-                selected_courses_by_sem[1] = random.sample(additional_courses_by_sem[1], num_courses_sem1)
-            if num_courses_sem2 > 0:
-                selected_courses_by_sem[2] = random.sample(additional_courses_by_sem[2], num_courses_sem2)
-            
-            if selected_courses_by_sem:
-                student_additional_enrollments = create_course_enrollments(
-                    student_id=student_id,
-                    courses_by_semester=selected_courses_by_sem,
-                    year=2025,
-                    max_credits=5,  # Limit additional courses to avoid overloading
-                    include_grades=True,
-                    shuffle_courses=False  # Already randomly selected
-                )
-                additional_enrollments.extend(student_additional_enrollments)
-                enrolled_students.add(student_id)
-
-        print(f"Adding {len(additional_enrollments)} additional enrollments to database...")
-        db.add_all(additional_enrollments)
-        db.commit()
-        print("Additional course enrollments created successfully!")
 
         # ====================================================================
         # SURVEY ROUNDS & DECISION STATUSES
@@ -785,15 +700,14 @@ def seed_database():
         print("="*70)
         print(f"Created:")
         print(f"  - Students: {len(students)} regular + {len(special_students)} special")
-        print(f"  - Courses: {len(courses)} SW + {len(additional_courses)} additional")
-        print(f"  - Enrollments: {len(enrollments)} SW + {len(special_enrollments)} special")
-        print(f"  - Additional Enrollments: {len(additional_enrollments)}")
+        print(f"  - Courses: {len(courses)} (all JSON, no deduplication)")
+        print(f"  - Enrollments: {len(enrollments)} regular + {len(special_enrollments)} special")
         print(f"  - Survey Responses: {len(surveys)}")
-        print(f"  - Entry Requirements: 1 sample")
+        print(f"  - Entry Requirements: 4 departments")
         print(f"\nTotals:")
         print(f"  - Total Students: {len(students) + len(special_students)}")
-        print(f"  - Total Courses: {len(courses) + len(additional_courses)}")
-        print(f"  - Total Enrollments: {len(enrollments) + len(special_enrollments) + len(additional_enrollments)}")
+        print(f"  - Total Courses: {len(courses)}")
+        print(f"  - Total Enrollments: {len(enrollments) + len(special_enrollments)}")
         print("="*70)
 
     except Exception as e:

@@ -514,7 +514,7 @@ class EvaluationService:
     def get_curriculum_details(self, student_id: int, department_id: int) -> Dict[int, List[Dict]]:
         """
         전체 학년 전공이수체계도 상세 정보 반환 (학년별로 그룹화)
-        교양필수, 전공기초 과목도 포함
+        설강학과의 과목만 포함 (중복 제거)
         
         Args:
             student_id: 학생 ID
@@ -523,16 +523,43 @@ class EvaluationService:
         Returns:
             학년별 체계도 과목 딕셔너리 {1: [...], 2: [...], 3: [...], 4: [...]}
         """
-        # 해당 학과의 전체 과목 조회 (1~4학년)
-        # 1. 해당 학과 소속 과목 (전공기초 포함) OR
-        # 2. 교양필수 과목 (다른 학과 소속이어도 포함)
+        # 학과명 조회
+        department = self.db.query(Department).filter(Department.id == department_id).first()
+        if not department:
+            return {}
+        
+        # 해당 학과의 교육과정 JSON에서 과목 코드 목록 가져오기
+        curriculum_data = self._load_all_curriculum_data()
+        dept_curriculum = curriculum_data.get(department.name, [])
+        curriculum_course_codes = set(
+            c.get("course_code", "") for c in dept_curriculum if c.get("course_code")
+        )
+        
+        # 해당 학과 소속 과목만 조회 (설강학과 기준)
         dept_courses = self.db.query(Course).filter(
-            Course.course_year.in_([1, 2, 3, 4]),
-            or_(
-                Course.department_id == department_id,
-                Course.course_type == '교양필수'
-            )
+            Course.department_id == department_id,
+            Course.course_year.in_([1, 2, 3, 4])
         ).order_by(Course.course_year, Course.semester, Course.course_code).all()
+        
+        # 교육과정 JSON에 있는 교양필수/전공기초 과목 중 다른 학과 소속인 것도 포함
+        # (단, 설강학과 소속이 아닌 과목만 추가)
+        existing_codes = set(c.course_code for c in dept_courses)
+        extra_codes = curriculum_course_codes - existing_codes
+        
+        if extra_codes:
+            # 교육과정에 명시된 과목 중 다른 학과 소속인 과목 조회
+            # course_code 기준으로 중복 없이 하나만 가져오기
+            extra_courses_raw = self.db.query(Course).filter(
+                Course.course_code.in_(extra_codes),
+                Course.course_year.in_([1, 2, 3, 4])
+            ).order_by(Course.course_year, Course.semester, Course.course_code).all()
+            
+            # course_code 기준 중복 제거 (첫 번째만 사용)
+            seen_codes = set()
+            for c in extra_courses_raw:
+                if c.course_code not in seen_codes:
+                    dept_courses.append(c)
+                    seen_codes.add(c.course_code)
         
         if not dept_courses:
             return {}
@@ -547,19 +574,50 @@ class EvaluationService:
         
         # 해당 학과의 필수/권장 과목 리스트 가져오기
         department_courses_data = self._get_department_courses(department_id)
-        # necessary_courses는 이제 [{course_code, course_name}, ...] 형태
         necessary_course_codes = set(
             c.get("course_code", "") for c in department_courses_data.get('necessary_courses', [])
         )
-        # recommended_courses는 과목명 리스트
         recommended_course_names = set(department_courses_data.get('recommended_courses', []))
         
-        # 학년별 체계도 과목 리스트 생성
+        # 학년별 체계도 과목 리스트 생성 (course_code 기준 중복 제거)
         curriculum_by_year = {1: [], 2: [], 3: [], 4: []}
+        seen_course_codes = set()
+        
+        # 정렬: 학년 → 학기 → 코드 순
+        dept_courses.sort(key=lambda c: (c.course_year or 0, c.semester or 0, c.course_code or ""))
+        
         for course in dept_courses:
-            enrollment = enrollment_map.get(course.id)
+            if course.course_code in seen_course_codes:
+                continue
+            seen_course_codes.add(course.course_code)
             
-            # 해당 학과 기준으로 요건 분류 결정
+            enrollment = enrollment_map.get(course.id)
+            enrolled_dept_name = None
+            
+            # enrollment_map에 없으면 course_code로도 매칭 시도
+            # (학생이 다른 학과의 동일 과목을 이수한 경우)
+            if not enrollment:
+                for e in enrollments:
+                    e_course = self.db.query(Course).filter(Course.id == e.course_id).first()
+                    if e_course and e_course.course_code == course.course_code:
+                        enrollment = e
+                        # 타학과 이수인 경우 학과명 기록
+                        if e_course.department_id != department_id:
+                            enrolled_dept = self.db.query(Department).filter(
+                                Department.id == e_course.department_id
+                            ).first()
+                            if enrolled_dept:
+                                enrolled_dept_name = enrolled_dept.name
+                        break
+            elif enrollment:
+                # course.id로 직접 매칭된 경우에도 타학과 여부 확인
+                if course.department_id != department_id:
+                    enrolled_dept = self.db.query(Department).filter(
+                        Department.id == course.department_id
+                    ).first()
+                    if enrolled_dept:
+                        enrolled_dept_name = enrolled_dept.name
+            
             requirement_type = None
             if course.course_code in necessary_course_codes:
                 requirement_type = "전공진입"
@@ -571,17 +629,17 @@ class EvaluationService:
                 "course_name": course.course_name,
                 "credits": course.credits,
                 "course_type": course.course_type,
-                "requirement_type": requirement_type,  # 해당 학과의 요건 분류
+                "requirement_type": requirement_type,
                 "semester": course.semester,
                 "year": course.course_year,
                 "enrolled": enrollment is not None,
                 "grade": enrollment.grade if enrollment else None,
                 "enrollment_year": enrollment.year if enrollment else None,
-                "enrollment_semester": enrollment.semester if enrollment else None
+                "enrollment_semester": enrollment.semester if enrollment else None,
+                "enrolled_department_name": enrolled_dept_name,
             }
             curriculum_by_year[course.course_year].append(course_detail)
         
-        # 빈 학년은 제거
         return {year: courses for year, courses in curriculum_by_year.items() if courses}
     
     def _build_analysis_json(

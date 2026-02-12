@@ -27,8 +27,8 @@ DEPT_ADVERTISING_PR = 600
 # ============================================================================
 
 MAX_CREDITS_PER_SEMESTER = 20
-TARGET_ADDITIONAL_ENROLLMENTS = 2000
-REGULAR_STUDENT_COUNT = 300
+TARGET_ADDITIONAL_ENROLLMENTS = 200
+REGULAR_STUDENT_COUNT = 30
 
 # ============================================================================
 # Grade Options and Weights
@@ -103,6 +103,38 @@ SPECIAL_STUDENTS_CONFIG: List[Dict[str, Any]] = [
         "grade_seed": 3003,  # Random seed for reproducible grades
         "grade_profile": "struggling",  # Lower grades (C-D range)
         "description": "Student facing academic challenges, uncertain about major choice"
+    },
+    {
+        "student_id": "2025345123",
+        "name": "홍길동",
+        "email": "hong.gildong@hanyang.ac.kr",
+        "phone": "010-4444-4444",
+        "track": "자연계열",
+        "pride": "L",
+        "class_number": 3,
+        "advisor_id": 1,
+        "target_dept": DEPT_DATA_INTELLIGENCE,
+        "decision_scale": 4,
+        "grade_seed": None,
+        "grade_profile": None,  # Uses manual_enrollments instead
+        "description": "Student with manually specified enrollment history targeting Data Intelligence",
+        "manual_enrollments": [
+            {"course_code": "CUL7125", "grade": "A0", "numeric_grade": 4.0, "year": 2026, "semester": 1, "completion_type": "교양필수"},
+            {"course_code": "CUL7133", "grade": "B+", "numeric_grade": 3.5, "year": 2026, "semester": 1, "completion_type": "교양필수"},
+            {"course_code": "GEN0063", "grade": "B0", "numeric_grade": 3.0, "year": 2026, "semester": 1, "completion_type": "전공기초"},
+            {"course_code": "GEN2052", "grade": "C+", "numeric_grade": 2.5, "year": 2026, "semester": 1, "completion_type": "전공기초"},
+            {"course_code": "INE1014", "grade": "A0", "numeric_grade": 4.0, "year": 2026, "semester": 1, "completion_type": "전공기초"},
+            {"course_code": "VCC1001", "grade": "P", "numeric_grade": 0.0, "year": 2026, "semester": 1, "completion_type": "교양필수"},
+            {"course_code": "AIX0004", "grade": "A0", "numeric_grade": 4.0, "year": 2026, "semester": 1, "completion_type": "교양선택"},
+            {"course_code": "CLU1073", "grade": "A+", "numeric_grade": 4.5, "year": 2026, "semester": 1, "completion_type": "교양선택"},
+            # 2학기 수강 중 (성적 미부여)
+            {"course_code": "ICT1001", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "전공기초"},
+            {"course_code": "MCD1001", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "전공핵심"},
+            {"course_code": "MMT2012", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "전공핵심"},
+            {"course_code": "CUL2100", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "교양필수"},
+            {"course_code": "CSE2010", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "전공기초"},
+            {"course_code": "MMT4017", "grade": None, "numeric_grade": None, "year": 2026, "semester": 2, "completion_type": "전공핵심"},
+        ],
     },
 ]
 
