@@ -1,0 +1,154 @@
+{
+    "student": {
+        "student_id": "2025345123",
+        "name": "홍길동",
+        "email": "hong.gildong@hanyang.ac.kr",
+        "phone": "010-4444-4444",
+        "department_id": 100,
+        "advisor_id": 1,
+        "pride": "L",
+        "class": 3
+    },
+    "student_courses": [
+        {
+            "student_id": "2025345123",
+            "course_code": "CUL7125",
+            "grade": "A0",
+            "numeric_grade": 4.0,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "교양필수",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "CUL7133",
+            "grade": "B+",
+            "numeric_grade": 3.5,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "교양필수",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "GEN0063",
+            "grade": "B0",
+            "numeric_grade": 3.0,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "전공기초",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "GEN2052",
+            "grade": "C+",
+            "numeric_grade": 2.5,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "전공기초",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "INE1014",
+            "grade": "A0",
+            "numeric_grade": 4.0,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "전공기초",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "VCC1001",
+            "grade": "P",
+            "numeric_grade": 0.0,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "교양필수",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "AIX0004",
+            "grade": "A0",
+            "numeric_grade": 4.0,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "교양선택",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "CLU1073",
+            "grade": "A+",
+            "numeric_grade": 4.5,
+            "year": 2026,
+            "semester": 1,
+            "completion_type": "교양선택",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "ICT1001",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "전공기초",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "MCD1001",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "전공핵심",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "MMT2012",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "전공핵심",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "CUL2100",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "교양필수",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "CSE2010",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "전공기초",
+            "is_retake": false
+        },
+        {
+            "student_id": "2025345123",
+            "course_code": "MMT4017",
+            "grade": null,
+            "numeric_grade": null,
+            "year": 2026,
+            "semester": 2,
+            "completion_type": "전공핵심",
+            "is_retake": false
+        }
+    ]
+}
