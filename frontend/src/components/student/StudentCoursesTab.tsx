@@ -85,16 +85,15 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
       {/* 학적 통계 카드들 */}
       <div className="grid grid-cols-3 gap-6">
         <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-xl text-[#6a7282] font-medium mb-3">총 취득학점</p>
+          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">총 취득학점</p>
           <p className="text-[22pt] font-bold text-[#101828]">{totalCredits}학점</p>
         </div>
         <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-xl text-[#6a7282] font-medium mb-3">평균 학점</p>
+          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">평균 학점</p>
           <p className="text-[22pt] font-bold text-[#101828] mb-2">{gpa.toFixed(2)} / 4.5</p>
-          <p className="text-xl text-[#6a7282]">총 {courses.length}과목 이수</p>
         </div>
         <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-xl text-[#6a7282] font-medium mb-3">희망 전공</p>
+          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">희망 전공</p>
           <p className="text-[22pt] font-bold text-[#101828]">{student.latest_major_choice || '-'}</p>
         </div>
       </div>

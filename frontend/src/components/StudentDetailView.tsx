@@ -14,7 +14,7 @@ export default function StudentDetailView() {
   const { studentId } = useParams<{ studentId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
@@ -81,9 +81,14 @@ export default function StudentDetailView() {
       <div className="py-4 md:py-6">
         <div>
           {/* 헤더 */}
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-4xl font-bold text-[#101828] mb-4">{selectedStudent.name}</h1>
+              <div className="flex items-center gap-4">
+                <h1 className="text-4xl font-bold text-[#101828]">{selectedStudent.name}</h1>
+                <p className="text-[16pt] text-[#6a7282] font-medium">
+                  {selectedStudent.student_id} ⋅ {selectedStudent.academic_info.class_number}반 ⋅ {selectedStudent.department.name}
+                </p>
+              </div>
             </div>
             <button
               onClick={handleBackToList}
@@ -94,20 +99,13 @@ export default function StudentDetailView() {
             </button>
           </div>
 
-          {/* 학생 학적 정보 */}
-          <div className="mb-6">
-            <p className="text-xl text-[#6a7282] font-medium">
-              {selectedStudent.student_id} ⋅ {selectedStudent.academic_info.class_number}반 ⋅ {selectedStudent.department.name}
-            </p>
-          </div>
-
           {/* 탭 네비게이션 */}
           <div className="flex items-start gap-0 mb-6 border-b border-[#e5e7eb]">
             <button
               onClick={() => setActiveTab('survey')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'survey'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
-                : 'text-[#6a7282]'
+                : 'text-[#6a7282] font-medium'
                 }`}
             >
               희망 전공 조사 결과
@@ -116,8 +114,7 @@ export default function StudentDetailView() {
               onClick={() => setActiveTab('entry')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'entry'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
-
-                : 'text-[#6a7282]'
+                : 'text-[#6a7282] font-medium'
                 }`}
             >
               희망 전공 진입
@@ -126,7 +123,7 @@ export default function StudentDetailView() {
               onClick={() => setActiveTab('courses')}
               className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'courses'
                 ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
-                : 'text-[#6a7282]'
+                : 'text-[#6a7282] font-medium'
                 }`}
             >
               수강 과목 리스트

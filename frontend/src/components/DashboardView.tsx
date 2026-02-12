@@ -128,7 +128,7 @@ export default function DashboardView() {
       {/* Title Section */}
       <div className="flex items-start justify-between  mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-[#101828] mb-2">학과 관심 현황 대시보드</h1>
+          <h1 className="text-2xl md:text-3xl lg:text-3xl font-bold text-[#101828]">학과 관심 현황 대시보드</h1>
         </div>
         <button
           onClick={downloadData}
@@ -171,7 +171,7 @@ export default function DashboardView() {
         {/* Department Ratio Chart */}
         <div className="bg-white rounded-2xl border border-black/10 p-4 md:p-5 lg:p-7">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
-            <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
+            <h2 className="text-lg md:text-xl lg:text-[16pt] font-semibold text-[#101828]">학과별 희망 학생 비율</h2>
             <div className="flex flex-wrap gap-2">
               <select
                 value={selectedSurvey}
