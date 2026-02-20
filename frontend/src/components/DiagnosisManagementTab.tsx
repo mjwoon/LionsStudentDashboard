@@ -1,18 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Activity, Play, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import type { BulkEvaluationResponse } from '../types';
 
+type JobProgress = {
+  current: number;
+  total: number;
+  percent: number;
+  status: string;
+  success_count?: number;
+  error_count?: number;
+};
+
 export default function DiagnosisManagementTab() {
   const [forceRecalculate, setForceRecalculate] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<JobProgress | null>(null);
   const [result, setResult] = useState<BulkEvaluationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const pollJobStatus = useCallback(async (id: string) => {
+    try {
+      const response = await api.admin.getJobStatus(id);
+
+      if (response.status === 'PROGRESS') {
+        setProgress(response.progress || null);
+      } else if (response.status === 'SUCCESS') {
+        stopPolling();
+        setResult(response.result || null);
+        setProgress(null);
+        setEvaluating(false);
+        setJobId(null);
+      } else if (response.status === 'FAILURE') {
+        stopPolling();
+        setError(response.error || '태스크 실행 중 오류가 발생했습니다');
+        setProgress(null);
+        setEvaluating(false);
+        setJobId(null);
+      }
+      // PENDING/STARTED → keep polling
+    } catch (err) {
+      stopPolling();
+      setError(err instanceof Error ? err.message : '상태 조회 중 오류');
+      setEvaluating(false);
+    }
+  }, [stopPolling]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   const handleEvaluate = async () => {
     setEvaluating(true);
     setResult(null);
     setError(null);
+    setProgress(null);
+    setJobId(null);
 
     try {
       const request = {
@@ -20,10 +72,22 @@ export default function DiagnosisManagementTab() {
       };
 
       const response = await api.admin.bulkEvaluate(request);
-      setResult(response);
+
+      if (response.job_id) {
+        // 비동기 모드: 폴링 시작
+        setJobId(response.job_id);
+        setProgress({ current: 0, total: 0, percent: 0, status: '대기 중...' });
+
+        pollingRef.current = setInterval(() => {
+          pollJobStatus(response.job_id);
+        }, 2000);
+      } else {
+        // 폴백 (동기 모드): 즉시 결과 표시
+        setResult(response as unknown as BulkEvaluationResponse);
+        setEvaluating(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '진단 실행 중 오류가 발생했습니다');
-    } finally {
       setEvaluating(false);
     }
   };
@@ -38,7 +102,8 @@ export default function DiagnosisManagementTab() {
             <p className="font-medium mb-1">대량 진단 안내</p>
             <ul className="list-disc list-inside space-y-1 text-yellow-700">
               <li>모든 학생-학과 조합에 대한 진단 결과를 미리 계산하여 저장합니다</li>
-              <li>학생 수와 학과 수에 따라 시간이 오래 걸릴 수 있습니다</li>
+              <li>백그라운드에서 처리되므로 페이지를 떠나도 진행됩니다</li>
+              <li>AI 총평이 함께 생성됩니다 (OpenAI API 사용)</li>
               <li>강제 재계산 옵션을 선택하면 기존 캐시를 무시하고 재계산합니다</li>
             </ul>
           </div>
@@ -102,6 +167,40 @@ export default function DiagnosisManagementTab() {
           </button>
         </div>
       </div>
+
+      {/* 진행률 바 */}
+      {evaluating && progress && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-700">{progress.status}</span>
+            <span className="text-sm font-bold text-blue-600">{progress.percent}%</span>
+          </div>
+
+          {/* 프로그레스 바 */}
+          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+
+          {/* 상세 통계 */}
+          {progress.total > 0 && (
+            <div className="flex items-center gap-6 mt-3 text-sm text-gray-600">
+              <span>진행: <strong>{progress.current}</strong> / {progress.total}</span>
+              {progress.success_count !== undefined && (
+                <span className="text-green-600">성공: <strong>{progress.success_count}</strong></span>
+              )}
+              {progress.error_count !== undefined && progress.error_count > 0 && (
+                <span className="text-red-600">실패: <strong>{progress.error_count}</strong></span>
+              )}
+              {jobId && (
+                <span className="text-gray-400 text-xs ml-auto">Job: {jobId.slice(0, 8)}...</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 결과 표시 */}
       {result && (

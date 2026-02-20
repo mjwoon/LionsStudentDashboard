@@ -169,33 +169,98 @@ async def upload_enrollments_file(
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
-@router.post("/evaluate/bulk", response_model=BulkEvaluationResponse)
+@router.post("/evaluate/bulk")
 async def bulk_evaluate(
     request: BulkEvaluationRequest,
     db: Session = Depends(get_db)
 ):
     """
-    대량 진단 실행 및 결과 캐싱
+    대량 진단을 비동기로 실행 (Celery Worker)
     
-    - student_ids: 특정 학생들만 진단 (없으면 전체)
-    - department_ids: 특정 학과들만 진단 (없으면 전체)
-    - force_recalculate: True이면 기존 결과 무시하고 재계산
-    
-    이 엔드포인트는 시간이 오래 걸릴 수 있으므로
-    백그라운드 작업으로 실행하는 것을 권장합니다.
+    - 즉시 job_id를 반환하고 백그라운드에서 처리
+    - GET /evaluate/jobs/{job_id}로 진행상황 확인
     """
-    return AdminService.bulk_evaluate(db, request)
+    try:
+        from celery import Celery
+        import os
+        
+        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
+        
+        task = celery_app.send_task(
+            "bulk_evaluate",
+            kwargs={
+                "force_recalculate": request.force_recalculate,
+                "student_ids": request.student_ids,
+                "department_ids": request.department_ids
+            }
+        )
+        
+        return {
+            "job_id": task.id,
+            "status": "QUEUED",
+            "message": "일괄 평가가 큐에 등록되었습니다. job_id로 진행상황을 확인하세요."
+        }
+    
+    except ImportError:
+        # Celery 미설치 시 기존 동기 방식 폴백
+        logger.warning("Celery 미설치 - 동기 방식으로 실행")
+        return AdminService.bulk_evaluate(db, request)
+    except Exception as e:
+        logger.error(f"태스크 큐잉 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"태스크 큐잉 실패: {str(e)}")
+
+
+@router.get("/evaluate/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """
+    비동기 일괄 평가 진행 상태 조회
+    
+    Returns:
+        - status: PENDING | STARTED | PROGRESS | SUCCESS | FAILURE
+        - progress: 진행률 정보 (PROGRESS 상태일 때)
+        - result: 최종 결과 (SUCCESS 상태일 때)
+    """
+    try:
+        from celery.result import AsyncResult
+        from celery import Celery
+        import os
+        
+        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
+        
+        result = AsyncResult(job_id, app=celery_app)
+        
+        response = {
+            "job_id": job_id,
+            "status": result.state,
+        }
+        
+        if result.state == "PROGRESS":
+            response["progress"] = result.info
+        elif result.state == "SUCCESS":
+            response["result"] = result.result
+        elif result.state == "FAILURE":
+            response["error"] = str(result.info)
+        elif result.state == "PENDING":
+            response["progress"] = {
+                "current": 0,
+                "total": 0,
+                "percent": 0,
+                "status": "대기 중..."
+            }
+        
+        return response
+    
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Celery가 설치되지 않았습니다.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"상태 조회 실패: {str(e)}")
 
 
 @router.get("/evaluate/stats", response_model=CachedEvaluationStats)
 async def get_cached_evaluation_stats(db: Session = Depends(get_db)):
-    """
-    캐시된 진단 결과 통계 조회
-    
-    - 전체 캐시 수
-    - 학과별 캐시 수
-    - 마지막 업데이트 시간
-    """
+    """캐시된 진단 결과 통계 조회"""
     return AdminService.get_cached_evaluation_stats(db)
 
 
@@ -204,11 +269,7 @@ async def clear_cached_evaluations(
     department_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    캐시된 진단 결과 삭제
-    
-    - department_id: 특정 학과의 캐시만 삭제 (없으면 전체)
-    """
+    """캐시된 진단 결과 삭제"""
     return AdminService.clear_cached_evaluations(db, department_id)
 
 
@@ -226,6 +287,7 @@ async def admin_health():
             "POST /api/admin/upload/enrollments",
             "POST /api/admin/upload/enrollments/file",
             "POST /api/admin/evaluate/bulk",
+            "GET /api/admin/evaluate/jobs/{job_id}",
             "GET /api/admin/evaluate/stats",
             "DELETE /api/admin/evaluate/cache"
         ]

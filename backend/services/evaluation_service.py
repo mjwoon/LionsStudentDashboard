@@ -9,11 +9,14 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Optional
 from datetime import datetime
 import json
 import os
 import glob
+import logging
+
+logger = logging.getLogger(__name__)
 
 from models.models import (
     Student, Department, Course, CourseEnrollment,
@@ -38,6 +41,9 @@ class EvaluationService:
         self._necessary_data = None
         self._recommended_data = None
         self._curriculum_data_cache = {}  # 학과별 교육과정 데이터 캐시
+        self._similarity_cache = {}       # Neo4j 유사도 캐시 {(code1, code2): float}
+        self._similarity_threshold = 0.7  # 유사과목 인정 최소 유사도
+        self._graph_available = None      # Neo4j 연결 상태 캐시 (None=미확인)
     
     def _load_necessary_courses(self) -> Dict:
         """necessary.json 파일 로드"""
@@ -296,8 +302,11 @@ class EvaluationService:
             'overall_score': round(overall_score, 2),
             'grade': grade,
             'analysis_json': analysis_json,
+            'ai_summary': None,
             'evaluated_at': datetime.utcnow()
         }
+        
+        # AI 총평은 AI Worker (Celery)가 별도로 처리
         
         # DB에 저장
         if save_to_db:
@@ -385,7 +394,7 @@ class EvaluationService:
         Returns:
             (동일과목 비율, 유사과목 인정 비율) 튜플
             - 동일과목: 정확히 같은 학수코드+과목명
-            - 유사과목: 과목명이 같으면 다른 학과 과목도 인정
+            - 유사과목: Neo4j 유사도 >= threshold이면 인정 (폴백: 과목명 일치)
         """
         dept_courses = self._get_department_courses(department_id)
         recommended_course_names = dept_courses.get("recommended_courses", [])  # 과목명 리스트
@@ -401,18 +410,23 @@ class EvaluationService:
         
         # 동일과목 카운트 (해당 학과의 설강 과목만)
         exact_match_count = 0
-        # 유사과목 카운트 (과목명이 같으면 다른 학과도 인정)
+        # 유사과목 카운트 (Neo4j 유사도 또는 과목명 일치)
         similar_match_count = 0
         
         for rec_name in recommended_course_names:
-            # 유사과목 체크: 과목명이 동일한 과목을 이수했는지
+            # 동일과목 체크: 과목명이 동일한 과목을 이수 + 학수코드도 일치
             if rec_name in completed_names:
-                similar_match_count += 1
-                
-                # 동일과목 체크: 해당 과목명에 대응하는 학수코드를 이수했는지
                 expected_codes = course_name_to_codes.get(rec_name, set())
-                if expected_codes & completed_codes:  # 교집합이 있으면
+                if expected_codes & completed_codes:
                     exact_match_count += 1
+            
+            # 유사과목 체크: Neo4j 유사도 기반 또는 과목명 폴백
+            target_codes = course_name_to_codes.get(rec_name, set())
+            is_similar, _, _ = self._find_best_similar_course(
+                target_codes, rec_name, student_completed_courses
+            )
+            if is_similar:
+                similar_match_count += 1
         
         total = len(recommended_course_names)
         exact_rate = (exact_match_count / total) * 100
@@ -431,7 +445,7 @@ class EvaluationService:
         Returns:
             (동일과목 비율, 유사과목 인정 비율) 튜플
             - 동일과목: 정확히 같은 설강학과+학수코드
-            - 유사과목: 과목명이 같으면 다른 학과 과목도 인정
+            - 유사과목: Neo4j 유사도 >= threshold이면 인정 (폴백: 과목명 일치)
         """
         # 해당 학과의 1학년 교육과정 과목
         first_year_courses = self._get_department_first_year_curriculum(department_id)
@@ -440,11 +454,10 @@ class EvaluationService:
             return 100.0, 100.0  # 1학년 과목이 없으면 100%
         
         completed_codes = student_completed_courses["codes"]
-        completed_names = student_completed_courses["names"]
         
         # 동일과목 카운트 (학수코드 일치)
         exact_match_count = 0
-        # 유사과목 카운트 (과목명 일치)
+        # 유사과목 카운트 (Neo4j 유사도 또는 과목명 일치)
         similar_match_count = 0
         
         for course in first_year_courses:
@@ -455,8 +468,12 @@ class EvaluationService:
             if course_code in completed_codes:
                 exact_match_count += 1
             
-            # 유사과목: 과목명이 일치
-            if course_name in completed_names:
+            # 유사과목: Neo4j 유사도 기반 또는 과목명 폴백
+            target_codes = {course_code} if course_code else set()
+            is_similar, _, _ = self._find_best_similar_course(
+                target_codes, course_name, student_completed_courses
+            )
+            if is_similar:
                 similar_match_count += 1
         
         total = len(first_year_courses)
@@ -465,6 +482,118 @@ class EvaluationService:
         
         return round(exact_rate, 2), round(similar_rate, 2)
     
+    # ==================== Neo4j 유사도 통합 ====================
+    
+    def _is_graph_available(self) -> bool:
+        """
+        Neo4j 연결 가능 여부 확인 (인스턴스 내 1회 캐싱)
+        """
+        if self._graph_available is None:
+            try:
+                from services.graph_service import CourseGraphService
+                self._graph_available = CourseGraphService.check_connection()
+            except Exception:
+                self._graph_available = False
+            if not self._graph_available:
+                logger.info("Neo4j 미연결 - 과목명 기반 폴백 모드로 동작")
+        return self._graph_available
+    
+    def _get_similarity_from_graph(
+        self,
+        source_course_code: str,
+        target_course_code: str
+    ) -> float:
+        """
+        Neo4j에서 두 과목 간 유사도 조회 (캐싱 적용)
+        
+        Returns:
+            유사도 (0.0 ~ 1.0), 관계 없거나 연결 실패 시 0.0
+        """
+        if not self._is_graph_available():
+            return 0.0
+        
+        # 캐시 확인 (순서 무관하게 동일 키)
+        cache_key = tuple(sorted([source_course_code, target_course_code]))
+        if cache_key in self._similarity_cache:
+            return self._similarity_cache[cache_key]
+        
+        # Neo4j 조회
+        try:
+            from services.graph_service import CourseGraphService
+            similarity = CourseGraphService.get_similarity_between(
+                source_course_code, target_course_code
+            )
+        except Exception as e:
+            logger.warning(f"Neo4j 유사도 조회 실패 ({source_course_code} <-> {target_course_code}): {e}")
+            similarity = 0.0
+        
+        self._similarity_cache[cache_key] = similarity
+        return similarity
+    
+    def _find_best_similar_course(
+        self,
+        target_course_codes: Set[str],
+        target_course_name: str,
+        student_completed_courses: Dict
+    ) -> Tuple[bool, float, Optional[Dict]]:
+        """
+        학생이 이수한 과목 중 타겟 과목과 가장 유사한 과목 찾기
+        
+        로직:
+        1. 동일 학수코드 → 유사도 1.0
+        2. Neo4j SIMILAR_TO 관계 조회 → threshold 이상이면 인정
+        3. 폴백: 과목명 일치 → 유사도 1.0으로 인정
+        
+        Args:
+            target_course_codes: 타겟 과목 학수코드 set (과목명으로 여러 코드 가능)
+            target_course_name: 타겟 과목명
+            student_completed_courses: 학생 이수 과목 정보
+            
+        Returns:
+            (인정여부, 최고유사도, 매칭된 과목 dict or None)
+        """
+        completed_codes = student_completed_courses["codes"]
+        completed_names = student_completed_courses["names"]
+        completed_details = student_completed_courses["details"]
+        
+        # 1. 동일 학수코드 체크
+        for target_code in target_course_codes:
+            if target_code in completed_codes:
+                for detail in completed_details:
+                    if detail["course_code"] == target_code:
+                        return (True, 1.0, detail)
+        
+        # 2. Neo4j 유사도 기반 매칭
+        if self._is_graph_available():
+            best_similarity = 0.0
+            best_match = None
+            
+            for detail in completed_details:
+                for target_code in target_course_codes:
+                    sim = self._get_similarity_from_graph(
+                        detail["course_code"],
+                        target_code
+                    )
+                    if sim > best_similarity:
+                        best_similarity = sim
+                        best_match = detail
+            
+            if best_similarity >= self._similarity_threshold:
+                return (True, best_similarity, best_match)
+            
+            # Neo4j에서 유사 관계를 못 찾았더라도 과목명 폴백은 하지 않음
+            # (Neo4j가 연결되어 있으면 그래프 결과를 신뢰)
+            if best_similarity > 0:
+                return (False, best_similarity, None)
+        
+        # 3. 폴백: 과목명 일치 (Neo4j 미연결 시)
+        if target_course_name in completed_names:
+            for detail in completed_details:
+                if detail["course_name"] == target_course_name:
+                    return (True, 1.0, detail)
+        
+        return (False, 0.0, None)
+    
     def _find_similar_courses(
         self,
         target_course_name: str,
@@ -472,9 +601,14 @@ class EvaluationService:
     ) -> bool:
         """
         학생이 이수한 과목 중 타겟 과목과 유사한 과목이 있는지 확인
-        (과목명 기준 유사도 판단)
+        (하위 호환용 - 내부적으로 _find_best_similar_course 사용)
         """
-        return target_course_name in student_completed_courses["names"]
+        course_name_to_codes = self._get_all_course_codes_by_name()
+        target_codes = course_name_to_codes.get(target_course_name, set())
+        is_similar, _, _ = self._find_best_similar_course(
+            target_codes, target_course_name, student_completed_courses
+        )
+        return is_similar
     
     def _save_evaluation_result(
         self,
@@ -699,24 +833,45 @@ class EvaluationService:
         
         for rec_name in recommended_course_names:
             is_exact_match = False
-            is_similar_match = rec_name in completed_names
+            is_similar_match = False
+            similarity = 0.0
             matched_course = None
+            matched_by = None  # 'exact', 'graph_similar', 'name_similar'
             
-            if is_similar_match:
-                # 정확히 어떤 과목으로 이수했는지 찾기
-                for detail in completed_details:
-                    if detail["course_name"] == rec_name:
-                        matched_course = detail
-                        # 해당 과목명의 원래 학수코드와 일치하면 exact match
-                        expected_codes = course_name_to_codes.get(rec_name, set())
-                        if detail["course_code"] in expected_codes:
-                            is_exact_match = True
-                        break
+            # 동일과목 체크
+            if rec_name in completed_names:
+                expected_codes = course_name_to_codes.get(rec_name, set())
+                if expected_codes & completed_codes:
+                    is_exact_match = True
+                    for detail in completed_details:
+                        if detail["course_name"] == rec_name:
+                            matched_course = detail
+                            break
+            
+            # 유사과목 체크 (Neo4j 또는 폴백)
+            target_codes = course_name_to_codes.get(rec_name, set())
+            is_similar, sim_score, sim_match = self._find_best_similar_course(
+                target_codes, rec_name, student_completed_courses
+            )
+            if is_similar:
+                is_similar_match = True
+                similarity = sim_score
+                if not matched_course:
+                    matched_course = sim_match
+                # 매칭 방식 판별
+                if is_exact_match:
+                    matched_by = 'exact'
+                elif sim_score < 1.0 and self._is_graph_available():
+                    matched_by = 'graph_similar'
+                else:
+                    matched_by = 'name_similar'
             
             recommended_details.append({
                 "course_name": rec_name,
                 "is_exact_match": is_exact_match,
                 "is_similar_match": is_similar_match,
+                "similarity": round(similarity, 4),
+                "matched_by": matched_by,
                 "matched_course": matched_course
             })
         
@@ -727,20 +882,39 @@ class EvaluationService:
             course_name = course.get("course_name", "")
             
             is_exact_match = course_code in completed_codes
-            is_similar_match = course_name in completed_names
-            matched_course = None
             
-            if is_exact_match or is_similar_match:
-                for detail in completed_details:
-                    if detail["course_code"] == course_code or detail["course_name"] == course_name:
-                        matched_course = detail
-                        break
+            # 유사과목 체크 (Neo4j 또는 폴백)
+            target_codes = {course_code} if course_code else set()
+            is_similar, sim_score, sim_match = self._find_best_similar_course(
+                target_codes, course_name, student_completed_courses
+            )
+            is_similar_match = is_similar
+            similarity = sim_score
+            matched_course = sim_match
+            
+            # 매칭 방식 판별
+            matched_by = None
+            if is_exact_match:
+                matched_by = 'exact'
+                # exact인 경우 matched_course 설정
+                if not matched_course:
+                    for detail in completed_details:
+                        if detail["course_code"] == course_code:
+                            matched_course = detail
+                            break
+            elif is_similar_match:
+                if similarity < 1.0 and self._is_graph_available():
+                    matched_by = 'graph_similar'
+                else:
+                    matched_by = 'name_similar'
             
             curriculum_details.append({
                 "course_code": course_code,
                 "course_name": course_name,
                 "is_exact_match": is_exact_match,
                 "is_similar_match": is_similar_match,
+                "similarity": round(similarity, 4),
+                "matched_by": matched_by,
                 "matched_course": matched_course
             })
         

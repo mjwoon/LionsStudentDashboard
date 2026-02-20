@@ -251,12 +251,28 @@ export const api = {
       return await response.json()
     },
 
-    // 진단 관리
+    // 진단 관리 (비동기)
     bulkEvaluate: (request: BulkEvaluationRequest) =>
-      fetchAPI<BulkEvaluationResponse>('/api/admin/evaluate/bulk', {
+      fetchAPI<{ job_id: string; status: string; message: string }>('/api/admin/evaluate/bulk', {
         method: 'POST',
         body: JSON.stringify(request),
       }),
+
+    getJobStatus: (jobId: string) =>
+      fetchAPI<{
+        job_id: string
+        status: string
+        progress?: {
+          current: number
+          total: number
+          percent: number
+          status: string
+          success_count?: number
+          error_count?: number
+        }
+        result?: BulkEvaluationResponse
+        error?: string
+      }>(`/api/admin/evaluate/jobs/${jobId}`),
 
     getEvaluationStats: () =>
       fetchAPI<CachedEvaluationStats>('/api/admin/evaluate/stats'),
@@ -271,6 +287,7 @@ export const api = {
     },
   },
 }
+
 
 // Re-export all types for backward compatibility
 export type {

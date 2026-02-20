@@ -17,7 +17,7 @@ def quick_start_example():
     NEO4J_URI = "bolt://localhost:7687"
     NEO4J_USER = "neo4j"
     NEO4J_PASSWORD = "password123"  # 실제 비밀번호로 변경 필요
-    CSV_PATH = "/graphDB/final_course.csv"
+    CSV_PATH = "final_course.csv"
     SIMILARITY_THRESHOLD = 0.5  # 유사도 임계값
     
     print("=" * 80)

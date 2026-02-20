@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.128.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy>=2.0.46",
     "pydantic>=2.0.0",
     "pydantic[email]>=2.0.0",
     "python-multipart>=0.0.6",
@@ -14,4 +14,6 @@ dependencies = [
     "requests>=2.31.0",
     # Neo4j Graph DB
     "neo4j>=5.0.0",
+    # Celery (비동기 태스크 제출용)
+    "celery[redis]>=5.6.2",
 ]

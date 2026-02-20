@@ -79,6 +79,7 @@ def evaluate_student_for_department(
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
                 "cached": True,
                 "analysis_json": analysis,
+                "ai_summary": analysis.get("ai_summary", None),
                 "curriculum_details": curriculum_details
             }
     

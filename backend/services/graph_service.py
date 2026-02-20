@@ -531,3 +531,72 @@ class CourseGraphService:
                 top_k=top_k
             )
             return [dict(record) for record in result]
+    
+    # ==================== 유사도 조회 ====================
+    
+    @staticmethod
+    def get_similarity_between(code1: str, code2: str) -> float:
+        """
+        두 과목 간 유사도 조회
+        
+        Args:
+            code1: 첫 번째 과목 학수번호
+            code2: 두 번째 과목 학수번호
+            
+        Returns:
+            유사도 (0.0 ~ 1.0), 관계 없으면 0.0
+        """
+        with get_session() as session:
+            result = session.run(
+                """
+                MATCH (c1:Course {code: $code1})-[r:SIMILAR_TO]-(c2:Course {code: $code2})
+                RETURN r.similarity as similarity
+                LIMIT 1
+                """,
+                code1=code1,
+                code2=code2
+            )
+            record = result.single()
+            return float(record['similarity']) if record else 0.0
+    
+    @staticmethod
+    def get_similar_courses_for_list(
+        target_codes: List[str], 
+        min_similarity: float = 0.7
+    ) -> Dict[str, List[Dict]]:
+        """
+        여러 과목에 대해 유사 과목 일괄 조회 (배치 최적화)
+        
+        Args:
+            target_codes: 조회할 교과목 학수번호 리스트
+            min_similarity: 최소 유사도 임계값
+            
+        Returns:
+            {타겟학수번호: [{code, name, similarity}, ...]}
+        """
+        with get_session() as session:
+            result = session.run(
+                """
+                MATCH (c1:Course)-[r:SIMILAR_TO]-(c2:Course)
+                WHERE c1.code IN $codes AND r.similarity >= $min_sim
+                RETURN c1.code as target_code,
+                       c2.code as similar_code,
+                       c2.name as similar_name,
+                       r.similarity as similarity
+                ORDER BY c1.code, r.similarity DESC
+                """,
+                codes=target_codes,
+                min_sim=min_similarity
+            )
+            
+            grouped: Dict[str, List[Dict]] = {}
+            for record in result:
+                target = record['target_code']
+                if target not in grouped:
+                    grouped[target] = []
+                grouped[target].append({
+                    'code': record['similar_code'],
+                    'name': record['similar_name'],
+                    'similarity': record['similarity']
+                })
+            return grouped
