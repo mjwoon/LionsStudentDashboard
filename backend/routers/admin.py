@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.schemas import (
     CourseDataUpload, StudentDataUpload, EnrollmentDataUpload,
+    CurriculumDataUpload, RecommendationDataUpload, RequirementDataUpload,
+    CollegeDataUpload, DepartmentDataUpload,
     DataUploadResponse, BulkEvaluationRequest, BulkEvaluationResponse,
     CachedEvaluationStats
 )
@@ -14,13 +16,87 @@ from services.admin_service import AdminService
 from typing import List, Optional
 import json
 import logging
+import io
+import math
 
 logger = logging.getLogger(__name__)
+
+async def parse_upload_file(file: UploadFile) -> List[dict]:
+    """
+    Parse JSON, CSV, or Excel file into a list of dictionaries.
+    Uses pandas for CSV and Excel.
+    """
+    filename = file.filename.lower()
+    contents = await file.read()
+    
+    if filename.endswith(".json"):
+        data = json.loads(contents)
+    elif filename.endswith(".csv") or filename.endswith(".xlsx") or filename.endswith(".xls"):
+        import pandas as pd
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # student_id 열이 있으면 문자열로 변환 (Excel/CSV에서 정수로 읽히는 문제 방지)
+        if "student_id" in df.columns:
+            df["student_id"] = df["student_id"].astype(str).str.replace(r'\.0$', '', regex=True)
+            
+        # Replace NaN with None so pydantic models can handle missing values (optional fields)
+        df = df.where(pd.notnull(df), None)
+        data = df.to_dict(orient="records")
+    else:
+        raise ValueError("Unsupported file format. Please upload .json, .csv, or .xlsx files.")
+    
+    # JSON에서도 student_id가 int로 들어오는 경우 str로 변환
+    for row in data:
+        if "student_id" in row and isinstance(row["student_id"], (int, float)):
+            row["student_id"] = str(int(row["student_id"]))
+    
+    return data
 
 router = APIRouter(
     prefix="/api/admin",
     tags=["admin"]
 )
+
+
+@router.post("/upload/colleges/file", response_model=DataUploadResponse)
+async def upload_colleges_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """파일로 대학 데이터 일괄 업로드"""
+    try:
+        data = await parse_upload_file(file)
+        colleges_data = [CollegeDataUpload(**item) for item in data]
+        return AdminService.upload_colleges(db, colleges_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
+@router.post("/upload/departments/file", response_model=DataUploadResponse)
+async def upload_departments_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """파일로 학과 데이터 일괄 업로드"""
+    try:
+        data = await parse_upload_file(file)
+        departments_data = [DepartmentDataUpload(**item) for item in data]
+        return AdminService.upload_departments(db, departments_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
 @router.post("/upload/courses", response_model=DataUploadResponse)
@@ -60,12 +136,13 @@ async def upload_courses_file(
     ]
     """
     try:
-        contents = await file.read()
-        data = json.loads(contents)
+        data = await parse_upload_file(file)
         courses_data = [CourseDataUpload(**item) for item in data]
         return AdminService.upload_courses(db, courses_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"File upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
@@ -109,12 +186,13 @@ async def upload_students_file(
     ]
     """
     try:
-        contents = await file.read()
-        data = json.loads(contents)
+        data = await parse_upload_file(file)
         students_data = [StudentDataUpload(**item) for item in data]
         return AdminService.upload_students(db, students_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"File upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
@@ -158,12 +236,67 @@ async def upload_enrollments_file(
     ]
     """
     try:
-        contents = await file.read()
-        data = json.loads(contents)
+        data = await parse_upload_file(file)
         enrollments_data = [EnrollmentDataUpload(**item) for item in data]
         return AdminService.upload_enrollments(db, enrollments_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
+@router.post("/upload/curriculums/file", response_model=DataUploadResponse)
+async def upload_curriculums_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await parse_upload_file(file)
+        curriculums_data = [CurriculumDataUpload(**item) for item in data]
+        return AdminService.upload_curriculums(db, curriculums_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
+@router.post("/upload/recommendations/file", response_model=DataUploadResponse)
+async def upload_recommendations_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await parse_upload_file(file)
+        recs_data = [RecommendationDataUpload(**item) for item in data]
+        return AdminService.upload_recommendations(db, recs_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
+@router.post("/upload/requirements/file", response_model=DataUploadResponse)
+async def upload_requirements_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await parse_upload_file(file)
+        reqs_data = [RequirementDataUpload(**item) for item in data]
+        return AdminService.upload_requirements(db, reqs_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"File upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
@@ -258,6 +391,30 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=500, detail=f"상태 조회 실패: {str(e)}")
 
 
+@router.post("/rebuild-graph")
+async def trigger_rebuild_graph():
+    """
+    GraphDB 재구축 비동기 실행 (Celery Worker)
+    """
+    try:
+        from celery import Celery
+        import os
+        
+        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
+        
+        task = celery_app.send_task("rebuild_graph")
+        
+        return {
+            "job_id": task.id,
+            "status": "QUEUED",
+            "message": "GraphDB 재구축이 큐에 등록되었습니다."
+        }
+    except Exception as e:
+        logger.error(f"태스크 큐잉 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"태스크 큐잉 실패: {str(e)}")
+
+
 @router.get("/evaluate/stats", response_model=CachedEvaluationStats)
 async def get_cached_evaluation_stats(db: Session = Depends(get_db)):
     """캐시된 진단 결과 통계 조회"""
@@ -286,7 +443,11 @@ async def admin_health():
             "POST /api/admin/upload/students/file",
             "POST /api/admin/upload/enrollments",
             "POST /api/admin/upload/enrollments/file",
+            "POST /api/admin/upload/curriculums/file",
+            "POST /api/admin/upload/recommendations/file",
+            "POST /api/admin/upload/requirements/file",
             "POST /api/admin/evaluate/bulk",
+            "POST /api/admin/rebuild-graph",
             "GET /api/admin/evaluate/jobs/{job_id}",
             "GET /api/admin/evaluate/stats",
             "DELETE /api/admin/evaluate/cache"

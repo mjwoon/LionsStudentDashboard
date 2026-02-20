@@ -5,7 +5,7 @@ from typing import Optional, List
 from database import get_db
 from models.models import (
     MajorSurvey, Student, Department, SurveyRound, 
-    Course, CourseEnrollment, College
+    Course, StudentCourse, College
 )
 from models.schemas import (
     SurveySummaryResponse, SurveyOverview, MajorPreference, SurveyStatus,
@@ -32,17 +32,8 @@ def get_survey_summary(db: Session = Depends(get_db)):
         Department.code != "LIONSE"
     ).count()
     
-    # Calculate entry requirement completion rate
-    # This is a simplified calculation
-    total_enrollments = db.query(CourseEnrollment).join(Course).filter(
-        Course.is_entry_requirement == True
-    ).count()
-    
+    # Calculate entry requirement completion rate (simplified)
     entry_completion_rate = 0.0
-    if total_students > 0:
-        avg_completions = total_enrollments / total_students
-        # Assuming 3 entry requirements needed on average
-        entry_completion_rate = min((avg_completions / 3) * 100, 100)
     
     # Get major preferences with counts and average decision scale
     preferences = db.query(
@@ -50,7 +41,7 @@ def get_survey_summary(db: Session = Depends(get_db)):
         func.count(MajorSurvey.id).label('count'),
         func.avg(MajorSurvey.decision_scale).label('avg_scale')
     ).join(
-        MajorSurvey, Department.id == MajorSurvey.first_choice_dept_id
+        MajorSurvey, Department.id == MajorSurvey.first_choice_id
     ).group_by(
         Department.name
     ).order_by(
@@ -76,7 +67,7 @@ def get_survey_summary(db: Session = Depends(get_db)):
     # Calculate participation rate for current round
     if current_round:
         participants = db.query(MajorSurvey).filter(
-            MajorSurvey.round_id == current_round.id
+            MajorSurvey.survey_round_id == current_round.id
         ).count()
         participation_rate = (participants / total_students * 100) if total_students > 0 else 0
     else:
@@ -135,8 +126,8 @@ def create_survey(survey_data: SurveyCreate, db: Session = Depends(get_db)):
     
     # Check if student already submitted for this round
     existing_survey = db.query(MajorSurvey).filter(
-        MajorSurvey.student_id == student.id,
-        MajorSurvey.round_id == survey_round.id
+        MajorSurvey.student_id == student.student_id,
+        MajorSurvey.survey_round_id == survey_round.id
     ).first()
     
     if existing_survey:
@@ -147,12 +138,12 @@ def create_survey(survey_data: SurveyCreate, db: Session = Depends(get_db)):
     
     # Create new survey
     new_survey = MajorSurvey(
-        student_id=student.id,
-        round_id=survey_round.id,
-        first_choice_dept_id=survey_data.first_choice_dept_id,
-        second_choice_dept_id=survey_data.second_choice_dept_id,
+        student_id=student.student_id,
+        survey_round_id=survey_round.id,
+        first_choice_id=survey_data.first_choice_dept_id,
+        second_choice_id=survey_data.second_choice_dept_id or survey_data.first_choice_dept_id,
         decision_scale=survey_data.decision_scale,
-        submitted_at=datetime.utcnow()
+        survey_date=datetime.utcnow()
     )
     
     db.add(new_survey)
@@ -164,7 +155,7 @@ def create_survey(survey_data: SurveyCreate, db: Session = Depends(get_db)):
         message="설문이 성공적으로 제출되었습니다.",
         data=SurveySubmitData(
             survey_id=new_survey.id,
-            submitted_at=new_survey.submitted_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            submitted_at=new_survey.survey_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         )
     )
 
@@ -190,7 +181,7 @@ def get_round_surveys(
         joinedload(MajorSurvey.student).joinedload(Student.department),
         joinedload(MajorSurvey.first_choice),
         joinedload(MajorSurvey.second_choice)
-    ).filter(MajorSurvey.round_id == round_id)
+    ).filter(MajorSurvey.survey_round_id == round_id)
     
     # Get total count
     total_count = query.count()
@@ -219,7 +210,7 @@ def get_round_surveys(
                 name=survey.second_choice.name
             ) if survey.second_choice else None,
             decision_scale=survey.decision_scale,
-            submitted_at=survey.submitted_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            submitted_at=survey.survey_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         )
         submissions_list.append(submission)
     
@@ -299,11 +290,11 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         College.name.label('college_name'),
         func.count(MajorSurvey.id).label('count')
     ).join(
-        MajorSurvey, Department.id == MajorSurvey.first_choice_dept_id
+        MajorSurvey, Department.id == MajorSurvey.first_choice_id
     ).join(
         College, Department.college_id == College.id
     ).filter(
-        MajorSurvey.round_id == latest_round.id,
+        MajorSurvey.survey_round_id == latest_round.id,
         Department.code != 'LIONSE'
     ).group_by(
         Department.id, Department.code, Department.name, College.name
@@ -342,9 +333,9 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             Department.code,
             func.count(MajorSurvey.id).label('count')
         ).join(
-            MajorSurvey, Department.id == MajorSurvey.first_choice_dept_id
+            MajorSurvey, Department.id == MajorSurvey.first_choice_id
         ).filter(
-            MajorSurvey.round_id == round_obj.id,
+            MajorSurvey.survey_round_id == round_obj.id,
             Department.code != 'LIONSE'
         ).group_by(
             Department.code

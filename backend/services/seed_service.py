@@ -16,7 +16,7 @@ from sqlalchemy.exc import OperationalError
 from datetime import datetime
 
 from models.models import (
-    CourseEnrollment,
+    StudentCourse,
     MajorSurvey,
 )
 from fixtures.seed_config import (
@@ -94,14 +94,14 @@ def load_json_data(filename: str) -> dict:
 
 
 def create_course_enrollments(
-    student_id: int,
+    student_id: str,
     courses_by_semester: Dict[int, List[Dict]],
     year: int,
     max_credits: int = MAX_CREDITS_PER_SEMESTER,
     include_grades: bool = True,
     shuffle_courses: bool = True,
     grade_profile: str = "normal"
-) -> List[CourseEnrollment]:
+) -> List[StudentCourse]:
     """
     Create course enrollments for a student across multiple semesters.
     
@@ -115,7 +115,7 @@ def create_course_enrollments(
         grade_profile: Grade distribution profile for this student
         
     Returns:
-        List[CourseEnrollment]: List of enrollment objects
+        List[StudentCourse]: List of enrollment objects
     """
     enrollments = []
     
@@ -136,7 +136,7 @@ def create_course_enrollments(
                 else:
                     grade, numeric_grade = None, None
                 
-                enrollment = CourseEnrollment(
+                enrollment = StudentCourse(
                     student_id=student_id,
                     course_id=course_info["id"],
                     year=year,
@@ -153,7 +153,7 @@ def create_course_enrollments(
 
 
 def create_survey_for_student(
-    student_id: int,
+    student_id: str,
     round_id: int,
     first_choice_dept: int,
     decision_scale: int,
@@ -165,7 +165,7 @@ def create_survey_for_student(
     Create a major survey entry for a student.
     
     Args:
-        student_id: Student database ID
+        student_id: Student PK (student_id VARCHAR)
         round_id: Survey round ID
         first_choice_dept: First choice department ID
         decision_scale: Decision certainty (1-5)
@@ -186,10 +186,10 @@ def create_survey_for_student(
     
     return MajorSurvey(
         student_id=student_id,
-        round_id=round_id,
-        first_choice_dept_id=first_choice_dept,
-        second_choice_dept_id=second_choice_dept,
+        survey_round_id=round_id,
+        first_choice_id=first_choice_dept,
+        second_choice_id=second_choice_dept or first_choice_dept,
         decision_status_id=decision_status_id,
         decision_scale=decision_scale,
-        submitted_at=datetime(round_year, round_month, random.randint(1, 28))
+        survey_date=datetime(round_year, round_month, random.randint(1, 28))
     )

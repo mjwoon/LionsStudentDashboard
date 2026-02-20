@@ -1,4 +1,4 @@
-**데이터 구조**
+**데이터 구조 (업데이트됨)**
 
 기초정보 및 학과 테이블
 
@@ -19,7 +19,16 @@ CREATE TABLE departments (
     FOREIGN KEY (college_id) REFERENCES colleges(id)
 );
 
--- 3. 과목 테이블
+-- 2.1 지도교수 테이블 (추가)
+CREATE TABLE advisors (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL,
+    email VARCHAR(100),
+    department_id INT,
+    FOREIGN KEY (department_id) REFERENCES departments(id)
+);
+
+-- 3. 과목 테이블 (학기 정보 추가)
 CREATE TABLE courses (
     course_id INT PRIMARY KEY AUTO_INCREMENT,
     course_code VARCHAR(20) UNIQUE NOT NULL, -- 과목코드 (예: CSE101)
@@ -28,6 +37,7 @@ CREATE TABLE courses (
     course_type VARCHAR(30), -- 전공기초, 전공필수 등
     course_department INT, -- 관장학과
     course_year INT NOT NULL, -- 권장 학년
+    semester INT NOT NULL, -- 권장 학기 (추가)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (course_department) REFERENCES departments(id)
 );
@@ -36,7 +46,7 @@ CREATE TABLE courses (
 학생 및 수강기록
 
 ```sql
--- 4. 학생 테이블
+-- 4. 학생 테이블 (지도교수 외래키 연결)
 CREATE TABLE students (
     student_id VARCHAR(10) PRIMARY KEY, -- 학번
     name VARCHAR(50) NOT NULL,
@@ -48,7 +58,8 @@ CREATE TABLE students (
     class INT, -- 분반
     
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (department_id) REFERENCES departments(id)
+    FOREIGN KEY (department_id) REFERENCES departments(id),
+    FOREIGN KEY (advisor_id) REFERENCES advisors(id)
 );
 
 -- 5. 학생 수강과목 테이블
@@ -80,12 +91,22 @@ CREATE TABLE decision_statuses (
     status_name VARCHAR(50) NOT NULL -- 최종결정, 고민중 등
 );
 
--- 7. 희망전공조사 테이블
+-- 6.1 설문 회차 테이블 (추가)
+CREATE TABLE survey_rounds (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    round_number INT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    status VARCHAR(20) DEFAULT 'OPEN', -- OPEN, CLOSED 등
+    start_date DATETIME,
+    end_date DATETIME
+);
+
+-- 7. 희망전공조사 테이블 (회차 외래키 연결)
 CREATE TABLE major_surveys (
     id INT PRIMARY KEY AUTO_INCREMENT,
     student_id VARCHAR(10) NOT NULL,
     
-    survey_round INT NOT NULL, -- 1회차, 2회차
+    survey_round_id INT NOT NULL, -- 회차 ID (수정)
     first_choice_id INT NOT NULL, -- 1지망 학과 ID
     second_choice_id INT NOT NULL, -- 2지망 학과 ID
     
@@ -96,7 +117,8 @@ CREATE TABLE major_surveys (
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
     FOREIGN KEY (first_choice_id) REFERENCES departments(id),
     FOREIGN KEY (second_choice_id) REFERENCES departments(id),
-    FOREIGN KEY (decision_status_id) REFERENCES decision_statuses(id)
+    FOREIGN KEY (decision_status_id) REFERENCES decision_statuses(id),
+    FOREIGN KEY (survey_round_id) REFERENCES survey_rounds(id)
 );
 ```
 
@@ -118,13 +140,13 @@ CREATE TABLE department_entry_requirements (
     FOREIGN KEY (department_id) REFERENCES departments(id)
 );
 
--- 9. 요건 대상 과목 맵핑
+-- 9. 요건 대상 과목 맵핑 (과목 ID 참조로 변경)
 CREATE TABLE requirement_courses (
     id INT PRIMARY KEY AUTO_INCREMENT,
     requirement_id INT NOT NULL,
-    course_code VARCHAR(20) NOT NULL,
+    course_id INT NOT NULL, -- course_code 대신 PK 참조
     FOREIGN KEY (requirement_id) REFERENCES department_entry_requirements(id) ON DELETE CASCADE,
-    FOREIGN KEY (course_code) REFERENCES courses(course_code)
+    FOREIGN KEY (course_id) REFERENCES courses(course_id)
 );
 
 -- 10. 학생별 진단 결과 캐시 테이블 (성능 최적화 및 AI 총평)
@@ -135,7 +157,6 @@ CREATE TABLE student_requirement_status (
     is_satisfied BOOLEAN DEFAULT FALSE, -- 최종 충족 여부
     
     -- 진단 상세 데이터 (JSON)
-    -- 예: {"completed": 2, "required": 2, "details": [{"code": "MAT101", "grade": "A0"}]}
     analysis_json JSON, 
     
     ai_summary TEXT, -- LLM이 생성한 맞춤형 커멘트

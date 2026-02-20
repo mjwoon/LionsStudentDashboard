@@ -22,23 +22,8 @@ def evaluate_student_for_department(
 ):
     """
     특정 학생의 특정 학과에 대한 진입 적합도 평가 (3개 메트릭)
-    
-    - **student_id**: 학생 학번
-    - **department_id**: 평가할 학과 ID
-    - **admission_year**: 입학년도 (진입요건 기준, 기본값: 2026)
-    - **force_recalculate**: 강제 재계산 여부 (기본값: False, 캐시된 결과 사용)
-    
-    Returns:
-        {
-            "entry_requirement_score": float,  # 진입요건 충족 (있으면 %, 없으면 100%)
-            "recommended_exact_rate": float,  # 권장과목 동일과목 이수율
-            "recommended_similar_rate": float,  # 권장과목 유사과목 인정 이수율
-            "curriculum_exact_rate": float,  # 1학년 교육과정 동일과목 이수율
-            "curriculum_similar_rate": float,  # 1학년 교육과정 유사과목 인정 이수율
-            "overall_score": float  # 종합 점수 (100점 만점)
-        }
     """
-    # 학생 조회
+    # 학생 조회 (student_id is now PK)
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail=f"학번 {student_id}를 찾을 수 없습니다.")
@@ -46,14 +31,14 @@ def evaluate_student_for_department(
     # 강제 재계산이 아니면 캐시된 결과 먼저 확인
     if not force_recalculate:
         cached_result = db.query(StudentRequirementStatus).filter(
-            StudentRequirementStatus.student_id == student.id,
+            StudentRequirementStatus.student_id == student.student_id,
             StudentRequirementStatus.department_id == department_id
         ).first()
         
         if cached_result and cached_result.overall_score is not None:
             # 체계도 상세 정보 추가
             evaluator = EvaluationService(db)
-            curriculum_details = evaluator.get_curriculum_details(student.id, department_id)
+            curriculum_details = evaluator.get_curriculum_details(student.student_id, department_id)
             
             # analysis_json에서 상세 정보 추출
             analysis = cached_result.analysis_json or {}
@@ -88,12 +73,12 @@ def evaluate_student_for_department(
     
     try:
         result = evaluator.evaluate_student(
-            student.id, department_id, admission_year, save_to_db=True
+            student.student_id, department_id, admission_year, save_to_db=True
         )
         result["cached"] = False
         
         # 체계도 상세 정보 추가
-        curriculum_details = evaluator.get_curriculum_details(student.id, department_id)
+        curriculum_details = evaluator.get_curriculum_details(student.student_id, department_id)
         result["curriculum_details"] = curriculum_details
         
         return result
@@ -112,12 +97,6 @@ def evaluate_student_for_all_departments(
 ):
     """
     특정 학생의 모든 학과에 대한 적합도 평가
-    
-    - **student_id**: 학생 학번
-    - **admission_year**: 입학년도
-    
-    Returns:
-        모든 학과에 대한 평가 결과 리스트 (적합도 순으로 정렬)
     """
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
@@ -132,7 +111,7 @@ def evaluate_student_for_all_departments(
     for dept in departments:
         try:
             result = evaluator.evaluate_student(
-                student.id, dept.id, admission_year, save_to_db=True
+                student.student_id, dept.id, admission_year, save_to_db=True
             )
             results.append(result)
         except Exception as e:
@@ -158,10 +137,6 @@ def batch_evaluate_department(
 ):
     """
     특정 학과에 대해 여러 학생을 일괄 평가
-    
-    - **department_id**: 평가할 학과 ID
-    - **student_ids**: 평가할 학생 학번 리스트 (None이면 전체 학생)
-    - **admission_year**: 입학년도
     """
     # 학과 확인
     department = db.query(Department).filter(Department.id == department_id).first()
@@ -179,7 +154,7 @@ def batch_evaluate_department(
     
     evaluator = EvaluationService(db)
     results = evaluator.batch_evaluate_students(
-        [s.id for s in students],
+        [s.student_id for s in students],
         department_id,
         admission_year
     )

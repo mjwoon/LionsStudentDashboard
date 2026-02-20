@@ -18,6 +18,44 @@ BACKEND_PATH = os.getenv("BACKEND_PATH", "/backend")
 if BACKEND_PATH not in sys.path:
     sys.path.insert(0, BACKEND_PATH)
 
+@celery_app.task(bind=True, name="rebuild_graph")
+def rebuild_graph_task(self):
+    """
+    비동기 GraphDB 재구축 태스크
+    """
+    import subprocess
+    import os
+
+    self.update_state(
+        state="PROGRESS",
+        meta={
+            "status": "GraphDB 재구축 시작...",
+            "percent": 0
+        }
+    )
+
+    try:
+        logger.info("GraphDB 재구축 스크립트 실행 시작...")
+        
+        env = os.environ.copy()
+        
+        result = subprocess.run(
+            ["uv", "run", "python", "quick_start.py"],
+            cwd="/graphDB",
+            capture_output=True,
+            text=True,
+            env=env
+        )
+        
+        if result.returncode != 0:
+            raise Exception(f"재구축 스크립트 실패: {result.stderr}")
+            
+        logger.info("GraphDB 재구축 스크립트 실행 완료")
+        return {"success": True, "message": "GraphDB 재구축 완료"}
+    except Exception as e:
+        logger.error(f"GraphDB 재구축 오류: {str(e)}")
+        return {"success": False, "error": str(e)}
+
 
 @celery_app.task(bind=True, name="bulk_evaluate")
 def bulk_evaluate_task(

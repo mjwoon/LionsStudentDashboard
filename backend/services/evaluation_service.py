@@ -19,9 +19,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 from models.models import (
-    Student, Department, Course, CourseEnrollment,
+    Student, Department, Course, StudentCourse,
     DepartmentEntryRequirement, RequirementCourse,
-    StudentRequirementStatus, GradeLevelEnum
+    StudentRequirementStatus, GradeLevelEnum,
+    Curriculum, CourseRecommendation
 )
 from constants import (
     GRADE_TO_NUMERIC,
@@ -46,65 +47,34 @@ class EvaluationService:
         self._graph_available = None      # Neo4j 연결 상태 캐시 (None=미확인)
     
     def _load_necessary_courses(self) -> Dict:
-        """necessary.json 파일 로드"""
-        if self._necessary_data is None:
-            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-            necessary_path = os.path.join(data_dir, 'necessary.json')
-            try:
-                with open(necessary_path, 'r', encoding='utf-8') as f:
-                    self._necessary_data = json.load(f)
-            except FileNotFoundError:
-                self._necessary_data = {"colleges": []}
-        return self._necessary_data
+        """Deprecated: Use DB directly"""
+        return {}
     
     def _load_recommended_courses(self) -> Dict:
-        """recommended.json 파일 로드"""
-        if self._recommended_data is None:
-            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-            recommended_path = os.path.join(data_dir, 'recommended.json')
-            try:
-                with open(recommended_path, 'r', encoding='utf-8') as f:
-                    self._recommended_data = json.load(f)
-            except FileNotFoundError:
-                self._recommended_data = {"colleges": []}
-        return self._recommended_data
+        """Deprecated: Use DB directly"""
+        return {}
     
     def _load_all_curriculum_data(self) -> Dict[str, List[Dict]]:
-        """
-        모든 학과 교육과정 JSON 파일 로드 (유사과목 판정용)
-        
-        Returns:
-            {학과명: [과목정보 리스트]} 형태의 딕셔너리
-        """
+        """모든 학과 교육과정 DB 로드 (유사과목 판정용)"""
         if self._curriculum_data_cache:
             return self._curriculum_data_cache
         
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-        curriculum_files = ['sw.json', 'elec.json', 'arch.json', 'ime.json', 
-                           'dataIntelli.json', 'designConverge.json']
-        
-        for filename in curriculum_files:
-            filepath = os.path.join(data_dir, filename)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    dept_name = data.get('department', '')
-                    curriculum = data.get('curriculum', [])
-                    if dept_name:
-                        self._curriculum_data_cache[dept_name] = curriculum
-            except (FileNotFoundError, json.JSONDecodeError):
-                continue
+        curriculums = self.db.query(Curriculum).all()
+        for cur in curriculums:
+            dept = self.db.query(Department).filter(Department.id == cur.department_id).first()
+            if dept:
+                if dept.name not in self._curriculum_data_cache:
+                    self._curriculum_data_cache[dept.name] = []
+                self._curriculum_data_cache[dept.name].append({
+                    "course_code": cur.course_code,
+                    "course_name": cur.course_name,
+                    "course_year": cur.course_year
+                })
         
         return self._curriculum_data_cache
     
     def _get_all_course_codes_by_name(self) -> Dict[str, Set[str]]:
-        """
-        모든 교육과정에서 과목명 -> 학수코드 매핑 생성
-        (동일 과목명이 여러 학과에서 다른 코드로 존재할 수 있음)
-        
-        Returns:
-            {과목명: {학수코드1, 학수코드2, ...}} 형태의 딕셔너리
-        """
+        """모든 교육과정에서 과목명 -> 학수코드 매핑 생성"""
         curriculum_data = self._load_all_curriculum_data()
         course_name_to_codes: Dict[str, Set[str]] = {}
         
@@ -127,37 +97,32 @@ class EvaluationService:
         return course_name_to_codes
     
     def _get_department_courses(self, department_id: int) -> Dict:
-        """학과의 필수/권장 과목 정보 조회"""
+        """학과의 필수/권장 과목 정보 DB에서 조회"""
         department = self.db.query(Department).filter(Department.id == department_id).first()
         if not department:
             return {"necessary_courses": [], "recommended_courses": []}
         
-        dept_name = department.name
+        # 필수 과목 조회 (RequirementCourse 활용)
+        # 만약 RequirementCourse 테이블이 비어있다면, Curriculum에서 전공필수(필요시)만 가져오거나 
+        # 임시로 빈 리스트 처리
+        req_courses = self.db.query(RequirementCourse).join(DepartmentEntryRequirement).filter(
+            DepartmentEntryRequirement.department_id == department_id
+        ).all()
         
-        # 필수 과목 조회 (진입요건)
-        necessary_data = self._load_necessary_courses()
         necessary_courses = []
-        for college in necessary_data.get("colleges", []):
-            for major in college.get("majors", []):
-                if major.get("name") == dept_name:
-                    # 전체 과목 정보 추출 (course_code와 course_name 포함)
-                    necessary_courses = [
-                        {
-                            "course_code": course["course_code"],
-                            "course_name": course.get("course_name", "")
-                        }
-                        for course in major.get("necessary_courses", [])
-                    ]
-                    break
+        for r in req_courses:
+            course = self.db.query(Course).filter(Course.course_id == r.course_id).first()
+            if course:
+                necessary_courses.append({
+                    "course_code": course.course_code,
+                    "course_name": course.course_name
+                })
         
-        # 권장 과목 조회 (과목명 리스트)
-        recommended_data = self._load_recommended_courses()
-        recommended_courses = []
-        for college in recommended_data.get("colleges", []):
-            for major in college.get("majors", []):
-                if major.get("name") == dept_name:
-                    recommended_courses = major.get("recommended_courses", [])
-                    break
+        # 만약 RequirementCourse를 사용하지 않는 경우에는 빈 배열 반환 (요건 충족 검사에서 100% 처리)
+        
+        # 권장 과목 조회
+        recs = self.db.query(CourseRecommendation).filter(CourseRecommendation.department_id == department_id).all()
+        recommended_courses = [r.course_name for r in recs]
         
         return {
             "necessary_courses": necessary_courses,
@@ -192,7 +157,7 @@ class EvaluationService:
         # 교육과정 JSON에 없으면 DB에서 조회
         if not first_year_courses:
             db_courses = self.db.query(Course).filter(
-                Course.department_id == department_id,
+                Course.course_department == department_id,
                 Course.course_year == FIRST_YEAR
             ).all()
             first_year_courses = [
@@ -207,7 +172,7 @@ class EvaluationService:
     
     def evaluate_student(
         self,
-        student_id: int,
+        student_id: str,
         department_id: int,
         admission_year: int = 2026,
         save_to_db: bool = True
@@ -225,7 +190,7 @@ class EvaluationService:
             평가 결과 딕셔너리
         """
         # 학생 정보 조회
-        student = self.db.query(Student).filter(Student.id == student_id).first()
+        student = self.db.query(Student).filter(Student.student_id == student_id).first()
         if not student:
             raise ValueError(f"학생 ID {student_id}를 찾을 수 없습니다.")
         
@@ -235,10 +200,10 @@ class EvaluationService:
             raise ValueError(f"학과 ID {department_id}를 찾을 수 없습니다.")
         
         # 학생의 수강 이력 조회
-        enrollments = self.db.query(CourseEnrollment).filter(
-            CourseEnrollment.student_id == student_id,
-            CourseEnrollment.grade.isnot(None),
-            CourseEnrollment.grade != ""
+        enrollments = self.db.query(StudentCourse).filter(
+            StudentCourse.student_id == student_id,
+            StudentCourse.grade.isnot(None),
+            StudentCourse.grade != ""
         ).all()
         
         # 학생이 이수한 과목 정보 수집 (과목코드, 과목명)
@@ -314,7 +279,7 @@ class EvaluationService:
         
         return result
     
-    def _get_student_completed_courses(self, enrollments: List[CourseEnrollment]) -> Dict:
+    def _get_student_completed_courses(self, enrollments: List[StudentCourse]) -> Dict:
         """
         학생이 이수한 과목 정보 수집
         
@@ -331,7 +296,7 @@ class EvaluationService:
         
         for enrollment in enrollments:
             if enrollment.grade and enrollment.grade != FAILING_GRADE:
-                course = self.db.query(Course).filter(Course.id == enrollment.course_id).first()
+                course = self.db.query(Course).filter(Course.course_id == enrollment.course_id).first()
                 if course:
                     completed_codes.add(course.course_code)
                     completed_names.add(course.course_name)
@@ -612,7 +577,7 @@ class EvaluationService:
     
     def _save_evaluation_result(
         self,
-        student_id: int,
+        student_id: str,
         department_id: int,
         admission_year: int,
         result: Dict
@@ -645,7 +610,7 @@ class EvaluationService:
         
         self.db.commit()
     
-    def get_curriculum_details(self, student_id: int, department_id: int) -> Dict[int, List[Dict]]:
+    def get_curriculum_details(self, student_id: str, department_id: int) -> Dict[int, List[Dict]]:
         """
         전체 학년 전공이수체계도 상세 정보 반환 (학년별로 그룹화)
         설강학과의 과목만 포함 (중복 제거)
@@ -671,7 +636,7 @@ class EvaluationService:
         
         # 해당 학과 소속 과목만 조회 (설강학과 기준)
         dept_courses = self.db.query(Course).filter(
-            Course.department_id == department_id,
+            Course.course_department == department_id,
             Course.course_year.in_([1, 2, 3, 4])
         ).order_by(Course.course_year, Course.semester, Course.course_code).all()
         
@@ -699,8 +664,8 @@ class EvaluationService:
             return {}
         
         # 학생의 수강 이력 조회
-        enrollments = self.db.query(CourseEnrollment).filter(
-            CourseEnrollment.student_id == student_id
+        enrollments = self.db.query(StudentCourse).filter(
+            StudentCourse.student_id == student_id
         ).all()
         
         # 수강 이력을 course_id로 매핑
@@ -725,29 +690,28 @@ class EvaluationService:
                 continue
             seen_course_codes.add(course.course_code)
             
-            enrollment = enrollment_map.get(course.id)
+            enrollment = enrollment_map.get(course.course_id)
             enrolled_dept_name = None
             
             # enrollment_map에 없으면 course_code로도 매칭 시도
-            # (학생이 다른 학과의 동일 과목을 이수한 경우)
             if not enrollment:
                 for e in enrollments:
-                    e_course = self.db.query(Course).filter(Course.id == e.course_id).first()
+                    e_course = self.db.query(Course).filter(Course.course_id == e.course_id).first()
                     if e_course and e_course.course_code == course.course_code:
                         enrollment = e
                         # 타학과 이수인 경우 학과명 기록
-                        if e_course.department_id != department_id:
+                        if e_course.course_department != department_id:
                             enrolled_dept = self.db.query(Department).filter(
-                                Department.id == e_course.department_id
+                                Department.id == e_course.course_department
                             ).first()
                             if enrolled_dept:
                                 enrolled_dept_name = enrolled_dept.name
                         break
             elif enrollment:
-                # course.id로 직접 매칭된 경우에도 타학과 여부 확인
-                if course.department_id != department_id:
+                # course.course_id로 직접 매칭된 경우에도 타학과 여부 확인
+                if course.course_department != department_id:
                     enrolled_dept = self.db.query(Department).filter(
-                        Department.id == course.department_id
+                        Department.id == course.course_department
                     ).first()
                     if enrolled_dept:
                         enrolled_dept_name = enrolled_dept.name
@@ -780,7 +744,7 @@ class EvaluationService:
         self,
         student: Student,
         department: Department,
-        enrollments: List[CourseEnrollment],
+        enrollments: List[StudentCourse],
         student_completed_courses: Dict,
         entry_requirement_score: float,
         recommended_exact_rate: float,
@@ -980,7 +944,7 @@ class EvaluationService:
     
     def batch_evaluate_students(
         self,
-        student_ids: List[int],
+        student_ids: List[str],
         department_id: int,
         admission_year: int = 2026
     ) -> List[Dict]:

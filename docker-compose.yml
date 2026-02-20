@@ -76,6 +76,7 @@ services:
     volumes:
       - ./ai:/app
       - ./backend:/backend    # Backend 모델/서비스 접근용
+      - ./graphDB:/graphDB    # GraphDB 재구축 접근용
       - /app/.venv
     environment:
       DATABASE_URL: postgresql://user:password@db:5432/my_db
@@ -105,6 +106,22 @@ services:
     stdin_open: true
     depends_on:
       - backend
+
+  neo4j-init:
+    build: ./graphDB
+    container_name: neo4j_initializer
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_URI: bolt://neo4j-course-graph:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: password123
+    networks:
+      - default
+      - course-graph-network
+    volumes:
+      - ./graphDB:/app
 
 volumes:
   postgres_data:

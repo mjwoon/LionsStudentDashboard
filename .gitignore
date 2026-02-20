@@ -78,6 +78,7 @@ lions_dashboard.db
 *.swp
 *.swo
 *~
+.claude
 
 # OS
 .DS_Store

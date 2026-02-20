@@ -200,6 +200,40 @@ export const api = {
   // 관리자 관련 API
   admin: {
     // 파일 업로드
+    uploadCollegesFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/colleges/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadDepartmentsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/departments/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
     uploadCoursesFile: async (file: File): Promise<UploadResponse> => {
       const formData = new FormData()
       formData.append('file', file)
@@ -239,6 +273,57 @@ export const api = {
       formData.append('file', file)
       
       const response = await fetch(`${API_BASE}/api/admin/upload/enrollments/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadCurriculumsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/curriculums/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadRecommendationsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/recommendations/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadRequirementsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/requirements/file`, {
         method: 'POST',
         body: formData,
       })

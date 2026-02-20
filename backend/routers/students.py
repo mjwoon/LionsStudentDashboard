@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from typing import Optional, List
 from database import get_db
-from models.models import Student, Department, Advisor, CourseEnrollment, Course, MajorSurvey
+from models.models import Student, Department, Advisor, StudentCourse, Course, MajorSurvey
 from models.schemas import (
     StudentListResponse, StudentDetail, StudentInList, StudentCreate, 
     StudentCreateResponse, StudentCoursesResponse, StudentSurveysResponse,
@@ -70,14 +70,14 @@ def get_students(
         # 최신 희망 학과 조회 (이미 selectinload로 로드됨)
         latest_survey = None
         if student.surveys:
-            latest_survey = max(student.surveys, key=lambda s: s.round_id)
+            latest_survey = max(student.surveys, key=lambda s: s.survey_round_id)
         
         latest_major_choice = None
         decision_certainty = None
         first_choice_dept_id = None
         
         if latest_survey:
-            first_choice_dept = all_departments.get(latest_survey.first_choice_dept_id)
+            first_choice_dept = all_departments.get(latest_survey.first_choice_id)
             if first_choice_dept:
                 latest_major_choice = first_choice_dept.name
                 first_choice_dept_id = first_choice_dept.id
@@ -89,7 +89,7 @@ def get_students(
         
         if first_choice_dept_id:
             completed, total = calculate_first_year_completion(
-                db, student.id, first_choice_dept_id
+                db, student.student_id, first_choice_dept_id
             )
             completion_status = f"{completed}/{total}"
             
@@ -98,7 +98,7 @@ def get_students(
             evaluator = EvaluationService(db)
             try:
                 eval_result = evaluator.evaluate_student(
-                    student.id, first_choice_dept_id, save_to_db=False
+                    student.student_id, first_choice_dept_id, save_to_db=False
                 )
                 # overall_score를 백분율 형식으로 반환
                 course_suitability = f"{eval_result['overall_score']:.0f}점"
@@ -179,16 +179,16 @@ def get_student_courses(student_id: str, db: Session = Depends(get_db)):
     if not student:
         raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
     
-    enrollments = db.query(CourseEnrollment).options(
-        joinedload(CourseEnrollment.course)
-    ).filter(CourseEnrollment.student_id == student.id).all()
+    enrollments = db.query(StudentCourse).options(
+        joinedload(StudentCourse.course)
+    ).filter(StudentCourse.student_id == student.student_id).all()
     
     total_credits = sum(enrollment.course.credits for enrollment in enrollments)
     
     course_history = []
     for enrollment in enrollments:
         course_detail = CourseEnrollmentDetail(
-            course_id=enrollment.course.id,
+            course_id=enrollment.course.course_id,
             course_code=enrollment.course.course_code,
             course_name=enrollment.course.course_name,
             credits=enrollment.course.credits,
@@ -220,8 +220,8 @@ def get_student_surveys(student_id: str, db: Session = Depends(get_db)):
         joinedload(MajorSurvey.survey_round),
         joinedload(MajorSurvey.first_choice),
         joinedload(MajorSurvey.second_choice)
-    ).filter(MajorSurvey.student_id == student.id).order_by(
-        MajorSurvey.submitted_at.desc()
+    ).filter(MajorSurvey.student_id == student.student_id).order_by(
+        MajorSurvey.survey_date.desc()
     ).all()
     
     history = []
@@ -229,7 +229,7 @@ def get_student_surveys(student_id: str, db: Session = Depends(get_db)):
         survey_item = SurveyHistoryItem(
             survey_id=survey.id,
             round=survey.survey_round.round_number,
-            submitted_at=survey.submitted_at.strftime("%Y-%m-%d"),
+            submitted_at=survey.survey_date.strftime("%Y-%m-%d"),
             first_choice=SurveyChoiceBase(
                 id=survey.first_choice.id,
                 name=survey.first_choice.name

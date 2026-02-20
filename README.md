@@ -56,13 +56,11 @@ docker-compose up -d --build
 
 ### 3. 초기 데이터 설정
 
-```bash
-# 데이터베이스 시드 데이터 삽입
-docker exec fastapi_backend uv run python seed_data.py
+### 3. 초기 데이터 설정
 
-# 배치 평가 실행 (학생별 학과 적합도 계산)
-docker exec fastapi_backend uv run python batch_evaluate_all.py
-```
+1. 프론트엔드 로그인 후 **관리자 페이지**로 이동
+2. `Data Upload` 탭에서 학생, 과목, 학과 요건, 수강 이력을 CSV/Excel 형태로 일괄 업로드
+3. 데이터가 업로드되면 자동으로 DB에 적재되고 평가 시스템이 활성화됩니다.
 
 ### 4. Neo4j 그래프 데이터 로드 (선택사항)
 

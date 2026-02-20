@@ -3,13 +3,12 @@ from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 import os
 
-# Database URL - SQLite for development, can be changed to PostgreSQL for production
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./lions_dashboard.db")
+# Database URL - PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://user:password@localhost:5432/my_db")
 
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
     echo=True  # Set to False in production
 )
 

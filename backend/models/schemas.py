@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -26,7 +26,6 @@ class DepartmentDetail(BaseModel):
     name: str
     college_name: str
     min_credits: int
-    homepage_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,7 +47,7 @@ class AcademicInfo(BaseModel):
 
 # Student Models
 class StudentBase(BaseModel):
-    student_id: str
+    student_id: str  # VARCHAR(10) PK
     name: str
     email: EmailStr
     phone: Optional[str] = None
@@ -199,7 +198,7 @@ class StudentSurveysResponse(BaseModel):
 
 
 class SurveyCreate(BaseModel):
-    student_id: str
+    student_id: str  # changed from int to str
     first_choice_dept_id: int
     second_choice_dept_id: Optional[int] = None
     survey_round: int
@@ -242,7 +241,7 @@ class SurveySummaryResponse(BaseModel):
 
 class SurveySubmissionItem(BaseModel):
     survey_id: int
-    student_id: str
+    student_id: str  # changed from int to str
     name: str
     department_name: str
     first_choice: SurveyChoiceBase
@@ -333,7 +332,7 @@ class DepartmentEntryRequirementDetail(BaseModel):
 # Student Requirement Status Models
 class StudentRequirementStatusDetail(BaseModel):
     id: int
-    student_id: str
+    student_id: str  # changed from int to str
     department_id: int
     department_name: str
     is_satisfied: bool
@@ -346,7 +345,7 @@ class StudentRequirementStatusDetail(BaseModel):
 
 
 class StudentRequirementStatusResponse(BaseModel):
-    student_id: str
+    student_id: str  # changed from int to str
     first_choice_dept_id: Optional[int] = None
     evaluations: List[StudentRequirementStatusDetail]
 
@@ -361,7 +360,7 @@ class MajorEvaluationSummary(BaseModel):
 
 class StudentMajorEvaluationResponse(BaseModel):
     """학생 전공 평가 응답"""
-    student_id: str
+    student_id: str  # changed from int to str
     department_id: int
     department_name: str
     evaluation: MajorEvaluationSummary
@@ -406,7 +405,7 @@ class RelatedCreditsResult(BaseModel):
 
 class EvaluationResultResponse(BaseModel):
     """전공진입 적합도 평가 결과"""
-    student_id: int
+    student_id: str  # changed from int to str
     department_id: int
     department_name: str
     admission_year: int
@@ -440,7 +439,7 @@ class BatchEvaluationResponse(BaseModel):
 
 class StudentEvaluationSummary(BaseModel):
     """학생 평가 요약"""
-    student_id: str
+    student_id: str  # changed from int to str
     student_name: str
     total_evaluations: int
     top_departments: List[dict]
@@ -459,9 +458,9 @@ class DataUploadResponse(BaseModel):
 
 class BulkEvaluationRequest(BaseModel):
     """대량 진단 요청"""
-    student_ids: Optional[List[str]] = None  # None이면 전체 학생
-    department_ids: Optional[List[int]] = None  # None이면 전체 학과
-    force_recalculate: bool = False  # True이면 기존 결과 무시하고 재계산
+    student_ids: Optional[List[str]] = None  # changed from int to str
+    department_ids: Optional[List[int]] = None
+    force_recalculate: bool = False
 
 
 class BulkEvaluationResponse(BaseModel):
@@ -498,19 +497,22 @@ class CourseDataUpload(BaseModel):
 
 class StudentDataUpload(BaseModel):
     """학생 데이터 업로드 스키마"""
-    student_id: str
+    student_id: str  # VARCHAR(10) PK
     name: str
     email: EmailStr
     phone: Optional[str] = None
-    department_code: str
+    department_id: int  # FK directly (was department_code)
+    advisor_id: Optional[int] = None
     pride: str
-    class_number: int
+    class_number: Optional[int] = Field(None, alias="class")  # 파일 열 이름 'class' 매핑
     track: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class EnrollmentDataUpload(BaseModel):
     """수강 데이터 업로드 스키마"""
-    student_id: str
+    student_id: str  # changed from int to str
     course_code: str
     year: int
     semester: int
@@ -518,3 +520,45 @@ class EnrollmentDataUpload(BaseModel):
     is_retake: bool = False
     grade: Optional[str] = None
     numeric_grade: Optional[float] = None
+
+
+class CurriculumDataUpload(BaseModel):
+    """교육과정 데이터 업로드 스키마"""
+    department_code: str
+    course_year: int
+    course_code: str
+    course_name: str
+
+
+class RecommendationDataUpload(BaseModel):
+    """권장과목 데이터 업로드 스키마"""
+    department_code: str
+    course_name: str
+
+
+class RequirementDataUpload(BaseModel):
+    """학과 요건 데이터 업로드 스키마"""
+    department_code: str
+    admission_year: int
+    requirement_group: int
+    target_grade_level: str
+    required_count: int
+    requirement_text: str
+    is_alert_required: bool = False
+    logic_operator: str = "AND"
+
+
+class CollegeDataUpload(BaseModel):
+    """대학 데이터 업로드 스키마"""
+    id: Optional[int] = None
+    name: str
+
+
+class DepartmentDataUpload(BaseModel):
+    """학과 데이터 업로드 스키마"""
+    id: Optional[int] = None
+    code: str
+    name: str
+    college_name: Optional[str] = None  # college name으로 매칭
+    college_id: Optional[int] = None  # 또는 college_id 직접 지정
+    min_credits: int = 130

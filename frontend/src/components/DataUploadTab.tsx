@@ -11,6 +11,18 @@ interface UploadState {
 }
 
 export default function DataUploadTab() {
+  const [collegesState, setCollegesState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [departmentsState, setDepartmentsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
   const [coursesState, setCoursesState] = useState<UploadState>({
     file: null,
     uploading: false,
@@ -24,6 +36,24 @@ export default function DataUploadTab() {
   });
   
   const [enrollmentsState, setEnrollmentsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [curriculumsState, setCurriculumsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [recommendationsState, setRecommendationsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [requirementsState, setRequirementsState] = useState<UploadState>({
     file: null,
     uploading: false,
     result: null,
@@ -73,11 +103,30 @@ export default function DataUploadTab() {
     }
   };
 
-  const downloadSampleJSON = (type: 'courses' | 'students' | 'enrollments') => {
+  const downloadSampleJSON = (type: 'colleges' | 'departments' | 'courses' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements') => {
     let sampleData: any[] = [];
     let filename = '';
 
-    if (type === 'courses') {
+    if (type === 'colleges') {
+      sampleData = [
+        {
+          id: 100,
+          name: '융합공학대학',
+        },
+      ];
+      filename = 'sample_colleges.json';
+    } else if (type === 'departments') {
+      sampleData = [
+        {
+          id: 100,
+          code: 'CS',
+          name: '컴퓨터학부',
+          college_id: 100,
+          min_credits: 130,
+        },
+      ];
+      filename = 'sample_departments.json';
+    } else if (type === 'courses') {
       sampleData = [
         {
           course_code: 'CSE101',
@@ -95,7 +144,7 @@ export default function DataUploadTab() {
     } else if (type === 'students') {
       sampleData = [
         {
-          student_id: '2024123456',
+          student_id: 2024123456,
           name: '홍길동',
           email: 'hong@hanyang.ac.kr',
           phone: '010-1234-5678',
@@ -106,10 +155,10 @@ export default function DataUploadTab() {
         },
       ];
       filename = 'sample_students.json';
-    } else {
+    } else if (type === 'enrollments') {
       sampleData = [
         {
-          student_id: '2024123456',
+          student_id: 2024123456,
           course_code: 'CSE101',
           year: 2024,
           semester: 1,
@@ -120,6 +169,38 @@ export default function DataUploadTab() {
         },
       ];
       filename = 'sample_enrollments.json';
+    } else if (type === 'curriculums') {
+      sampleData = [
+        {
+          department_code: 'CSE',
+          course_year: 1,
+          course_code: 'CSE101',
+          course_name: '컴퓨터공학개론'
+        },
+      ];
+      filename = 'sample_curriculums.json';
+    } else if (type === 'recommendations') {
+      sampleData = [
+        {
+          department_code: 'CSE',
+          course_name: '자료구조'
+        },
+      ];
+      filename = 'sample_recommendations.json';
+    } else if (type === 'requirements') {
+      sampleData = [
+        {
+          department_code: 'CSE',
+          admission_year: 2025,
+          requirement_group: 1,
+          target_grade_level: 'A',
+          required_count: 2,
+          requirement_text: 'A등급 2과목 이상 이수',
+          is_alert_required: false,
+          logic_operator: 'AND'
+        },
+      ];
+      filename = 'sample_requirements.json';
     }
 
     const json = JSON.stringify(sampleData, null, 2);
@@ -138,7 +219,7 @@ export default function DataUploadTab() {
     state: UploadState,
     setState: React.Dispatch<React.SetStateAction<UploadState>>,
     uploadFn: (file: File) => Promise<UploadResponse>,
-    type: 'courses' | 'students' | 'enrollments'
+    type: 'colleges' | 'departments' | 'courses' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements'
   ) => (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center gap-3 mb-4">
@@ -151,7 +232,7 @@ export default function DataUploadTab() {
         <div className="flex items-center gap-3">
           <input
             type="file"
-            accept=".json"
+            accept=".json,.csv,.xlsx"
             onChange={(e) => handleFileSelect(e, setState)}
             className="block w-full text-sm text-gray-500
               file:mr-4 file:py-2 file:px-4
@@ -263,7 +344,7 @@ export default function DataUploadTab() {
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">데이터 업로드 안내</p>
             <ul className="list-disc list-inside space-y-1 text-blue-700">
-              <li>JSON 형식의 파일만 업로드 가능합니다</li>
+              <li>JSON, CSV, Excel(.xlsx) 형식의 파일 업로드가 가능합니다</li>
               <li>기존 데이터는 자동으로 업데이트됩니다</li>
               <li>샘플 버튼을 클릭하여 형식을 확인하세요</li>
               <li>오류 발생 시 전체 업로드가 취소됩니다 (트랜잭션)</li>
@@ -271,6 +352,24 @@ export default function DataUploadTab() {
           </div>
         </div>
       </div>
+
+      {renderUploadSection(
+        '대학 데이터',
+        <FileText className="h-5 w-5 text-yellow-600" />,
+        collegesState,
+        setCollegesState,
+        api.admin.uploadCollegesFile,
+        'colleges'
+      )}
+
+      {renderUploadSection(
+        '학과 데이터',
+        <FileText className="h-5 w-5 text-cyan-600" />,
+        departmentsState,
+        setDepartmentsState,
+        api.admin.uploadDepartmentsFile,
+        'departments'
+      )}
 
       {renderUploadSection(
         '과목 데이터',
@@ -297,6 +396,33 @@ export default function DataUploadTab() {
         setEnrollmentsState,
         api.admin.uploadEnrollmentsFile,
         'enrollments'
+      )}
+
+      {renderUploadSection(
+        '교육과정 데이터',
+        <FileText className="h-5 w-5 text-orange-600" />,
+        curriculumsState,
+        setCurriculumsState,
+        api.admin.uploadCurriculumsFile,
+        'curriculums'
+      )}
+
+      {renderUploadSection(
+        '권장과목 데이터',
+        <FileText className="h-5 w-5 text-pink-600" />,
+        recommendationsState,
+        setRecommendationsState,
+        api.admin.uploadRecommendationsFile,
+        'recommendations'
+      )}
+
+      {renderUploadSection(
+        '학과요건 데이터',
+        <FileText className="h-5 w-5 text-indigo-600" />,
+        requirementsState,
+        setRequirementsState,
+        api.admin.uploadRequirementsFile,
+        'requirements'
       )}
     </div>
   );

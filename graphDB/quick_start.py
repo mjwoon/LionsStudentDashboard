@@ -9,14 +9,15 @@ Docker: docker run -d --name neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j
 from course_similarity_graph import CourseGraphBuilder
 from course_graph_analysis import CourseGraphAnalyzer
 
+import os
 
 def quick_start_example():
     """빠른 시작 예제"""
     
     # === 설정 ===
-    NEO4J_URI = "bolt://localhost:7687"
-    NEO4J_USER = "neo4j"
-    NEO4J_PASSWORD = "password123"  # 실제 비밀번호로 변경 필요
+    NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password123")
     CSV_PATH = "final_course.csv"
     SIMILARITY_THRESHOLD = 0.5  # 유사도 임계값
     

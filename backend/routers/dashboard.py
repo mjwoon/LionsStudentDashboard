@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
-from models.models import Student, Department, College, MajorSurvey, CourseEnrollment, Course
+from models.models import Student, Department, College, MajorSurvey, StudentCourse, Course
 from database import get_db
 from sqlalchemy import func, desc, case
 
@@ -27,8 +27,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     colleges_data = [
         {
             "id": college.id,
-            "name": college.name,
-            "code": college.code
+            "name": college.name
         }
         for college in colleges
     ]
@@ -51,7 +50,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     subquery = (
         db.query(
             MajorSurvey.student_id,
-            func.max(MajorSurvey.round_id).label("max_round")
+            func.max(MajorSurvey.survey_round_id).label("max_round")
         )
         .group_by(MajorSurvey.student_id)
         .subquery()
@@ -62,7 +61,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         .join(
             subquery,
             (MajorSurvey.student_id == subquery.c.student_id) &
-            (MajorSurvey.round_id == subquery.c.max_round)
+            (MajorSurvey.survey_round_id == subquery.c.max_round)
         )
         .all()
     )
@@ -70,8 +69,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # 1지망 학과별 학생 수 집계
     dept_student_count = {}
     for survey in latest_surveys:
-        if survey.first_choice_dept_id:
-            dept_id = survey.first_choice_dept_id
+        if survey.first_choice_id:
+            dept_id = survey.first_choice_id
             dept_student_count[dept_id] = dept_student_count.get(dept_id, 0) + 1
     
     # 총 학생 수 (설문 제출한 학생)
@@ -93,23 +92,19 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     current_data.sort(key=lambda x: x["students"], reverse=True)
     
     # 4. 추세 데이터: 회차별 희망학과 변화
-    # 모든 설문 회차 조회
-    all_rounds = db.query(MajorSurvey.round_id).distinct().order_by(MajorSurvey.round_id).all()
+    all_rounds = db.query(MajorSurvey.survey_round_id).distinct().order_by(MajorSurvey.survey_round_id).all()
     round_ids = [r[0] for r in all_rounds]
     
     trend_data = []
     for round_id in round_ids:
-        # 해당 회차의 설문 조회
         round_surveys = db.query(MajorSurvey).filter(
-            MajorSurvey.round_id == round_id
+            MajorSurvey.survey_round_id == round_id
         ).all()
         
-        # 학과별 학생 수 집계
         round_dept_count = {}
         for survey in round_surveys:
-            if survey.first_choice_dept_id:
-                dept_id = survey.first_choice_dept_id
-                # 학과명 찾기
+            if survey.first_choice_id:
+                dept_id = survey.first_choice_id
                 dept = db.query(Department).filter(Department.id == dept_id).first()
                 if dept:
                     dept_name = dept.name
@@ -121,7 +116,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         })
     
     # 5. 전체 학생 통계
-    total_students_count = db.query(func.count(Student.id)).scalar()
+    total_students_count = db.query(func.count(Student.student_id)).scalar()
     
     # GPA 통계
     gpa_stats = db.query(
@@ -140,7 +135,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # 계열별 학생 수
     track_distribution = db.query(
         Student.track,
-        func.count(Student.id).label("count")
+        func.count(Student.student_id).label("count")
     ).group_by(Student.track).all()
     
     student_stats = {
@@ -158,7 +153,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     }
     
     # 6. 성적 분포 데이터
-    # 전체 학생의 GPA 구간별 분포
     gpa_ranges = [
         ("4.0 이상", 4.0, 4.5),
         ("3.5~3.99", 3.5, 3.99),
@@ -170,7 +164,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     
     grade_distribution = []
     for range_name, min_gpa, max_gpa in gpa_ranges:
-        count = db.query(func.count(Student.id)).filter(
+        count = db.query(func.count(Student.student_id)).filter(
             Student.current_gpa >= min_gpa,
             Student.current_gpa <= max_gpa
         ).scalar()
@@ -184,12 +178,11 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     # 학과별 평균 GPA (상위 10개 학과)
     dept_gpa_stats = []
     for dept in departments:
-        # 해당 학과를 희망하는 학생들의 평균 GPA
-        dept_student_ids = [s.student_id for s in latest_surveys if s.first_choice_dept_id == dept.id]
+        dept_student_ids = [s.student_id for s in latest_surveys if s.first_choice_id == dept.id]
         
         if dept_student_ids:
             avg_gpa = db.query(func.avg(Student.current_gpa)).filter(
-                Student.id.in_(dept_student_ids),
+                Student.student_id.in_(dept_student_ids),
                 Student.current_gpa > 0
             ).scalar()
             
@@ -200,7 +193,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                     "student_count": len(dept_student_ids)
                 })
     
-    # 평균 GPA 기준 내림차순 정렬 후 상위 10개
     dept_gpa_stats.sort(key=lambda x: x["avg_gpa"], reverse=True)
     
     return {
@@ -212,4 +204,3 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         "grade_distribution": grade_distribution,
         "department_gpa_stats": dept_gpa_stats[:10]
     }
-

@@ -22,5 +22,5 @@ RUN uv sync --frozen --no-cache
 COPY . .
 
 # 7. FastAPI 실행
-# seed_data.py가 자동으로 DB 연결을 기다림
-CMD ["sh", "-c", "uv run python seed_data.py && uv run fastapi dev main.py --host 0.0.0.0 --port 8080"]
+# DB 테이블은 main.py의 startup_event에서 Base.metadata.create_all로 자동 생성됨
+CMD ["sh", "-c", "uv run fastapi dev main.py --host 0.0.0.0 --port 8080"]

@@ -16,4 +16,7 @@ dependencies = [
     "neo4j>=5.0.0",
     # Celery (비동기 태스크 제출용)
     "celery[redis]>=5.6.2",
+    # CSV/Excel 업로드 처리를 위한 pandas
+    "pandas>=2.1.0",
+    "openpyxl>=3.1.0",
 ]

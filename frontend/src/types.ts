@@ -109,7 +109,6 @@ export interface Department {
   name: string
   college_name: string
   min_credits: number
-  homepage_url?: string
 }
 
 export interface DepartmentCurriculum {
