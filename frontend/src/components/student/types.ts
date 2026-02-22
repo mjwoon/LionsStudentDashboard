@@ -1,12 +1,12 @@
 // 학생 관련 공통 타입 정의
 
 export interface Student {
-  student_id: string;
+  student_id: number;
   name: string;
   email: string;
   phone?: string;
   department: {
-    id: number;
+    id: string;
     name: string;
   };
   academic_info: {

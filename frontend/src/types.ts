@@ -17,12 +17,12 @@ export interface StudentsResponse {
 }
 
 export interface Student {
-  student_id: string
+  student_id: number
   name: string
   email: string
   phone?: string
   department: {
-    id: number
+    id: string
     name: string
   }
   academic_info: {
@@ -46,7 +46,7 @@ export interface StudentDetail extends Student {
 }
 
 export interface StudentCoursesResponse {
-  student_id: string
+  student_id: number
   total_credits: number
   course_history: CourseEnrollment[]
 }
@@ -79,11 +79,11 @@ export interface SurveyHistory {
 }
 
 export interface StudentCreate {
-  student_id: string
+  student_id: number
   name: string
   email: string
   phone?: string
-  department_id: number
+  department_id: string
   advisor_id?: number
   pride: string
   class_number: number
@@ -91,7 +91,7 @@ export interface StudentCreate {
 
 export interface StudentCreateResponse {
   message: string
-  student_id: string
+  student_id: number
 }
 
 // ============================================================================
@@ -104,11 +104,12 @@ export interface DepartmentsResponse {
 }
 
 export interface Department {
-  id: number
+  id: string
   code: string
   name: string
   college_name: string
   min_credits: number
+  is_evaluation_available?: boolean
 }
 
 export interface DepartmentCurriculum {
@@ -136,7 +137,7 @@ export interface Course {
   credits: number
   course_type: string
   department: {
-    id: number
+    id: string
     name: string
   }
   flags: {
@@ -158,7 +159,7 @@ export interface EntryRequirementCourse {
   course_name: string
   credits: number
   course_type: string
-  department_id: number
+  department_id: string
   department_name: string
   is_recommended: boolean
 }
@@ -185,9 +186,9 @@ export interface SurveySummaryResponse {
 }
 
 export interface SurveySubmit {
-  student_id: string
-  first_choice_dept_id: number
-  second_choice_dept_id?: number
+  student_id: number
+  first_choice_dept_id: string
+  second_choice_dept_id?: string
   survey_round: number
   decision_scale: number
 }
@@ -218,7 +219,7 @@ export interface SurveyRoundResponse {
 
 export interface SurveySubmission {
   survey_id: number
-  student_id: string
+  student_id: number
   name: string
   department_name: string
   first_choice: { id: number; name: string }
@@ -265,17 +266,19 @@ export interface CurriculumCourse {
   course_code: string
   course_name: string
   credits: number
+  course_type?: string
   year: number
   semester: number
   enrolled: boolean
   grade?: string
   evaluation_type?: string
   requirement_type?: string | null
+  enrolled_department_name?: string
 }
 
 export interface EvaluationResult {
-  student_id: string
-  department_id: number
+  student_id: number
+  department_id: string
   department_name: string
   gpa_score: number
   required_courses_score: number
@@ -336,6 +339,7 @@ export interface EvaluationResult {
   }
   evaluated_at: string
   cached?: boolean
+  ai_summary?: string
 }
 
 export interface EvaluationStatistics {
@@ -358,7 +362,7 @@ export interface DepartmentRankings {
   total_evaluated: number
   rankings: {
     rank: number
-    student_id: string
+    student_id: number
     student_name: string
     overall_score: number
     is_satisfied: boolean
@@ -370,12 +374,19 @@ export interface DepartmentRankings {
 // Admin Types
 // ============================================================================
 
+export interface ErrorDetail {
+  row: number
+  item_id: string
+  reason: string
+}
+
 export interface UploadResponse {
   success: boolean
   message: string
   uploaded_count: number
   updated_count: number
   errors?: string[]
+  detailed_errors?: ErrorDetail[]
 }
 
 export interface BulkEvaluationRequest {

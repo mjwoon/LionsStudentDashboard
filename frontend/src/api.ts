@@ -89,13 +89,13 @@ export const api = {
       return fetchAPI<StudentsResponse>(`/api/students?${params}`)
     },
     
-    get: (studentId: string) => 
+    get: (studentId: string | number) => 
       fetchAPI<StudentDetail>(`/api/students/${studentId}`),
     
-    courses: (studentId: string) => 
+    courses: (studentId: string | number) => 
       fetchAPI<StudentCoursesResponse>(`/api/students/${studentId}/courses`),
     
-    surveys: (studentId: string) => 
+    surveys: (studentId: string | number) => 
       fetchAPI<StudentSurveysResponse>(`/api/students/${studentId}/surveys`),
     
     create: (data: StudentCreate) => 
@@ -110,7 +110,7 @@ export const api = {
     list: () => 
       fetchAPI<DepartmentsResponse>('/api/departments'),
     
-    courses: (departmentId: number, page = 1, perPage = 20) => {
+    courses: (departmentId: string, page = 1, perPage = 20) => {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
@@ -118,13 +118,13 @@ export const api = {
       return fetchAPI<CoursesResponse>(`/api/departments/${departmentId}/courses?${params}`)
     },
     
-    curriculum: (departmentId: number) => 
+    curriculum: (departmentId: string) => 
       fetchAPI<DepartmentCurriculum>(`/api/departments/${departmentId}/curriculum`),
   },
 
   // 평가 관련 API
   evaluation: {
-    getStudentEvaluation: (studentId: string, departmentId: number, forceRecalculate = false) => {
+    getStudentEvaluation: (studentId: string | number, departmentId: string, forceRecalculate = false) => {
       const params = new URLSearchParams()
       if (forceRecalculate) {
         params.append('force_recalculate', 'true')
@@ -137,7 +137,7 @@ export const api = {
     getStatistics: () => 
       fetchAPI<EvaluationStatistics>('/api/evaluation/statistics'),
     
-    getDepartmentRankings: (departmentId: number, limit = 10) => {
+    getDepartmentRankings: (departmentId: string, limit = 10) => {
       const params = new URLSearchParams({ limit: limit.toString() })
       return fetchAPI<DepartmentRankings>(`/api/evaluation/department/${departmentId}/rankings?${params}`)
     },
@@ -147,14 +147,14 @@ export const api = {
   courses: {
     list: (page = 1, perPage = 20, filters?: {
       course_type?: string
-      department_id?: number
+      department_id?: string
       is_entry_requirement?: boolean
     }) => {
       const params = new URLSearchParams({
         page: page.toString(),
         per_page: perPage.toString(),
         ...(filters?.course_type && { course_type: filters.course_type }),
-        ...(filters?.department_id && { department_id: filters.department_id.toString() }),
+        ...(filters?.department_id && { department_id: filters.department_id }),
         ...(filters?.is_entry_requirement !== undefined && { 
           is_entry_requirement: filters.is_entry_requirement.toString() 
         }),
@@ -164,9 +164,12 @@ export const api = {
     
     entryRequirements: () => 
       fetchAPI<EntryRequirementsResponse>('/api/courses/entry-requirements'),
-    
-    curriculum: (departmentId: number) => {
-      const params = new URLSearchParams({ department_id: departmentId.toString() })
+      
+    fullCurriculum: (departmentId: string) => 
+      fetchAPI<any>(`/api/courses/curriculum?department_id=${departmentId}`),
+  
+    curriculum: (departmentId: string) => {
+      const params = new URLSearchParams({ department_id: departmentId })
       return fetchAPI<any>(`/api/courses/curriculum?${params}`)
     },
   },
@@ -217,6 +220,23 @@ export const api = {
       return await response.json()
     },
 
+    uploadAdvisorsFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/advisors/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
     uploadDepartmentsFile: async (file: File): Promise<UploadResponse> => {
       const formData = new FormData()
       formData.append('file', file)
@@ -239,6 +259,23 @@ export const api = {
       formData.append('file', file)
       
       const response = await fetch(`${API_BASE}/api/admin/upload/courses/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
+    uploadMajorSurveysFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/major-surveys/file`, {
         method: 'POST',
         body: formData,
       })
@@ -336,6 +373,23 @@ export const api = {
       return await response.json()
     },
 
+    uploadRequirementCoursesFile: async (file: File): Promise<UploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`${API_BASE}/api/admin/upload/requirement-courses/file`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      
+      return await response.json()
+    },
+
     // 진단 관리 (비동기)
     bulkEvaluate: (request: BulkEvaluationRequest) =>
       fetchAPI<{ job_id: string; status: string; message: string }>('/api/admin/evaluate/bulk', {
@@ -362,7 +416,7 @@ export const api = {
     getEvaluationStats: () =>
       fetchAPI<CachedEvaluationStats>('/api/admin/evaluate/stats'),
 
-    clearCache: (departmentId?: number) => {
+    clearCache: (departmentId?: string) => {
       const params = departmentId 
         ? `?department_id=${departmentId}` 
         : ''

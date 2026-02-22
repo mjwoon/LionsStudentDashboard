@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 from celery_app import celery_app
 from database import get_db_session
-from services.ai_service import AIService
+from ai_services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def bulk_evaluate_task(
                 try:
                     # 기존 캐시 확인
                     existing = db.query(StudentRequirementStatus).filter(
-                        StudentRequirementStatus.student_id == student.id,
+                        StudentRequirementStatus.student_id == student.student_id,
                         StudentRequirementStatus.department_id == department.id
                     ).first()
                     
@@ -150,7 +150,7 @@ def bulk_evaluate_task(
                         # 평가 수행
                         evaluator = EvaluationService(db)
                         result = evaluator.evaluate_student(
-                            student.id,
+                            student.student_id,
                             department.id,
                             admission_year,
                             save_to_db=False  # Worker가 직접 저장
@@ -173,7 +173,7 @@ def bulk_evaluate_task(
                             existing.calculated_at = datetime.utcnow()
                         else:
                             new_record = StudentRequirementStatus(
-                                student_id=student.id,
+                                student_id=student.student_id,
                                 department_id=department.id,
                                 is_satisfied=result.get("overall_score", 0) >= 70,
                                 overall_score=result.get("overall_score", 0),

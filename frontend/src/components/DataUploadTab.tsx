@@ -23,18 +23,30 @@ export default function DataUploadTab() {
     result: null,
   });
 
+  const [advisorsState, setAdvisorsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [majorSurveysState, setMajorSurveysState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
   const [coursesState, setCoursesState] = useState<UploadState>({
     file: null,
     uploading: false,
     result: null,
   });
-  
+
   const [studentsState, setStudentsState] = useState<UploadState>({
     file: null,
     uploading: false,
     result: null,
   });
-  
+
   const [enrollmentsState, setEnrollmentsState] = useState<UploadState>({
     file: null,
     uploading: false,
@@ -54,6 +66,12 @@ export default function DataUploadTab() {
   });
 
   const [requirementsState, setRequirementsState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    result: null,
+  });
+
+  const [reqCoursesState, setReqCoursesState] = useState<UploadState>({
     file: null,
     uploading: false,
     result: null,
@@ -81,7 +99,7 @@ export default function DataUploadTab() {
     try {
       const result = await uploadFn(state.file);
       setState((prev) => ({ ...prev, uploading: false, result }));
-      
+
       // 성공 시 파일 선택 초기화
       if (result.success) {
         setTimeout(() => {
@@ -103,7 +121,7 @@ export default function DataUploadTab() {
     }
   };
 
-  const downloadSampleJSON = (type: 'colleges' | 'departments' | 'courses' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements') => {
+  const downloadSampleJSON = (type: 'colleges' | 'departments' | 'advisors' | 'courses' | 'major_surveys' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements' | 'requirement_courses') => {
     let sampleData: any[] = [];
     let filename = '';
 
@@ -126,29 +144,53 @@ export default function DataUploadTab() {
         },
       ];
       filename = 'sample_departments.json';
+    } else if (type === 'advisors') {
+      sampleData = [
+        {
+          id: 1,
+          name: '이순신',
+          email: 'leesunsin@hanyang.ac.kr',
+          department_id: 100,
+        },
+      ];
+      filename = 'sample_advisors.json';
     } else if (type === 'courses') {
       sampleData = [
         {
-          course_code: 'CSE101',
-          course_name: '컴퓨터공학개론',
-          credits: 3,
-          course_type: '전공필수',
-          department_code: 'CSE',
-          course_year: 1,
-          semester: 1,
-          is_retake_only: false,
-          description: '컴퓨터공학의 기초',
+          '학년': 1,
+          '학기': 1,
+          '이수구분': '전공기초',
+          '학수번호': 'CSE101',
+          '교과목 이름': '컴퓨터공학개론',
+          '설강학과': '컴퓨터학부',
+          '교과목개요': '컴퓨터공학의 기초 개념을 학습한다',
+          '선수강 과목': '',
+          '학점': 3
         },
       ];
       filename = 'sample_courses.json';
+    } else if (type === 'major_surveys') {
+      sampleData = [
+        {
+          id: 1,
+          student_id: "2024123456",
+          survey_round_id: 1,
+          first_choice_id: 101,
+          second_choice_id: 102,
+          decision_status_id: 1,
+          decision_scale: 5
+        },
+      ];
+      filename = 'sample_major_surveys.json';
     } else if (type === 'students') {
       sampleData = [
         {
-          student_id: 2024123456,
+          student_id: "2024123456",
           name: '홍길동',
           email: 'hong@hanyang.ac.kr',
           phone: '010-1234-5678',
-          department_code: 'LION',
+          department_id: 100,
+          advisor_id: 1,
           pride: 'L',
           class_number: 1,
           track: '자연계열',
@@ -158,14 +200,17 @@ export default function DataUploadTab() {
     } else if (type === 'enrollments') {
       sampleData = [
         {
-          student_id: 2024123456,
-          course_code: 'CSE101',
-          year: 2024,
-          semester: 1,
-          completion_type: '전공필수',
-          is_retake: false,
-          grade: 'A+',
-          numeric_grade: DEFAULT_MAX_GPA,
+          id: 1,
+          '학번': "2024123456",
+          '학수번호': "GEN0063",
+          '과목명': "일반물리학1",
+          '학점': 3,
+          '년도': 2024,
+          '학기': 1,
+          '이수구분': '전공필수',
+          '재수강여부': false,
+          '성적': 'A+',
+          '평점': DEFAULT_MAX_GPA,
         },
       ];
       filename = 'sample_enrollments.json';
@@ -175,7 +220,10 @@ export default function DataUploadTab() {
           department_code: 'CSE',
           course_year: 1,
           course_code: 'CSE101',
-          course_name: '컴퓨터공학개론'
+          course_name: '컴퓨터공학개론',
+          credits: 3,
+          course_type: '전공기초',
+          semester: 1
         },
       ];
       filename = 'sample_curriculums.json';
@@ -201,6 +249,15 @@ export default function DataUploadTab() {
         },
       ];
       filename = 'sample_requirements.json';
+    } else if (type === 'requirement_courses') {
+      sampleData = [
+        {
+          id: 1,
+          '요건 ID': 1,
+          '학수번호': 'CSE101'
+        },
+      ];
+      filename = 'sample_requirement_courses.json';
     }
 
     const json = JSON.stringify(sampleData, null, 2);
@@ -219,7 +276,7 @@ export default function DataUploadTab() {
     state: UploadState,
     setState: React.Dispatch<React.SetStateAction<UploadState>>,
     uploadFn: (file: File) => Promise<UploadResponse>,
-    type: 'colleges' | 'departments' | 'courses' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements'
+    type: 'colleges' | 'departments' | 'advisors' | 'courses' | 'major_surveys' | 'students' | 'enrollments' | 'curriculums' | 'recommendations' | 'requirements' | 'requirement_courses'
   ) => (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center gap-3 mb-4">
@@ -243,7 +300,7 @@ export default function DataUploadTab() {
               cursor-pointer"
             disabled={state.uploading}
           />
-          
+
           <button
             onClick={() => downloadSampleJSON(type)}
             className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
@@ -287,11 +344,10 @@ export default function DataUploadTab() {
         {/* 결과 표시 */}
         {state.result && (
           <div
-            className={`p-4 rounded-lg ${
-              state.result.success
-                ? 'bg-green-50 border border-green-200'
-                : 'bg-red-50 border border-red-200'
-            }`}
+            className={`p-4 rounded-lg ${state.result.success
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+              }`}
           >
             <div className="flex items-start gap-2">
               {state.result.success ? (
@@ -301,9 +357,8 @@ export default function DataUploadTab() {
               )}
               <div className="flex-1">
                 <p
-                  className={`font-medium ${
-                    state.result.success ? 'text-green-800' : 'text-red-800'
-                  }`}
+                  className={`font-medium ${state.result.success ? 'text-green-800' : 'text-red-800'
+                    }`}
                 >
                   {state.result.message}
                 </p>
@@ -313,16 +368,53 @@ export default function DataUploadTab() {
                     <p>✓ 업데이트: {state.result.updated_count}개</p>
                   </div>
                 )}
-                {state.result.errors && state.result.errors.length > 0 && (
+                {state.result.detailed_errors && state.result.detailed_errors.length > 0 && (
+                  <div className="mt-3 text-sm text-red-700">
+                    <p className="font-medium mb-2">⚠️ 오류 내역 ({state.result.detailed_errors.length}건):</p>
+                    <div className="max-h-60 overflow-y-auto border border-red-200 rounded">
+                      <table className="min-w-full divide-y divide-red-200">
+                        <thead className="bg-red-50 sticky top-0">
+                          <tr>
+                            <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-red-800 uppercase tracking-wider">
+                              Row
+                            </th>
+                            <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-red-800 uppercase tracking-wider">
+                              Item
+                            </th>
+                            <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-red-800 uppercase tracking-wider">
+                              Reason
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-red-100">
+                          {state.result.detailed_errors.map((error, index) => (
+                            <tr key={index}>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                                {error.row}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                                {error.item_id}
+                              </td>
+                              <td className="px-3 py-2 text-sm text-gray-500">
+                                {error.reason}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {!state.result.detailed_errors && state.result.errors && state.result.errors.length > 0 && (
                   <div className="mt-2 text-sm text-red-700">
-                    <p className="font-medium">⚠️ 오류 ({state.result.errors.length}건):</p>
+                    <p className="font-medium">⚠️ 일반 오류 ({state.result.errors.length}건):</p>
                     <ul className="mt-1 list-disc list-inside space-y-1">
                       {state.result.errors.slice(0, 5).map((error, index) => (
                         <li key={index} className="truncate">{error}</li>
                       ))}
                       {state.result.errors.length > 5 && (
                         <li className="text-gray-600">
-                          ...외 {state.result.errors.length - 5}건
+                          외 {state.result.errors.length - 5}건
                         </li>
                       )}
                     </ul>
@@ -372,21 +464,21 @@ export default function DataUploadTab() {
       )}
 
       {renderUploadSection(
+        '지도교수 데이터',
+        <FileText className="h-5 w-5 text-teal-600" />,
+        advisorsState,
+        setAdvisorsState,
+        api.admin.uploadAdvisorsFile,
+        'advisors'
+      )}
+
+      {renderUploadSection(
         '과목 데이터',
-        <FileText className="h-5 w-5 text-blue-600" />,
+        <FileText className="h-5 w-5 text-amber-600" />,
         coursesState,
         setCoursesState,
         api.admin.uploadCoursesFile,
         'courses'
-      )}
-
-      {renderUploadSection(
-        '학생 데이터',
-        <FileText className="h-5 w-5 text-green-600" />,
-        studentsState,
-        setStudentsState,
-        api.admin.uploadStudentsFile,
-        'students'
       )}
 
       {renderUploadSection(
@@ -408,6 +500,24 @@ export default function DataUploadTab() {
       )}
 
       {renderUploadSection(
+        '학생 데이터',
+        <FileText className="h-5 w-5 text-green-600" />,
+        studentsState,
+        setStudentsState,
+        api.admin.uploadStudentsFile,
+        'students'
+      )}
+
+      {renderUploadSection(
+        '희망 전공 조사',
+        <FileText className="h-5 w-5 text-blue-600" />,
+        majorSurveysState,
+        setMajorSurveysState,
+        api.admin.uploadMajorSurveysFile,
+        'major_surveys'
+      )}
+
+      {renderUploadSection(
         '권장과목 데이터',
         <FileText className="h-5 w-5 text-pink-600" />,
         recommendationsState,
@@ -423,6 +533,15 @@ export default function DataUploadTab() {
         setRequirementsState,
         api.admin.uploadRequirementsFile,
         'requirements'
+      )}
+
+      {renderUploadSection(
+        '요건 과목 매핑 데이터',
+        <FileText className="h-5 w-5 text-indigo-400" />,
+        reqCoursesState,
+        setReqCoursesState,
+        api.admin.uploadRequirementCoursesFile,
+        'requirement_courses'
       )}
     </div>
   );

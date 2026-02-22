@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../../api';
-import type { Student } from './types';
+import type { Student } from '../../types';
 import { getDecisionCertaintyLabel, getDecisionCertaintyColor, getCourseProgressColor } from './types';
 
 interface StudentListViewProps {
-  onStudentSelect: (student: Student, departmentId: number) => void;
+  onStudentSelect: (student: Student, departmentId: string) => void;
 }
 
 export default function StudentListView({ onStudentSelect }: StudentListViewProps) {
@@ -107,7 +107,7 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
         {/* Header Section */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-[#101828]">LIONS칼리지 학생 목록</h1>
+            <h1 className="text-2xl md:text-3xl lg:text-3xl font-bold text-[#101828]">LIONS칼리지 학생 목록</h1>
           </div>
           <button
             onClick={downloadCSV}
@@ -270,13 +270,25 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex flex-col gap-1">
-                            <span className="text-base text-[#101828]">0%</span>
-                            <div className="w-full h-1 bg-[#e5e7eb] rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${getCourseProgressColor(student.course_suitability)}`}
-                                style={{ width: `${Math.random() * 100}%` }}
-                              />
-                            </div>
+                            {(() => {
+                              const raw = student.course_suitability;
+                              const match = raw?.match(/(\d+)/);
+                              const score = match ? parseInt(match[1], 10) : null;
+                              if (score !== null) {
+                                return (
+                                  <>
+                                    <span className="text-base text-[#101828]">{score}%</span>
+                                    <div className="w-full h-1 bg-[#e5e7eb] rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full ${getCourseProgressColor(score)}`}
+                                        style={{ width: `${score}%` }}
+                                      />
+                                    </div>
+                                  </>
+                                );
+                              }
+                              return <span className="text-sm text-[#6a7282]">{raw || '-'}</span>;
+                            })()}
                           </div>
                         </td>
                       </tr>

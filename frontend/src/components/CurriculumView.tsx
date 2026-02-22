@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen, Filter } from 'lucide-react';
 import { api } from '../api';
 import { getCourseTypeBadgeColor } from '../constants';
+import type { Department } from '../types';
 
 interface Course {
   course_id: number;
@@ -20,42 +21,39 @@ interface Curriculum {
   };
 }
 
-interface Department {
-  id: number;
-  name: string;
-}
-
-// 교육과정이 있는 6개 학과
-const AVAILABLE_DEPARTMENTS: Department[] = [
-  { id: 300, name: '컴퓨터학부' },
-  { id: 303, name: '데이터인텔리전스전공' },
-  { id: 304, name: '디자인컨버전스전공' },
-  { id: 200, name: '건축학전공' },
-  { id: 204, name: '전자공학부' },
-  { id: 207, name: '산업경영공학과' }
-];
-
 export default function CurriculumView() {
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [curriculum, setCurriculum] = useState<Curriculum>({});
-  // const [totalCourses, setTotalCourses] = useState(0);  // Currently unused
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedDepartment, setSelectedDepartment] = useState<number>(300); // 기본값: 컴퓨터학부
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const data = await api.departments.list();
+        const evalDepts = data.departments.filter(d => d.is_evaluation_available);
+        setDepartments(evalDepts);
+        if (evalDepts.length > 0) {
+          setSelectedDepartment(evalDepts[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch departments:', error);
+        setLoading(false);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   useEffect(() => {
     const fetchCurriculum = async () => {
+      if (!selectedDepartment) return;
       try {
         setLoading(true);
-        console.log('Fetching curriculum for department:', selectedDepartment);
         const data = await api.courses.curriculum(selectedDepartment);
-        console.log('Parsed data:', data);
-        console.log('Curriculum keys:', Object.keys(data.curriculum || {}));
-        
         setCurriculum(data.curriculum);
-        // Total courses count available in data.total_courses if needed
       } catch (error) {
         console.error('Failed to fetch curriculum:', error);
-        console.error('Error details:', error instanceof Error ? error.message : String(error));
       } finally {
         setLoading(false);
       }
@@ -64,10 +62,10 @@ export default function CurriculumView() {
     fetchCurriculum();
   }, [selectedDepartment]);
 
-  if (loading) {
+  if (loading && departments.length === 0) {
     return (
-      <div className="p-8 bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">교육과정을 불러오는 중...</div>
+      <div className="p-8 bg-gray-50 flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">데이터를 불러오는 중...</div>
       </div>
     );
   }
@@ -82,20 +80,19 @@ export default function CurriculumView() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      
+
       {/* 학과 선택 */}
       <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-4 md:mb-6">
-        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">분석할 학과 선택</h2>
+        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">교육과정 학과 선택</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-          {AVAILABLE_DEPARTMENTS.map(dept => (
+          {departments.map(dept => (
             <button
               key={dept.id}
               onClick={() => setSelectedDepartment(dept.id)}
-              className={`px-2 md:px-4 py-2 md:py-3 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                selectedDepartment === dept.id
+              className={`px-2 md:px-4 py-2 md:py-3 rounded-lg text-xs md:text-sm font-medium transition-all ${selectedDepartment === dept.id
                   ? 'bg-blue-600 text-white shadow-md transform scale-105'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               {dept.name}
             </button>
@@ -112,11 +109,10 @@ export default function CurriculumView() {
               <button
                 key={type}
                 onClick={() => setSelectedType(type)}
-                className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                  selectedType === type
+                className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${selectedType === type
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 {type === 'all' ? '전체' : type}
               </button>

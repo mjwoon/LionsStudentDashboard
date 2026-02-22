@@ -94,7 +94,7 @@ def load_json_data(filename: str) -> dict:
 
 
 def create_course_enrollments(
-    student_id: str,
+    student_id: int,
     courses_by_semester: Dict[int, List[Dict]],
     year: int,
     max_credits: int = MAX_CREDITS_PER_SEMESTER,
@@ -153,7 +153,7 @@ def create_course_enrollments(
 
 
 def create_survey_for_student(
-    student_id: str,
+    student_id: int,
     round_id: int,
     first_choice_dept: int,
     decision_scale: int,

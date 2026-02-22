@@ -26,7 +26,7 @@ export default function SystemStatsTab() {
     }
   };
 
-  const handleClearCache = async (departmentId?: number) => {
+  const handleClearCache = async (departmentId?: string) => {
     if (!confirm(departmentId 
       ? '해당 학과의 캐시를 삭제하시겠습니까?' 
       : '전체 캐시를 삭제하시겠습니까?'

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 
 @router.get("/student/{student_id}/department/{department_id}")
 def evaluate_student_for_department(
-    student_id: str,
+    student_id: int,
     department_id: int,
     admission_year: int = 2026,
     force_recalculate: bool = False,
@@ -91,7 +91,7 @@ def evaluate_student_for_department(
 
 @router.get("/student/{student_id}/all-departments")
 def evaluate_student_for_all_departments(
-    student_id: str,
+    student_id: int,
     admission_year: int = 2025,
     db: Session = Depends(get_db)
 ):
@@ -131,7 +131,7 @@ def evaluate_student_for_all_departments(
 @router.post("/batch/department/{department_id}")
 def batch_evaluate_department(
     department_id: int,
-    student_ids: Optional[List[str]] = None,
+    student_ids: Optional[List[int]] = None,
     admission_year: int = 2025,
     db: Session = Depends(get_db)
 ):

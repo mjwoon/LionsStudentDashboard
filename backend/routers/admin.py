@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from database import get_db
 from models.schemas import (
-    CourseDataUpload, StudentDataUpload, EnrollmentDataUpload,
+    CourseDataUpload, StudentDataUpload, EnrollmentDataUpload, MajorSurveyDataUpload,
     CurriculumDataUpload, RecommendationDataUpload, RequirementDataUpload,
-    CollegeDataUpload, DepartmentDataUpload,
+    CollegeDataUpload, DepartmentDataUpload, RequirementCourseDataUpload,
+    AdvisorDataUpload,
     DataUploadResponse, BulkEvaluationRequest, BulkEvaluationResponse,
     CachedEvaluationStats
 )
@@ -38,20 +39,25 @@ async def parse_upload_file(file: UploadFile) -> List[dict]:
         else:
             df = pd.read_excel(io.BytesIO(contents))
         
-        # student_id 열이 있으면 문자열로 변환 (Excel/CSV에서 정수로 읽히는 문제 방지)
+        # student_id 열이 있으면 정수로 변환 (공백이나 \.0 등 제거 후)
         if "student_id" in df.columns:
-            df["student_id"] = df["student_id"].astype(str).str.replace(r'\.0$', '', regex=True)
+            df["student_id"] = pd.to_numeric(df["student_id"], errors='coerce').astype('Int64')
             
         # Replace NaN with None so pydantic models can handle missing values (optional fields)
         df = df.where(pd.notnull(df), None)
         data = df.to_dict(orient="records")
+        # pandas의 where가 NaN을 완전히 제거하지 못하는 경우 보완
+        for row in data:
+            for key, val in row.items():
+                if isinstance(val, float) and math.isnan(val):
+                    row[key] = None
     else:
         raise ValueError("Unsupported file format. Please upload .json, .csv, or .xlsx files.")
     
-    # JSON에서도 student_id가 int로 들어오는 경우 str로 변환
+    # JSON에서도 student_id가 str로 들어오는 경우 int로 변환
     for row in data:
-        if "student_id" in row and isinstance(row["student_id"], (int, float)):
-            row["student_id"] = str(int(row["student_id"]))
+        if "student_id" in row and isinstance(row["student_id"], str) and row["student_id"].isdigit():
+            row["student_id"] = int(row["student_id"])
     
     return data
 
@@ -80,6 +86,25 @@ async def upload_colleges_file(
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
+@router.post("/upload/advisors/file", response_model=DataUploadResponse)
+async def upload_advisors_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """파일로 지도교수 데이터 일괄 업로드"""
+    try:
+        data = await parse_upload_file(file)
+        advisors_data = [AdvisorDataUpload(**item) for item in data]
+        return AdminService.upload_advisors(db, advisors_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+
 @router.post("/upload/departments/file", response_model=DataUploadResponse)
 async def upload_departments_file(
     file: UploadFile = File(...),
@@ -99,46 +124,36 @@ async def upload_departments_file(
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 
-@router.post("/upload/courses", response_model=DataUploadResponse)
-async def upload_courses(
-    courses_data: List[CourseDataUpload],
-    db: Session = Depends(get_db)
-):
-    """
-    과목 데이터 일괄 업로드/업데이트
-    
-    - 기존 과목 코드가 있으면 업데이트
-    - 없으면 새로 생성
-    """
-    return AdminService.upload_courses(db, courses_data)
-
-
 @router.post("/upload/courses/file", response_model=DataUploadResponse)
 async def upload_courses_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """
-    JSON 파일로 과목 데이터 일괄 업로드
-    
-    파일 형식:
-    [
-        {
-            "course_code": "CSE101",
-            "course_name": "컴퓨터공학개론",
-            "credits": 3,
-            "course_type": "전공필수",
-            "department_code": "CSE",
-            "course_year": 1,
-            "semester": 1
-        },
-        ...
-    ]
-    """
+    """CSV/JSON 파일로 과목 데이터 일괄 업로드 (한국어 헤더 지원)"""
     try:
         data = await parse_upload_file(file)
         courses_data = [CourseDataUpload(**item) for item in data]
         return AdminService.upload_courses(db, courses_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+@router.post("/upload/major-surveys/file", response_model=DataUploadResponse)
+async def upload_major_surveys_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    JSON/CSV 파일로 희망전공 조사(major_surveys) 데이터 일괄 업로드
+    """
+    try:
+        data = await parse_upload_file(file)
+        surveys_data = [MajorSurveyDataUpload(**item) for item in data]
+        return AdminService.upload_major_surveys(db, surveys_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -177,7 +192,8 @@ async def upload_students_file(
             "name": "홍길동",
             "email": "hong@hanyang.ac.kr",
             "phone": "010-1234-5678",
-            "department_code": "CSE",
+            "department_id": 100,
+            "advisor_id": 1,
             "pride": "L",
             "class_number": 1,
             "track": "자연계열"
@@ -293,6 +309,23 @@ async def upload_requirements_file(
         data = await parse_upload_file(file)
         reqs_data = [RequirementDataUpload(**item) for item in data]
         return AdminService.upload_requirements(db, reqs_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
+
+@router.post("/upload/requirement-courses/file", response_model=DataUploadResponse)
+async def upload_requirement_courses_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await parse_upload_file(file)
+        req_courses_data = [RequirementCourseDataUpload(**item) for item in data]
+        return AdminService.upload_requirement_courses(db, req_courses_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -437,8 +470,7 @@ async def admin_health():
         "status": "healthy",
         "module": "admin",
         "endpoints": [
-            "POST /api/admin/upload/courses",
-            "POST /api/admin/upload/courses/file",
+            "POST /api/admin/upload/major-surveys/file",
             "POST /api/admin/upload/students",
             "POST /api/admin/upload/students/file",
             "POST /api/admin/upload/enrollments",

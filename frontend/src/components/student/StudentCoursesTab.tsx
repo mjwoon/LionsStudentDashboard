@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
-import type { Student } from './types';
+import type { Student } from '../../types';
 import type { CourseEnrollment } from '../../types';
 
 interface StudentCoursesTabProps {

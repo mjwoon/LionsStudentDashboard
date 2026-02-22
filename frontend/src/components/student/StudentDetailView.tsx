@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
-import { api } from '../api';
-import type { Student } from './student/types';
-import StudentListView from './student/StudentListView';
-import StudentSurveyTab from './student/StudentSurveyTab';
-import StudentEntryTab from './student/StudentEntryTab';
-import StudentCoursesTab from './student/StudentCoursesTab';
+import { api } from '../../api';
+import type { Student } from '../../types';
+import StudentListView from './StudentListView';
+import StudentSurveyTab from './StudentSurveyTab';
+import StudentEntryTab from './StudentEntryTab';
+import StudentCoursesTab from './StudentCoursesTab';
 
 type TabType = 'survey' | 'entry' | 'courses';
 
@@ -17,7 +17,7 @@ export default function StudentDetailView() {
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('survey');
 
   // location.state에서 departmentId 가져오기
@@ -37,8 +37,7 @@ export default function StudentDetailView() {
 
       try {
         setLoading(true);
-        const response = await api.students.list(1, 100, { search: studentId });
-        const student = response.students.find((s: Student) => s.student_id === studentId);
+        const student = await api.students.get(studentId);
         if (student) {
           setSelectedStudent(student);
         } else {
@@ -56,7 +55,7 @@ export default function StudentDetailView() {
     fetchStudent();
   }, [studentId, navigate]);
 
-  const handleStudentSelect = (student: Student, departmentId: number) => {
+  const handleStudentSelect = (student: Student, departmentId: string) => {
     setSelectedDepartmentId(departmentId);
     setActiveTab('survey');
     navigate(`/student/${student.student_id}`, { state: { departmentId } });
@@ -84,7 +83,7 @@ export default function StudentDetailView() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="flex items-center gap-4">
-                <h1 className="text-4xl font-bold text-[#101828]">{selectedStudent.name}</h1>
+                <h1 className="text-2xl md:text-3xl lg:text-3xl font-bold text-[#101828]">{selectedStudent.name}</h1>
                 <p className="text-[16pt] text-[#6a7282] font-medium">
                   {selectedStudent.student_id} ⋅ {selectedStudent.academic_info.class_number}반 ⋅ {selectedStudent.department.name}
                 </p>
@@ -132,7 +131,7 @@ export default function StudentDetailView() {
 
           {/* 탭 컨텐츠 */}
           {activeTab === 'survey' && <StudentSurveyTab student={selectedStudent} />}
-          {activeTab === 'entry' && <StudentEntryTab student={selectedStudent} initialDepartmentId={selectedDepartmentId} />}
+          {activeTab === 'entry' && <StudentEntryTab student={selectedStudent} selectedDepartmentId={selectedDepartmentId} />}
           {activeTab === 'courses' && <StudentCoursesTab student={selectedStudent} />}
         </div>
       </div>

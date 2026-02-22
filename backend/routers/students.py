@@ -9,7 +9,7 @@ from models.schemas import (
     DepartmentBase, AcademicInfo, CourseEnrollmentDetail, SurveyHistoryItem,
     SurveyChoiceBase
 )
-from services.student_service import calculate_first_year_completion
+from services.student_service import calculate_entry_requirement_completion
 from datetime import datetime
 import math
 
@@ -61,10 +61,19 @@ def get_students(
     offset = (page - 1) * per_page
     students = query.offset(offset).limit(per_page).all()
     
+    # Format response
+    from models.models import StudentRequirementStatus
+    
     # Pre-load departments for efficiency (cache)
     all_departments = {dept.id: dept for dept in db.query(Department).all()}
     
-    # Format response
+    # Pre-load Requirement Statuses to avoid slow N+1 EvaluationService computations
+    student_ids = [s.student_id for s in students]
+    req_statuses = db.query(StudentRequirementStatus).filter(
+        StudentRequirementStatus.student_id.in_(student_ids)
+    ).all()
+    status_map = {(rs.student_id, rs.department_id): rs for rs in req_statuses}
+    
     students_list = []
     for student in students:
         # 최신 희망 학과 조회 (이미 selectinload로 로드됨)
@@ -83,28 +92,31 @@ def get_students(
                 first_choice_dept_id = first_choice_dept.id
             decision_certainty = latest_survey.decision_scale
         
-        # 이수현황 계산: 최신 희망학과의 1학년 과목 이수 현황 (헬퍼 함수 사용)
+        # 이수현황 / 수강과목 적합성
         completion_status = "0/0"
         course_suitability = None
-        
+
         if first_choice_dept_id:
-            completed, total = calculate_first_year_completion(
-                db, student.student_id, first_choice_dept_id
-            )
-            completion_status = f"{completed}/{total}"
-            
-            # 수강과목 적합성: 전체 적합도 점수 (평가 시스템 사용)
-            from services.evaluation_service import EvaluationService
-            evaluator = EvaluationService(db)
-            try:
-                eval_result = evaluator.evaluate_student(
-                    student.student_id, first_choice_dept_id, save_to_db=False
+            rs = status_map.get((student.student_id, first_choice_dept_id))
+
+            # 이수현황: 진입 필수 과목 이수 현황 (캐시 우선, fallback은 직접 쿼리)
+            if rs and rs.analysis_json and "entry_requirement" in rs.analysis_json:
+                er = rs.analysis_json["entry_requirement"]
+                completed_req = er.get("completed_courses", 0)
+                total_req = er.get("total_courses", 0)
+            else:
+                completed_req, total_req = calculate_entry_requirement_completion(
+                    db, student.student_id, first_choice_dept_id
                 )
-                # overall_score를 백분율 형식으로 반환
-                course_suitability = f"{eval_result['overall_score']:.0f}점"
-            except:
-                # 평가 실패 시 기본값
-                course_suitability = None
+            completion_status = f"{completed_req}/{total_req}" if total_req > 0 else None
+
+            # 수강과목 적합성: 캐시된 진단 결과 사용 (N+1 성능 최적화)
+            if rs and rs.overall_score is not None:
+                course_suitability = f"{float(rs.overall_score):.0f}점"
+            elif rs and rs.analysis_json and "overall" in rs.analysis_json:
+                course_suitability = f"{rs.analysis_json['overall']['score']:.0f}점"
+            else:
+                course_suitability = "진단 필요"
         
         student_data = StudentInList(
             student_id=student.student_id,
@@ -139,7 +151,7 @@ def get_students(
 
 
 @router.get("/students/{student_id}", response_model=StudentDetail)
-def get_student_detail(student_id: str, db: Session = Depends(get_db)):
+def get_student_detail(student_id: int, db: Session = Depends(get_db)):
     """특정 학생 상세 프로필 조회"""
     
     student = db.query(Student).options(
@@ -172,32 +184,34 @@ def get_student_detail(student_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/students/{student_id}/courses", response_model=StudentCoursesResponse)
-def get_student_courses(student_id: str, db: Session = Depends(get_db)):
+def get_student_courses(student_id: int, db: Session = Depends(get_db)):
     """학생 수강 이력 조회"""
     
     student = db.query(Student).filter(Student.student_id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
     
-    enrollments = db.query(StudentCourse).options(
-        joinedload(StudentCourse.course)
-    ).filter(StudentCourse.student_id == student.student_id).all()
+    enrollments = db.query(StudentCourse).filter(
+        StudentCourse.student_id == student.student_id
+    ).order_by(
+        StudentCourse.year.desc(), StudentCourse.semester.desc()
+    ).all()
     
-    total_credits = sum(enrollment.course.credits for enrollment in enrollments)
+    total_credits = sum(enrollment.credits for enrollment in enrollments)
     
     course_history = []
     for enrollment in enrollments:
         course_detail = CourseEnrollmentDetail(
-            course_id=enrollment.course.course_id,
-            course_code=enrollment.course.course_code,
-            course_name=enrollment.course.course_name,
-            credits=enrollment.course.credits,
+            course_id=enrollment.id,
+            course_code=enrollment.course_code,
+            course_name=enrollment.course_name,
+            credits=enrollment.credits,
             year=enrollment.year,
             semester=enrollment.semester,
             completion_type=enrollment.completion_type,
             is_retake=enrollment.is_retake,
             grade=enrollment.grade,
-            numeric_grade=float(enrollment.numeric_grade) if enrollment.numeric_grade else None
+            numeric_grade=float(enrollment.numeric_grade) if enrollment.numeric_grade is not None else None
         )
         course_history.append(course_detail)
     
@@ -209,7 +223,7 @@ def get_student_courses(student_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/students/{student_id}/surveys", response_model=StudentSurveysResponse)
-def get_student_surveys(student_id: str, db: Session = Depends(get_db)):
+def get_student_surveys(student_id: int, db: Session = Depends(get_db)):
     """학생의 전공 희망 조사 이력 조회"""
     
     student = db.query(Student).filter(Student.student_id == student_id).first()

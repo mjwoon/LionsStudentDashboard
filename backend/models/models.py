@@ -53,7 +53,7 @@ class Advisor(Base):
 class Student(Base):
     __tablename__ = "students"
     
-    student_id = Column(String(10), primary_key=True)  # 학번 (PK)
+    student_id = Column(Integer, primary_key=True)  # 학번 (PK)
     name = Column(String(50), nullable=False)
     email = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
@@ -84,7 +84,7 @@ class Course(Base):
     course_name = Column(String(100), nullable=False)
     credits = Column(Integer, nullable=False)
     course_type = Column(String(30))  # 전공기초, 전공필수 등
-    course_department = Column(Integer, ForeignKey("departments.id"))  # 관장학과
+    course_department = Column(String(20), ForeignKey("departments.name"))  # 관장학과
     course_year = Column(Integer, nullable=False)  # 권장 학년
     semester = Column(Integer, nullable=False)  # 권장 학기
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -95,7 +95,6 @@ class Course(Base):
     
     department = relationship("Department", back_populates="courses",
                               foreign_keys=[course_department])
-    enrollments = relationship("StudentCourse", back_populates="course")
 
 
 class StudentCourse(Base):
@@ -103,8 +102,12 @@ class StudentCourse(Base):
     __tablename__ = "student_courses"
     
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String(10), ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.course_id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
+    
+    course_code = Column(String(20), nullable=False)
+    course_name = Column(String(100), nullable=False)
+    credits = Column(Integer, nullable=False, default=3)
+    
     grade = Column(String(5), nullable=False)  # A+, B0, F 등
     numeric_grade = Column(Numeric(3, 2))  # 4.5, 3.0 등 계산용 점수
     
@@ -117,7 +120,6 @@ class StudentCourse(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     student = relationship("Student", back_populates="course_enrollments")
-    course = relationship("Course", back_populates="enrollments")
 
 
 class SurveyRound(Base):
@@ -147,7 +149,7 @@ class MajorSurvey(Base):
     __tablename__ = "major_surveys"
     
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String(10), ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
     
     survey_round_id = Column(Integer, ForeignKey("survey_rounds.id"), nullable=False)  # renamed from round_id
     first_choice_id = Column(Integer, ForeignKey("departments.id"), nullable=False)  # renamed from first_choice_dept_id
@@ -192,15 +194,15 @@ class DepartmentEntryRequirement(Base):
 
 
 class RequirementCourse(Base):
-    """요건 대상 과목 매핑 (course_id FK 참조)"""
+    """요건 대상 과목 매핑 (course_code 참조)"""
     __tablename__ = "requirement_courses"
     
     id = Column(Integer, primary_key=True, index=True)
     requirement_id = Column(Integer, ForeignKey("department_entry_requirements.id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.course_id"), nullable=False)  # changed from course_code to FK
+    course_code = Column(String(20), ForeignKey("courses.course_code"), nullable=False)
     
     requirement = relationship("DepartmentEntryRequirement", back_populates="requirement_courses")
-    course = relationship("Course")  # new relationship
+    course = relationship("Course")
 
 
 class StudentRequirementStatus(Base):
@@ -208,7 +210,7 @@ class StudentRequirementStatus(Base):
     __tablename__ = "student_requirement_status"
     
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String(10), ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.student_id", ondelete="CASCADE"), nullable=False)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
     is_satisfied = Column(Boolean, default=False)  # 최종 충족 여부
     
@@ -240,6 +242,9 @@ class Curriculum(Base):
     course_year = Column(Integer, nullable=False)  # 1, 2, 3, 4학년
     course_code = Column(String(20), nullable=False)
     course_name = Column(String(100), nullable=False)
+    credits = Column(Integer, nullable=False, default=3)
+    course_type = Column(String(30), nullable=True)
+    semester = Column(Integer, nullable=False, default=1)
     
     department = relationship("Department")
     

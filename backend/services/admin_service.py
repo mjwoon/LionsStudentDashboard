@@ -9,13 +9,14 @@ from sqlalchemy import func
 from models.models import (
     Student, Course, Department, StudentCourse,
     StudentRequirementStatus, College, Advisor,
-    Curriculum, CourseRecommendation, DepartmentEntryRequirement
+    Curriculum, CourseRecommendation, DepartmentEntryRequirement,
+    MajorSurvey, RequirementCourse
 )
 from models.schemas import (
-    CourseDataUpload, StudentDataUpload, EnrollmentDataUpload,
-    CurriculumDataUpload, RecommendationDataUpload, RequirementDataUpload,
-    CollegeDataUpload, DepartmentDataUpload,
-    DataUploadResponse, BulkEvaluationRequest, BulkEvaluationResponse,
+    CourseDataUpload, StudentDataUpload, EnrollmentDataUpload, MajorSurveyDataUpload,
+    CurriculumDataUpload, RecommendationDataUpload, RequirementDataUpload, RequirementCourseDataUpload,
+    CollegeDataUpload, DepartmentDataUpload, AdvisorDataUpload,
+    DataUploadResponse, ErrorDetail, BulkEvaluationRequest, BulkEvaluationResponse,
     CachedEvaluationStats
 )
 from services.evaluation_service import EvaluationService
@@ -34,10 +35,11 @@ class AdminService:
         """대학 데이터 일괄 업로드/업데이트"""
         uploaded_count = 0
         updated_count = 0
-        errors = []
+        detailed_errors = []
         
-        try:
-            for college_data in colleges_data:
+        row_index = 2
+        for college_data in colleges_data:
+            try:
                 existing = db.query(College).filter(College.name == college_data.name).first()
                 
                 if existing:
@@ -48,32 +50,80 @@ class AdminService:
                         new_college.id = college_data.id
                     db.add(new_college)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=college_data.name, reason=str(e)))
+            row_index += 1
             
+        try:
             db.commit()
             return DataUploadResponse(
                 success=True,
                 message="대학 데이터 업로드 완료",
                 uploaded_count=uploaded_count,
                 updated_count=updated_count,
-                errors=errors if errors else None
+                detailed_errors=detailed_errors if detailed_errors else None
             )
         except Exception as e:
             db.rollback()
-            logger.error(f"대학 업로드 오류: {str(e)}")
+            logger.error(f"대학 업로드 커밋 오류: {str(e)}")
             return DataUploadResponse(
                 success=False, message=f"대학 데이터 업로드 실패: {str(e)}",
-                uploaded_count=0, updated_count=0, errors=[str(e)]
+                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
             )
     
+    @staticmethod
+    def upload_advisors(db: Session, advisors_data: List[AdvisorDataUpload]) -> DataUploadResponse:
+        uploaded_count = 0
+        updated_count = 0
+        detailed_errors = []
+        
+        row_index = 2
+        for data in advisors_data:
+            try:
+                existing = None
+                if data.id is not None:
+                    existing = db.query(Advisor).filter(Advisor.id == data.id).first()
+                if not existing and data.email:
+                    existing = db.query(Advisor).filter(Advisor.email == data.email).first()
+                
+                if existing:
+                    existing.name = data.name
+                    if data.department_id is not None:
+                        existing.department_id = data.department_id
+                    updated_count += 1
+                else:
+                    new_item = Advisor(
+                        id=data.id,
+                        name=data.name,
+                        email=data.email,
+                        department_id=data.department_id
+                    )
+                    db.add(new_item)
+                    uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=data.name, reason=str(e)))
+            row_index += 1
+            
+        try:
+            db.commit()
+            return DataUploadResponse(
+                success=True, message="지도교수 데이터 업로드 완료", uploaded_count=uploaded_count,
+                updated_count=updated_count, detailed_errors=detailed_errors if detailed_errors else None
+            )
+        except Exception as e:
+            db.rollback()
+            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None)
+
     @staticmethod
     def upload_departments(db: Session, departments_data: List[DepartmentDataUpload]) -> DataUploadResponse:
         """학과 데이터 일괄 업로드/업데이트"""
         uploaded_count = 0
         updated_count = 0
-        errors = []
+        detailed_errors = []
         
-        try:
-            for dept_data in departments_data:
+        row_index = 2
+        for dept_data in departments_data:
+            try:
                 # college_id 결정: 직접 지정 또는 college_name으로 매칭
                 college_id = dept_data.college_id
                 if not college_id and dept_data.college_name:
@@ -81,8 +131,7 @@ class AdminService:
                     if college:
                         college_id = college.id
                     else:
-                        errors.append(f"대학 '{dept_data.college_name}'을 찾을 수 없습니다.")
-                        continue
+                        raise ValueError(f"대학 '{dept_data.college_name}'을 찾을 수 없습니다.")
                 
                 existing = db.query(Department).filter(Department.code == dept_data.code).first()
                 
@@ -103,21 +152,106 @@ class AdminService:
                         new_dept.id = dept_data.id
                     db.add(new_dept)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=dept_data.code, reason=str(e)))
+            row_index += 1
             
+        try:
             db.commit()
             return DataUploadResponse(
                 success=True,
                 message="학과 데이터 업로드 완료",
                 uploaded_count=uploaded_count,
                 updated_count=updated_count,
-                errors=errors if errors else None
+                detailed_errors=detailed_errors if detailed_errors else None
             )
         except Exception as e:
             db.rollback()
-            logger.error(f"학과 업로드 오류: {str(e)}")
+            logger.error(f"학과 업로드 커밋 오류: {str(e)}")
             return DataUploadResponse(
                 success=False, message=f"학과 데이터 업로드 실패: {str(e)}",
-                uploaded_count=0, updated_count=0, errors=[str(e)]
+                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
+            )
+    
+    @staticmethod
+    def upload_major_surveys(db: Session, surveys_data: List[MajorSurveyDataUpload]) -> DataUploadResponse:
+        """희망 전공 조사 데이터 일괄 업로드/업데이트"""
+        uploaded_count = 0
+        updated_count = 0
+        detailed_errors = []
+        
+        row_index = 2
+        for survey_data in surveys_data:
+            try:
+                # 학생 존재 확인
+                student = db.query(Student).filter(Student.student_id == survey_data.student_id).first()
+                if not student:
+                    raise ValueError(f"학생 {survey_data.student_id}를 찾을 수 없습니다.")
+
+                # survey_round가 없으면 생성
+                from models.models import SurveyRound, DecisionStatus
+                round_obj = db.query(SurveyRound).filter(SurveyRound.round_number == survey_data.survey_round_id).first()
+                if not round_obj:
+                    round_obj = SurveyRound(
+                        round_number=survey_data.survey_round_id,
+                        title=f"제{survey_data.survey_round_id}차 희망전공 수요조사",
+                        status="CLOSED"
+                    )
+                    db.add(round_obj)
+                    db.flush()
+                
+                # decision_status_id가 있으면 존재 여부 확인, 없으면 자동 생성
+                if survey_data.decision_status_id is not None:
+                    ds = db.query(DecisionStatus).filter(DecisionStatus.id == survey_data.decision_status_id).first()
+                    if not ds:
+                        ds = DecisionStatus(id=survey_data.decision_status_id, status_name=f"상태{survey_data.decision_status_id}")
+                        db.add(ds)
+                        db.flush()
+                
+                # 기존 데이터 확인 (동일 학생, 동일 회차)
+                existing = db.query(MajorSurvey).filter(
+                    MajorSurvey.student_id == survey_data.student_id,
+                    MajorSurvey.survey_round_id == round_obj.id
+                ).first()
+                
+                if existing:
+                    existing.first_choice_id = survey_data.first_choice_id
+                    existing.second_choice_id = survey_data.second_choice_id
+                    existing.decision_status_id = survey_data.decision_status_id
+                    existing.decision_scale = survey_data.decision_scale
+                    updated_count += 1
+                else:
+                    new_survey = MajorSurvey(
+                        student_id=survey_data.student_id,
+                        survey_round_id=round_obj.id,
+                        first_choice_id=survey_data.first_choice_id,
+                        second_choice_id=survey_data.second_choice_id,
+                        decision_status_id=survey_data.decision_status_id,
+                        decision_scale=survey_data.decision_scale
+                    )
+                    if survey_data.id is not None:
+                        new_survey.id = survey_data.id
+                    db.add(new_survey)
+                    uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=str(survey_data.student_id), reason=str(e)))
+            row_index += 1
+            
+        try:
+            db.commit()
+            return DataUploadResponse(
+                success=True,
+                message="희망 전공 조사 데이터 업로드 완료",
+                uploaded_count=uploaded_count,
+                updated_count=updated_count,
+                detailed_errors=detailed_errors if detailed_errors else None
+            )
+        except Exception as e:
+            db.rollback()
+            logger.error(f"희망전공조사 업로드 커밋 오류: {str(e)}")
+            return DataUploadResponse(
+                success=False, message=f"희망전공조사 업로드 실패: {str(e)}",
+                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
             )
     
     @staticmethod
@@ -125,89 +259,105 @@ class AdminService:
         """과목 데이터 일괄 업로드/업데이트"""
         uploaded_count = 0
         updated_count = 0
-        errors = []
+        detailed_errors = []
         
-        try:
-            for course_data in courses_data:
-                # 학과 코드로 학과 찾기
-                department = db.query(Department).filter(
-                    Department.code == course_data.department_code
-                ).first()
+        # 같은 파일 내 중복 처리를 위한 로컬 캐시 (새로 추가되거나 업데이트된 항목 추적)
+        processed_courses = {}
+
+        row_index = 2
+        for course_data in courses_data:
+            try:
+                # 학과 찾기
+                department = None
+                dept_identifier = course_data.department_name or course_data.department_code
+                if dept_identifier:
+                    department = db.query(Department).filter(
+                        (Department.name == dept_identifier) | (Department.code == dept_identifier)
+                    ).first()
                 
-                if not department:
-                    errors.append(f"학과 코드 {course_data.department_code}를 찾을 수 없습니다.")
-                    continue
-                
-                # 기존 과목 확인
-                existing_course = db.query(Course).filter(
-                    Course.course_code == course_data.course_code
-                ).first()
-                
-                if existing_course:
-                    # 업데이트
-                    existing_course.course_name = course_data.course_name
-                    existing_course.credits = course_data.credits
-                    existing_course.course_type = course_data.course_type
-                    existing_course.course_department = department.id
-                    existing_course.course_year = course_data.course_year
-                    existing_course.semester = course_data.semester
-                    existing_course.is_retake_only = course_data.is_retake_only
-                    existing_course.description = course_data.description
+                # 먼저 이번 업로드 배치의 캐시를 확인
+                if course_data.course_code in processed_courses:
+                    existing_course = processed_courses[course_data.course_code]
                     updated_count += 1
+                    # 이전에 '새로 생성'으로 카운트되었다면 깎지 않고 그냥 덮어씀
                 else:
-                    # 새로 생성
+                    # 캐시에 없으면 DB에서 확인
+                    existing_course = db.query(Course).filter(
+                        Course.course_code == course_data.course_code
+                    ).first()
+
+                if existing_course:
+                    existing_course.course_name = course_data.course_name
+                    if course_data.course_type:
+                        existing_course.course_type = course_data.course_type
+                    if department:
+                        existing_course.course_department = department.id
+                    if course_data.course_year is not None:
+                        existing_course.course_year = course_data.course_year
+                    if course_data.credits is not None:
+                        existing_course.credits = course_data.credits
+                    if course_data.semester is not None:
+                        existing_course.semester = course_data.semester
+                    if course_data.description is not None:
+                        existing_course.description = course_data.description
+                    
+                    if course_data.course_code not in processed_courses:
+                        updated_count += 1
+                        processed_courses[course_data.course_code] = existing_course
+                else:
                     new_course = Course(
                         course_code=course_data.course_code,
                         course_name=course_data.course_name,
-                        credits=course_data.credits,
+                        credits=course_data.credits or 3,
                         course_type=course_data.course_type,
-                        course_department=department.id,
-                        course_year=course_data.course_year,
-                        semester=course_data.semester,
-                        is_retake_only=course_data.is_retake_only,
+                        course_department=department.id if department else None,
+                        course_year=course_data.course_year or 1,
+                        semester=course_data.semester or 1,
                         description=course_data.description
                     )
                     db.add(new_course)
-                    uploaded_count += 1
+                    
+                    if course_data.course_code not in processed_courses:
+                        uploaded_count += 1
+                        processed_courses[course_data.course_code] = new_course
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=course_data.course_code, reason=str(e)))
+            row_index += 1
             
+        try:
             db.commit()
-            
             return DataUploadResponse(
                 success=True,
-                message=f"과목 데이터 업로드 완료",
+                message="과목 데이터 업로드 완료",
                 uploaded_count=uploaded_count,
                 updated_count=updated_count,
-                errors=errors if errors else None
+                detailed_errors=detailed_errors if detailed_errors else None
             )
-        
         except Exception as e:
             db.rollback()
-            logger.error(f"과목 업로드 오류: {str(e)}")
+            logger.error(f"과목 업로드 커밋 오류: {str(e)}")
             return DataUploadResponse(
-                success=False,
-                message=f"과목 데이터 업로드 실패: {str(e)}",
-                uploaded_count=0,
-                updated_count=0,
-                errors=[str(e)]
+                success=False, message=f"과목 데이터 업로드 실패: {str(e)}",
+                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
             )
-    
+
     @staticmethod
     def upload_students(db: Session, students_data: List[StudentDataUpload]) -> DataUploadResponse:
         """학생 데이터 일괄 업로드/업데이트"""
         uploaded_count = 0
         updated_count = 0
-        errors = []
+        detailed_errors = []
         
-        try:
-            for student_data in students_data:
+        row_index = 2
+        for student_data in students_data:
+            try:
                 # department_id 직접 사용 (파일에서 바로 제공됨)
                 department = db.query(Department).filter(
                     Department.id == student_data.department_id
                 ).first()
                 
                 if not department:
-                    errors.append(f"학과 ID {student_data.department_id}를 찾을 수 없습니다.")
-                    continue
+                    raise ValueError(f"학과 ID {student_data.department_id}를 찾을 수 없습니다.")
                 
                 # advisor_id 검증: DB에 없으면 null 처리
                 advisor_id = student_data.advisor_id
@@ -249,7 +399,11 @@ class AdminService:
                     )
                     db.add(new_student)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=str(student_data.student_id), reason=str(e)))
+            row_index += 1
             
+        try:
             db.commit()
             
             return DataUploadResponse(
@@ -257,18 +411,19 @@ class AdminService:
                 message=f"학생 데이터 업로드 완료",
                 uploaded_count=uploaded_count,
                 updated_count=updated_count,
-                errors=errors if errors else None
+                detailed_errors=detailed_errors if detailed_errors else None
             )
         
         except Exception as e:
             db.rollback()
-            logger.error(f"학생 업로드 오류: {str(e)}")
+            logger.error(f"학생 업로드 커밋 오류: {str(e)}")
             return DataUploadResponse(
                 success=False,
                 message=f"학생 데이터 업로드 실패: {str(e)}",
                 uploaded_count=0,
                 updated_count=0,
-                errors=[str(e)]
+                errors=[str(e)],
+                detailed_errors=detailed_errors if detailed_errors else None
             )
     
     @staticmethod
@@ -276,38 +431,31 @@ class AdminService:
         """수강 데이터 일괄 업로드/업데이트"""
         uploaded_count = 0
         updated_count = 0
-        errors = []
+        detailed_errors = []
         
-        try:
-            for enrollment_data in enrollments_data:
+        row_index = 2
+        for enrollment_data in enrollments_data:
+            try:
                 # 학생 찾기
                 student = db.query(Student).filter(
                     Student.student_id == enrollment_data.student_id
                 ).first()
                 
                 if not student:
-                    errors.append(f"학생 {enrollment_data.student_id}를 찾을 수 없습니다.")
-                    continue
-                
-                # 과목 찾기
-                course = db.query(Course).filter(
-                    Course.course_code == enrollment_data.course_code
-                ).first()
-                
-                if not course:
-                    errors.append(f"과목 코드 {enrollment_data.course_code}를 찾을 수 없습니다.")
-                    continue
+                    raise ValueError(f"학생 {enrollment_data.student_id}를 찾을 수 없습니다.")
                 
                 # 기존 수강 기록 확인
                 existing_enrollment = db.query(StudentCourse).filter(
                     StudentCourse.student_id == student.student_id,
-                    StudentCourse.course_id == course.course_id,
+                    StudentCourse.course_code == enrollment_data.course_code,
                     StudentCourse.year == enrollment_data.year,
                     StudentCourse.semester == enrollment_data.semester
                 ).first()
                 
                 if existing_enrollment:
                     # 업데이트
+                    existing_enrollment.course_name = enrollment_data.course_name
+                    existing_enrollment.credits = enrollment_data.credits
                     existing_enrollment.completion_type = enrollment_data.completion_type
                     existing_enrollment.is_retake = enrollment_data.is_retake
                     existing_enrollment.grade = enrollment_data.grade
@@ -317,7 +465,9 @@ class AdminService:
                     # 새로 생성
                     new_enrollment = StudentCourse(
                         student_id=student.student_id,
-                        course_id=course.course_id,
+                        course_code=enrollment_data.course_code,
+                        course_name=enrollment_data.course_name,
+                        credits=enrollment_data.credits,
                         year=enrollment_data.year,
                         semester=enrollment_data.semester,
                         completion_type=enrollment_data.completion_type,
@@ -327,7 +477,11 @@ class AdminService:
                     )
                     db.add(new_enrollment)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=f"{enrollment_data.student_id}-{enrollment_data.course_code}", reason=str(e)))
+            row_index += 1
             
+        try:
             db.commit()
             
             return DataUploadResponse(
@@ -335,31 +489,39 @@ class AdminService:
                 message=f"수강 데이터 업로드 완료",
                 uploaded_count=uploaded_count,
                 updated_count=updated_count,
-                errors=errors if errors else None
+                detailed_errors=detailed_errors if detailed_errors else None
             )
         
         except Exception as e:
             db.rollback()
-            logger.error(f"수강 데이터 업로드 오류: {str(e)}")
+            logger.error(f"수강 데이터 업로드 커밋 오류: {str(e)}")
             return DataUploadResponse(
                 success=False,
                 message=f"수강 데이터 업로드 실패: {str(e)}",
                 uploaded_count=0,
                 updated_count=0,
-                errors=[str(e)]
+                errors=[str(e)],
+                detailed_errors=detailed_errors if detailed_errors else None
             )
     
     @staticmethod
     def upload_curriculums(db: Session, curriculums_data: List[CurriculumDataUpload]) -> DataUploadResponse:
         uploaded_count = 0
         updated_count = 0
-        errors = []
-        try:
-            for data in curriculums_data:
-                department = db.query(Department).filter(Department.code == data.department_code).first()
+        detailed_errors = []
+        
+        row_index = 2
+        for data in curriculums_data:
+            try:
+                department = None
+                if getattr(data, 'department_id', None):
+                    department = db.query(Department).filter(Department.id == data.department_id).first()
+                elif getattr(data, 'department_code', None):
+                    department = db.query(Department).filter(Department.code == data.department_code).first()
+                
                 if not department:
-                    errors.append(f"학과 코드 {data.department_code}를 찾을 수 없습니다.")
-                    continue
+                    dept_info = data.department_id or data.department_code
+                    raise ValueError(f"학과 정보({dept_info})를 찾을 수 없습니다.")
                 
                 existing = db.query(Curriculum).filter(
                     Curriculum.department_id == department.id,
@@ -369,81 +531,136 @@ class AdminService:
                 if existing:
                     existing.course_year = data.course_year
                     existing.course_name = data.course_name
+                    existing.credits = data.credits
+                    existing.course_type = data.course_type
+                    existing.semester = data.semester
                     updated_count += 1
                 else:
                     new_item = Curriculum(
                         department_id=department.id,
                         course_year=data.course_year,
                         course_code=data.course_code,
-                        course_name=data.course_name
+                        course_name=data.course_name,
+                        credits=data.credits,
+                        course_type=data.course_type,
+                        semester=data.semester
                     )
                     db.add(new_item)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=data.course_code, reason=str(e)))
+            row_index += 1
+            
+        try:
             db.commit()
             return DataUploadResponse(
                 success=True, message=f"교육과정 데이터 업로드 완료", uploaded_count=uploaded_count,
-                updated_count=updated_count, errors=errors if errors else None
+                updated_count=updated_count, detailed_errors=detailed_errors if detailed_errors else None
             )
         except Exception as e:
             db.rollback()
-            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)])
+            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None)
 
     @staticmethod
     def upload_recommendations(db: Session, recs_data: List[RecommendationDataUpload]) -> DataUploadResponse:
         uploaded_count = 0
         updated_count = 0
-        errors = []
-        try:
-            for data in recs_data:
-                department = db.query(Department).filter(Department.code == data.department_code).first()
-                if not department:
-                    errors.append(f"학과 코드 {data.department_code}를 찾을 수 없습니다.")
-                    continue
+        detailed_errors = []
+        
+        row_index = 2
+        for data in recs_data:
+            try:
+                department = None
+                if data.department_id:
+                    department = db.query(Department).filter(Department.id == data.department_id).first()
+                elif data.department_code:
+                    department = db.query(Department).filter(Department.code == data.department_code).first()
                 
-                existing = db.query(CourseRecommendation).filter(
-                    CourseRecommendation.department_id == department.id,
-                    CourseRecommendation.course_name == data.course_name
-                ).first()
+                if not department:
+                    raise ValueError(f"학과 정보(ID: {data.department_id}, 코드: {data.department_code})를 찾을 수 없습니다.")
+                
+                existing = None
+                if getattr(data, 'id', None) is not None:
+                     existing = db.query(CourseRecommendation).filter(
+                        CourseRecommendation.id == data.id
+                    ).first()
+                     
+                if not existing:
+                    existing = db.query(CourseRecommendation).filter(
+                        CourseRecommendation.department_id == department.id,
+                        CourseRecommendation.course_name == data.course_name
+                    ).first()
                 
                 if existing:
-                    updated_count += 1
+                     if getattr(data, 'id', None) is not None and existing.id != data.id:
+                         pass
+                     updated_count += 1
                 else:
                     new_item = CourseRecommendation(department_id=department.id, course_name=data.course_name)
+                    if getattr(data, 'id', None) is not None:
+                        new_item.id = data.id
                     db.add(new_item)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=data.course_name, reason=str(e)))
+            row_index += 1
+            
+        try:
             db.commit()
             return DataUploadResponse(
                 success=True, message=f"권장과목 데이터 업로드 완료", uploaded_count=uploaded_count,
-                updated_count=updated_count, errors=errors if errors else None
+                updated_count=updated_count, detailed_errors=detailed_errors if detailed_errors else None
             )
         except Exception as e:
             db.rollback()
-            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)])
+            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None)
 
     @staticmethod
     def upload_requirements(db: Session, reqs_data: List[RequirementDataUpload]) -> DataUploadResponse:
         uploaded_count = 0
         updated_count = 0
-        errors = []
-        try:
-            for data in reqs_data:
-                department = db.query(Department).filter(Department.code == data.department_code).first()
-                if not department:
-                    errors.append(f"학과 코드 {data.department_code}를 찾을 수 없습니다.")
-                    continue
+        detailed_errors = []
+        
+        row_index = 2
+        for data in reqs_data:
+            try:
+                department = None
+                if data.department_id:
+                    department = db.query(Department).filter(Department.id == data.department_id).first()
+                elif data.department_code:
+                    department = db.query(Department).filter(Department.code == data.department_code).first()
                 
-                existing = db.query(DepartmentEntryRequirement).filter(
-                    DepartmentEntryRequirement.department_id == department.id,
-                    DepartmentEntryRequirement.admission_year == data.admission_year,
-                    DepartmentEntryRequirement.requirement_group == data.requirement_group
-                ).first()
+                if not department:
+                    raise ValueError(f"학과 정보(ID: {data.department_id}, 코드: {data.department_code})를 찾을 수 없습니다.")
+                
+                existing = None
+                if getattr(data, 'id', None) is not None:
+                     existing = db.query(DepartmentEntryRequirement).filter(
+                        DepartmentEntryRequirement.id == data.id
+                    ).first()
+                     
+                if not existing:
+                    existing = db.query(DepartmentEntryRequirement).filter(
+                        DepartmentEntryRequirement.department_id == department.id,
+                        DepartmentEntryRequirement.admission_year == data.admission_year,
+                        DepartmentEntryRequirement.requirement_group == data.requirement_group
+                    ).first()
                 
                 if existing:
                     existing.target_grade_level = data.target_grade_level
                     existing.required_count = data.required_count
-                    existing.requirement_text = data.requirement_text
-                    existing.is_alert_required = data.is_alert_required
-                    existing.logic_operator = data.logic_operator
+                    if hasattr(data, 'requirement_text') and data.requirement_text is not None:
+                        existing.requirement_text = data.requirement_text
+                    
+                    if hasattr(data, 'is_alert_required') and data.is_alert_required is not None:
+                        existing.is_alert_required = data.is_alert_required
+                    
+                    if hasattr(data, 'logic_operator') and data.logic_operator is not None:
+                        existing.logic_operator = data.logic_operator
+                        
+                    if getattr(data, 'id', None) is not None and existing.id != data.id:
+                         pass
+                        
                     updated_count += 1
                 else:
                     new_item = DepartmentEntryRequirement(
@@ -452,20 +669,84 @@ class AdminService:
                         requirement_group=data.requirement_group,
                         target_grade_level=data.target_grade_level,
                         required_count=data.required_count,
-                        requirement_text=data.requirement_text,
-                        is_alert_required=data.is_alert_required,
-                        logic_operator=data.logic_operator
+                        requirement_text=getattr(data, 'requirement_text', ""),
+                        is_alert_required=getattr(data, 'is_alert_required', False),
+                        logic_operator=getattr(data, 'logic_operator', "AND")
                     )
+                    if getattr(data, 'id', None) is not None:
+                        new_item.id = data.id
+
                     db.add(new_item)
                     uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=f"ReqGrp {data.requirement_group}", reason=str(e)))
+            row_index += 1
+            
+        try:
             db.commit()
             return DataUploadResponse(
                 success=True, message=f"학과요건 데이터 업로드 완료", uploaded_count=uploaded_count,
-                updated_count=updated_count, errors=errors if errors else None
+                updated_count=updated_count, detailed_errors=detailed_errors if detailed_errors else None
             )
         except Exception as e:
             db.rollback()
-            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)])
+            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None)
+
+    @staticmethod
+    def upload_requirement_courses(db: Session, req_courses_data: List[RequirementCourseDataUpload]) -> DataUploadResponse:
+        uploaded_count = 0
+        updated_count = 0
+        detailed_errors = []
+        
+        row_index = 2
+        for data in req_courses_data:
+            try:
+                # 요건 찾기
+                requirement = db.query(DepartmentEntryRequirement).filter(
+                    DepartmentEntryRequirement.id == data.requirement_id
+                ).first()
+                if not requirement:
+                    raise ValueError(f"요건 ID {data.requirement_id}를 찾을 수 없습니다.")
+                    
+                # 기존 맵핑 존재 여부 체크
+                existing = None
+                if getattr(data, 'id', None) is not None:
+                     existing = db.query(RequirementCourse).filter(
+                         RequirementCourse.id == data.id
+                     ).first()
+                     
+                if not existing:
+                    existing = db.query(RequirementCourse).filter(
+                        RequirementCourse.requirement_id == requirement.id,
+                        RequirementCourse.course_code == data.course_code
+                    ).first()
+                
+                if existing:
+                    if getattr(data, 'id', None) is not None and existing.id != data.id:
+                        pass
+                    updated_count += 1
+                else:
+                    new_item = RequirementCourse(
+                        requirement_id=requirement.id,
+                        course_code=data.course_code
+                    )
+                    if getattr(data, 'id', None) is not None:
+                         new_item.id = data.id
+                    db.add(new_item)
+                    uploaded_count += 1
+            except Exception as e:
+                detailed_errors.append(ErrorDetail(row=row_index, item_id=data.course_code, reason=str(e)))
+            row_index += 1
+            
+        try:
+            db.commit()
+            return DataUploadResponse(
+                success=True, message=f"요건 대상 과목 매핑 데이터 업로드 완료", uploaded_count=uploaded_count,
+                updated_count=updated_count, detailed_errors=detailed_errors if detailed_errors else None
+            )
+        except Exception as e:
+            db.rollback()
+            return DataUploadResponse(success=False, message=str(e), uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None)
 
     @staticmethod
     def bulk_evaluate(db: Session, request: BulkEvaluationRequest) -> BulkEvaluationResponse:

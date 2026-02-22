@@ -1,6 +1,6 @@
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
-import StudentDetailView from './components/StudentDetailView';
+import StudentDetailView from './components/student/StudentDetailView';
 import AdminView from './components/AdminView';
 
 const LOGO_URL = '/HYU_logo.svg';
@@ -37,28 +37,31 @@ export default function App() {
             <button
               onClick={() => navigate('/')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'dashboard'
-                  ? 'bg-white/15'
-                  : 'hover:bg-white/10'
+                ? 'bg-white/15'
+                : 'hover:bg-white/10'
                 }`}
             >
+              <img src="/전체.svg" alt="전체 현황" className="w-4 h-4 md:w-5 md:h-5" />
               <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">전체 현황</span>
             </button>
             <button
               onClick={() => navigate('/student')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'student'
-                  ? 'bg-white/15'
-                  : 'hover:bg-white/10'
+                ? 'bg-white/15'
+                : 'hover:bg-white/10'
                 }`}
             >
+              <img src="/학생관리.svg" alt="학생 목록" className="w-4 h-4 md:w-5 md:h-5" />
               <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">학생 목록</span>
             </button>
             <button
               onClick={() => navigate('/admin')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-lg transition-colors cursor-pointer ${activeView === 'admin'
-                  ? 'bg-white/15'
-                  : 'hover:bg-white/10'
+                ? 'bg-white/15'
+                : 'hover:bg-white/10'
                 }`}
             >
+              <img src="/관리자.svg" alt="관리자" className="w-4 h-4 md:w-5 md:h-5" />
               <span className="text-xs md:text-sm lg:text-[13pt] font-medium text-white">관리자</span>
             </button>
           </nav>
@@ -73,8 +76,8 @@ export default function App() {
           <Route path="/student/:studentId" element={<StudentDetailView />} />
           <Route path="/admin" element={<AdminView />} />
         </Routes>
-      </main>  
-      
+      </main>
+
       {/* Footer */}
       <footer className="h-20 flex items-center justify-center animate-fade-in-up">
         <p className="text-gray-500 text-[14pt] transition-opacity duration-300">©2026 한양대학교 ERICA 학생 관리 시스템. All rights reserved.</p>

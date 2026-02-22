@@ -31,7 +31,11 @@ def get_courses(
     if course_type:
         query = query.filter(Course.course_type == course_type)
     if department_id:
-        query = query.filter(Course.course_department == department_id)
+        dept = db.query(Department).filter(Department.id == department_id).first()
+        if dept:
+            query = query.filter(Course.course_department == dept.name)
+        else:
+            return CourseListResponse(count=0, page=page, per_page=per_page, courses=[])
     
     # Get total count
     total_count = query.count()
@@ -89,16 +93,16 @@ def get_entry_requirements(
     
     requirements = query.all()
     
-    # 요건에 포함된 모든 과목 수집 (course_id FK를 통해)
-    all_course_ids = set()
+    # 요건에 포함된 모든 과목 수집 (course_code FK를 통해)
+    all_course_codes = set()
     for req in requirements:
         for req_course in req.requirement_courses:
-            all_course_ids.add(req_course.course_id)
+            all_course_codes.add(req_course.course_code)
     
     # 과목 정보 조회
     courses = db.query(Course).options(
         joinedload(Course.department)
-    ).filter(Course.course_id.in_(all_course_ids)).all()
+    ).filter(Course.course_code.in_(all_course_codes)).all()
     
     courses_list = []
     for course in courses:
@@ -123,10 +127,16 @@ def get_entry_requirements(
 @router.get("/departments", response_model=DepartmentListResponse)
 def get_departments(db: Session = Depends(get_db)):
     """학과 리스트 및 졸업 학점 확인"""
+    from models.models import DepartmentEntryRequirement
     
     departments = db.query(Department).options(
         joinedload(Department.college)
     ).all()
+    
+    # Check which departments have entry requirements configured
+    eval_dept_ids = {
+        r[0] for r in db.query(DepartmentEntryRequirement.department_id).distinct().all()
+    }
     
     departments_list = []
     for dept in departments:
@@ -135,7 +145,8 @@ def get_departments(db: Session = Depends(get_db)):
             code=dept.code,
             name=dept.name,
             college_name=dept.college.name if dept.college else "",
-            min_credits=dept.min_credits
+            min_credits=dept.min_credits,
+            is_evaluation_available=(dept.id in eval_dept_ids)
         )
         departments_list.append(dept_data)
     
@@ -162,7 +173,7 @@ def get_department_courses(
     # Query courses for this department
     query = db.query(Course).options(
         joinedload(Course.department)
-    ).filter(Course.course_department == department_id)
+    ).filter(Course.course_department == department.name)
     
     # Get total count
     total_count = query.count()
@@ -217,7 +228,7 @@ def get_department_curriculum(department_id: int, db: Session = Depends(get_db))
 
 @router.get("/courses/curriculum", response_model=dict)
 def get_full_curriculum(
-    department_id: Optional[int] = Query(300, description="학과 ID (기본값: 300 컴퓨터학부)"),
+    department_id: Optional[int] = Query(None, description="학과 ID"),
     db: Session = Depends(get_db)
 ):
     """전체 교육과정 조회 (학년/학기별 구조화) - DB 기반 처리"""
@@ -239,8 +250,8 @@ def get_full_curriculum(
     for r in recs:
         recommended_courses.add(r.course_name)
         
-    # 해당 학과의 진입요건 과목 ID 조회
-    entry_requirement_course_ids = set()
+    # 해당 학과의 진입요건 과목 Code 조회
+    entry_requirement_codes = set()
     requirements = db.query(DepartmentEntryRequirement).filter(
         DepartmentEntryRequirement.department_id == department_id
     ).all()
@@ -250,13 +261,7 @@ def get_full_curriculum(
             RequirementCourse.requirement_id == req.id
         ).all()
         for rc in req_courses:
-            entry_requirement_course_ids.add(rc.course_id)
-    
-    # 진입요건 과목의 course_code 조회
-    entry_requirement_codes = set()
-    if entry_requirement_course_ids:
-        entry_courses = db.query(Course).filter(Course.course_id.in_(entry_requirement_course_ids)).all()
-        entry_requirement_codes = {c.course_code for c in entry_courses}
+            entry_requirement_codes.add(rc.course_code)
             
     # 관련 Course 정보 일괄 조회를 위해 course_code 수집
     course_codes = [c.course_code for c in curriculums]

@@ -144,23 +144,23 @@ SPECIAL_STUDENTS_CONFIG: List[Dict[str, Any]] = [
 
 ADVISORS_DATA: List[Dict[str, Any]] = [
     # 라이언스 칼리지
-    {"id": 1, "name": "박교수", "email": "park@hanyang.ac.kr", "department_id": 100},
-    {"id": 2, "name": "최교수", "email": "choi@hanyang.ac.kr", "department_id": 100},
-    {"id": 3, "name": "김교수", "email": "kim@hanyang.ac.kr", "department_id": 100},
+    {"id": 1, "name": "박교수", "email": "park@hanyang.ac.kr", "department_id": "100"},
+    {"id": 2, "name": "최교수", "email": "choi@hanyang.ac.kr", "department_id": "100"},
+    {"id": 3, "name": "김교수", "email": "kim@hanyang.ac.kr", "department_id": "100"},
     # 공과대학
-    {"id": 4, "name": "이교수", "email": "lee.ee@hanyang.ac.kr", "department_id": 205},
-    {"id": 5, "name": "정교수", "email": "jung.me@hanyang.ac.kr", "department_id": 206},
-    {"id": 6, "name": "강교수", "email": "kang.chem@hanyang.ac.kr", "department_id": 207},
+    {"id": 4, "name": "이교수", "email": "lee.ee@hanyang.ac.kr", "department_id": "205"},
+    {"id": 5, "name": "정교수", "email": "jung.me@hanyang.ac.kr", "department_id": "206"},
+    {"id": 6, "name": "강교수", "email": "kang.chem@hanyang.ac.kr", "department_id": "207"},
     # 소프트웨어융합대학
-    {"id": 7, "name": "송교수", "email": "song.cs@hanyang.ac.kr", "department_id": 300},
-    {"id": 8, "name": "윤교수", "email": "yoon.math@hanyang.ac.kr", "department_id": 306},
+    {"id": 7, "name": "송교수", "email": "song.cs@hanyang.ac.kr", "department_id": "300"},
+    {"id": 8, "name": "윤교수", "email": "yoon.math@hanyang.ac.kr", "department_id": "306"},
     # 첨단융합대학
-    {"id": 9, "name": "한교수", "email": "han.semi@hanyang.ac.kr", "department_id": 400},
-    {"id": 10, "name": "오교수", "email": "oh.bio@hanyang.ac.kr", "department_id": 403},
+    {"id": 9, "name": "한교수", "email": "han.semi@hanyang.ac.kr", "department_id": "400"},
+    {"id": 10, "name": "오교수", "email": "oh.bio@hanyang.ac.kr", "department_id": "403"},
     # 경상대학
-    {"id": 11, "name": "서교수", "email": "seo.biz@hanyang.ac.kr", "department_id": 500},
+    {"id": 11, "name": "서교수", "email": "seo.biz@hanyang.ac.kr", "department_id": "500"},
     # 글로벌문화통상대학
-    {"id": 12, "name": "안교수", "email": "ahn.global@hanyang.ac.kr", "department_id": 700},
+    {"id": 12, "name": "안교수", "email": "ahn.global@hanyang.ac.kr", "department_id": "700"},
 ]
 
 # ============================================================================

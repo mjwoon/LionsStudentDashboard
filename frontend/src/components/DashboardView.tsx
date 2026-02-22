@@ -29,7 +29,7 @@ function getRandomColor(deptId: string | number): string {
 export default function DashboardView() {
   const [selectedSurvey, setSelectedSurvey] = useState('3');
   const [selectedCollege, setSelectedCollege] = useState('all');
-  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [checkedColleges, setCheckedColleges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [colleges, setColleges] = useState<{ id: string | number; name: string }[]>([]);
   const [departments, setDepartments] = useState<{ id: string | number; name: string; college?: string; color?: string }[]>([]);
@@ -52,6 +52,10 @@ export default function DashboardView() {
         ];
 
         setColleges(collegesWithAll);
+        // 추세 차트: 첫 번째 단과대학을 기본으로 체크
+        if (filteredColleges.length > 0) {
+          setCheckedColleges(new Set([String(filteredColleges[0].id)]));
+        }
         // 각 학과에 랜덤 색상 할당
         const departmentsWithRandomColors = data.departments.map(d => ({
           ...d,
@@ -97,6 +101,11 @@ export default function DashboardView() {
       </div>
     );
   }
+
+  // 추세 차트: 체크된 단과대학에 속한 학과 ID 목록
+  const trendDeptIds = departments
+    .filter(d => checkedColleges.has(String(d.college)))
+    .map(d => String(d.id));
 
   // 현재 데이터 필터링 (상위 15개로 제한)
   const filteredCurrentData = currentData
@@ -186,7 +195,6 @@ export default function DashboardView() {
                 value={selectedCollege}
                 onChange={(e) => {
                   setSelectedCollege(e.target.value);
-                  setSelectedDepts([]);
                 }}
                 className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-44"
               >
@@ -230,19 +238,21 @@ export default function DashboardView() {
             <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-[#101828] mb-2">시점별 변화 추세</h2>
           </div>
 
-          {/* Department Selection */}
+          {/* College Selection */}
           <div className="mb-6 flex gap-2 flex-wrap">
-            {[
-              { id: 'college-eng', name: '공과대학', checked: true },
-              { id: 'college-sci', name: '자연과학대학', checked: false },
-              { id: 'college-bus', name: '경영대학', checked: false },
-              { id: 'college-hum', name: '인문대학', checked: false },
-              { id: 'college-social', name: '사회과학대학', checked: false }
-            ].map(college => (
+            {colleges.filter(c => c.id !== 'all').map((college) => (
               <label key={college.id} className="flex items-center gap-1.5 md:gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  defaultChecked={college.checked}
+                  checked={checkedColleges.has(String(college.id))}
+                  onChange={(e) => {
+                    setCheckedColleges(prev => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(String(college.id));
+                      else next.delete(String(college.id));
+                      return next;
+                    });
+                  }}
                   className="w-3.5 h-3.5 md:w-4 md:h-4 rounded border-gray-300"
                 />
                 <span className="text-sm md:text-base lg:text-lg text-[#101828]">{college.name}</span>
@@ -258,32 +268,20 @@ export default function DashboardView() {
                 <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
                 <Tooltip />
                 <Legend />
-                {selectedDepts.length === 0 ? (
-                  // Show a default line if no departments are selected
-                  <Line
-                    type="monotone"
-                    dataKey={currentData[0]?.id}
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    name={currentData[0]?.dept}
-                  />
-                ) : (
-                  selectedDepts.map((deptId) => {
-                    const dept = departments.find((d) => d.id === deptId);
-                    return (
-                      <Line
-                        key={deptId}
-                        type="monotone"
-                        dataKey={deptId}
-                        stroke={dept?.color}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                        name={dept?.name}
-                      />
-                    );
-                  })
-                )}
+                {trendDeptIds.map((deptId) => {
+                  const dept = departments.find((d) => String(d.id) === deptId);
+                  return (
+                    <Line
+                      key={deptId}
+                      type="monotone"
+                      dataKey={deptId}
+                      stroke={dept?.color || getRandomColor(deptId)}
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      name={dept?.name}
+                    />
+                  );
+                })}
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -5,14 +5,13 @@
 ```sql
 -- 1. 단과대 테이블
 CREATE TABLE colleges (
-    id INT PRIMARY KEY AUTO_INCREMENT,
+    id INT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
 -- 2. 학과 테이블
 CREATE TABLE departments (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    code VARCHAR(20) UNIQUE NOT NULL,
+    id VARCHAR(20) PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     college_id INT,
     min_credits INT DEFAULT 130, -- 졸업 최소 학점
@@ -35,11 +34,10 @@ CREATE TABLE courses (
     course_name VARCHAR(100) NOT NULL,
     credits INT NOT NULL,
     course_type VARCHAR(30), -- 전공기초, 전공필수 등
-    course_department INT, -- 관장학과
+    course_department VARCHAR(20), -- 관장학과
     course_year INT NOT NULL, -- 권장 학년
     semester INT NOT NULL, -- 권장 학기 (추가)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (course_department) REFERENCES departments(id)
+    FOREIGN KEY (course_department) REFERENCES departments(name)
 );
 ```
 
@@ -52,7 +50,7 @@ CREATE TABLE students (
     name VARCHAR(50) NOT NULL,
     email VARCHAR(100) NOT NULL,
     phone VARCHAR(20) NOT NULL,
-    department_id INT NOT NULL, -- 현재 소속 (전계열, 자연계 등)
+    department_id VARCHAR(20) NOT NULL, -- 현재 소속 (전계열, 자연계 등)
     advisor_id INT,
     pride VARCHAR(10), -- LIONSE 등급 등
     class INT, -- 분반
@@ -127,7 +125,7 @@ CREATE TABLE major_surveys (
 ```sql
 -- 8. 학과별 진입 요건 정의 (학년도별/그룹별)
 CREATE TABLE department_entry_requirements (
-    id INT PRIMARY KEY AUTO_INCREMENT,
+    id INT PRIMARY KEY,
     department_id INT NOT NULL,
     
     admission_year INT NOT NULL, -- 적용 학번 (2026 등)
@@ -142,11 +140,11 @@ CREATE TABLE department_entry_requirements (
 
 -- 9. 요건 대상 과목 맵핑 (과목 ID 참조로 변경)
 CREATE TABLE requirement_courses (
-    id INT PRIMARY KEY AUTO_INCREMENT,
+    id INT PRIMARY KEY ,
     requirement_id INT NOT NULL,
-    course_id INT NOT NULL, -- course_code 대신 PK 참조
+    course_code VARCHAR(20) NOT NULL,
     FOREIGN KEY (requirement_id) REFERENCES department_entry_requirements(id) ON DELETE CASCADE,
-    FOREIGN KEY (course_id) REFERENCES courses(course_id)
+    FOREIGN KEY (course_code) REFERENCES courses(course_code)
 );
 
 -- 10. 학생별 진단 결과 캐시 테이블 (성능 최적화 및 AI 총평)
@@ -165,5 +163,28 @@ CREATE TABLE student_requirement_status (
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
     FOREIGN KEY (department_id) REFERENCES departments(id),
     UNIQUE KEY unique_student_dept_eval (student_id, department_id)
+);
+
+-- 11. 학과별 교육과정 지정 데이터 (유지)
+CREATE TABLE curriculums (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    course_year INT NOT NULL, -- 1, 2, 3, 4학년
+    course_code VARCHAR(20) NOT NULL,
+    course_name VARCHAR(100) NOT NULL,
+    credits INT NOT NULL,
+    course_type VARCHAR(30), -- 전공기초, 전공필수 등
+    department_id INT NOT NULL, -- 관장학과
+    semester INT NOT NULL, -- 권장 학기 (추가)
+    FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_curriculum_dept_course (department_id, course_code)
+);
+
+-- 12. 학과별 권장과목 데이터 (유지)
+CREATE TABLE course_recommendations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    department_idINT NOT NULL,
+    course_name VARCHAR(100) NOT NULL,
+    FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_recommendation_dept_course (department_id, course_name)
 );
 ```

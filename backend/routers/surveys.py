@@ -270,7 +270,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     # Get colleges
     colleges_db = db.query(College).filter(College.id != 1).all()
     colleges = [CollegeBase(id=college.id, name=college.name) for college in colleges_db]
-    colleges.insert(0, CollegeBase(id=0, name="전체"))
     
     # Get latest round
     latest_round = db.query(SurveyRound).order_by(SurveyRound.round_number.desc()).first()
@@ -287,7 +286,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     current_stats = db.query(
         Department.code,
         Department.name,
-        College.name.label('college_name'),
+        College.id.label('college_id'),
         func.count(MajorSurvey.id).label('count')
     ).join(
         MajorSurvey, Department.id == MajorSurvey.first_choice_id
@@ -297,7 +296,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         MajorSurvey.survey_round_id == latest_round.id,
         Department.code != 'LIONSE'
     ).group_by(
-        Department.id, Department.code, Department.name, College.name
+        Department.id, Department.code, Department.name, College.id
     ).order_by(
         func.count(MajorSurvey.id).desc()
     ).all()
@@ -309,7 +308,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     
     for stat in current_stats:
         dept_id = dept_code_map.get(stat.code, stat.code.lower())
-        college_id = college_map.get(stat.college_name, 'other')
+        college_id = str(stat.college_id)
         color = dept_colors.get(dept_id, '#6b7280')
         percent = (stat.count / total_students * 100) if total_students > 0 else 0
         
