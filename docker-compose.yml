@@ -105,6 +105,8 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - VITE_API_URL=http://localhost:8080
+      - VITE_LOGIN_PASSWORD=${VITE_LOGIN_PASSWORD}
+      - VITE_ADMIN_PASSWORD=${VITE_ADMIN_PASSWORD}
     stdin_open: true
     depends_on:
       - backend
