@@ -48,14 +48,14 @@ services:
         sync: false   # 백엔드 배포 후 입력: https://lions-backend.onrender.com
 
   # ─────────────────────────────────────────
-  # 3. AI Worker (Celery)  ← ai/Dockerfile.prod 없으면 주석 처리하세요
+  # 3. AI Worker (Celery)
   # ─────────────────────────────────────────
   - type: worker
     name: lions-ai-worker
     runtime: docker
     dockerfilePath: ./ai/Dockerfile.prod
     dockerContext: .
-    plan: free
+    plan: starter
     envVars:
       - key: DATABASE_URL
         fromDatabase:
