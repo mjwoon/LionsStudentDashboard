@@ -2,7 +2,15 @@ import { useState, useEffect } from 'react';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../../api';
 import type { Student } from '../../types';
-import { getDecisionCertaintyLabel, getDecisionCertaintyColor, getCourseProgressColor } from './types';
+import { getDecisionCertaintyLabel, getCourseProgressColor } from './types';
+
+const DECISION_CERTAINTY_SVG: Record<number, string> = {
+  1: '/매우불확실.svg',
+  2: '/불확실.svg',
+  3: '/보통.svg',
+  4: '/확실.svg',
+  5: '/매우확실.svg',
+};
 
 interface StudentListViewProps {
   onStudentSelect: (student: Student, departmentId: string) => void;
@@ -12,11 +20,12 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [searchInput, setSearchInput] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [perPage] = useState<number>(30);
+  const [perPage] = useState<number>(20);
 
   // Filter states
   const [trackFilter, setTrackFilter] = useState<string>('전체');
@@ -32,7 +41,7 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
         const response = await api.students.list(currentPage, perPage, {
           search: searchQuery || undefined
         });
-        setStudents(response.students);
+        setStudents([...response.students].sort((a, b) => a.name.localeCompare(b.name, 'ko')));
         setTotalCount(response.count);
       } catch (error) {
         console.error('Failed to fetch students:', error);
@@ -55,32 +64,54 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
     }
   };
 
-  const downloadCSV = () => {
-    const headers = ['이름', '학번', '계열', 'Pride', '분반', '최신 희망 학과', '전공결정도', '이수현황', '수강과목 적합성'];
-    const rows = students.map(s => [
-      s.name,
-      s.student_id,
-      s.academic_info.track || '-',
-      s.academic_info.pride,
-      s.academic_info.class_number,
-      s.latest_major_choice || '-',
-      getDecisionCertaintyLabel(s.decision_certainty) || '-',
-      s.completion_status || '-',
-      s.course_suitability || '-'
-    ]);
+  const downloadCSV = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    try {
+      // 전체 학생 수집 (백엔드 per_page 최대 100)
+      const allStudents: Student[] = [];
+      let page = 1;
+      while (true) {
+        const response = await api.students.list(page, 100, {
+          search: searchQuery || undefined,
+        });
+        allStudents.push(...response.students);
+        if (allStudents.length >= response.count) break;
+        page++;
+      }
+      allStudents.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+      const headers = ['이름', '학번', '계열', 'Pride', '분반', '최신 희망 학과', '전공결정도', '이수현황', '수강과목 적합성'];
+      const rows = allStudents.map(s => [
+        s.name,
+        s.student_id,
+        s.academic_info.track || '-',
+        s.academic_info.pride,
+        s.academic_info.class_number,
+        s.latest_major_choice || '-',
+        getDecisionCertaintyLabel(s.decision_certainty) || '-',
+        s.completion_status || '-',
+        s.course_suitability || '-',
+      ]);
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `students_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+      // UTF-8 BOM 추가 → 엑셀에서 한글 깨짐 방지
+      const csvContent = '\uFEFF' + [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `students_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const totalPages = Math.ceil(totalCount / perPage);
@@ -102,8 +133,8 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
   });
 
   return (
-    <div className="py-4 md:py-6">
-      <div>
+    <div className="py-4 md:py-6 w-full">
+      <div className="w-full">
         {/* Header Section */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -111,63 +142,75 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
           </div>
           <button
             onClick={downloadCSV}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto"
+            disabled={isDownloading}
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition self-start sm:self-auto disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Download className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-xs md:text-sm font-medium">학과별 조사시점별 데이터 다운로드</span>
+            {isDownloading
+              ? <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Download className="w-4 h-4 md:w-5 md:h-5" />
+            }
+            <span className="text-xs md:text-sm font-medium">
+              {isDownloading ? '다운로드 중...' : '학과별 조사시점별 데이터 다운로드'}
+            </span>
           </button>
         </div>
 
         {/* Student Table Card */}
-        <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-black/10 rounded-2xl overflow-hidden w-full min-w-0">
           {/* Table Header with Filters */}
           <div className="bg-white p-6 border-b border-black/10">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                {/* Search Input */}
-                <div className="relative w-56">
-                  <input
-                    type="text"
-                    placeholder="이름으로 검색 ..."
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#6a7282] placeholder-[#6a7282] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
-                  />
+            <div className="flex items-center justify-between gap-4">
+              {/* Search Input */}
+              <div className="relative w-56">
+                <input
+                  type="text"
+                  placeholder="이름으로 검색 ..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#6a7282] placeholder-[#6a7282] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                />
+              </div>
+
+              {/* Filter Dropdowns */}
+              <div className="flex gap-3 shrink-0">
+                <div className="w-36 shrink-0">
+                  <select
+                    value={trackFilter}
+                    onChange={(e) => setTrackFilter(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                  >
+                    {trackOptions.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Filter Dropdowns */}
-                <select
-                  value={trackFilter}
-                  onChange={(e) => setTrackFilter(e.target.value)}
-                  className="px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
-                >
-                  {trackOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
+                <div className="w-28 shrink-0">
+                  <select
+                    value={prideFilter}
+                    onChange={(e) => setPrideFilter(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                  >
+                    <option value="전체">Pride</option>
+                    {prideOptions.filter(o => o !== '전체').map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
 
-                <select
-                  value={prideFilter}
-                  onChange={(e) => setPrideFilter(e.target.value)}
-                  className="px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
-                >
-                  <option value="전체">Pride</option>
-                  {prideOptions.filter(o => o !== '전체').map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={classFilter}
-                  onChange={(e) => setClassFilter(e.target.value)}
-                  className="px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
-                >
+                <div className="w-28 shrink-0">
+                  <select
+                    value={classFilter}
+                    onChange={(e) => setClassFilter(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                  >
                   <option value="전체">분반</option>
                   {classOptions.filter(o => o !== '전체').map(option => (
                     <option key={option} value={option.toString()}>{option}반</option>
                   ))}
-                </select>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -252,16 +295,18 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
                         </td>
                         <td className="px-5 py-3 text-center bg-[rgba(67,132,195,0.04)]">
                           {student.decision_certainty ? (
-                            <span className={`px-4 py-1 rounded-full text-base font-bold inline-block ${getDecisionCertaintyColor(student.decision_certainty)}`}>
-                              {getDecisionCertaintyLabel(student.decision_certainty)}
-                            </span>
+                            <img
+                              src={DECISION_CERTAINTY_SVG[student.decision_certainty]}
+                              alt={getDecisionCertaintyLabel(student.decision_certainty) ?? ''}
+                              className="h-9 mx-auto"
+                            />
                           ) : (
                             <span className="text-[#6a7282]">-</span>
                           )}
                         </td>
                         <td className="px-5 py-3 text-center bg-[rgba(67,132,195,0.04)]">
                           {student.completion_status ? (
-                            <span className={`px-4 py-1 rounded-full text-base font-bold inline-block bg-green-100 text-green-800`}>
+                            <span className={`px-4 py-1 rounded-full text-base font-bold`}>
                               {student.completion_status}
                             </span>
                           ) : (

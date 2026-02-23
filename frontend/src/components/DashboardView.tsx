@@ -113,7 +113,7 @@ export default function DashboardView() {
       const dept = departments.find((dep) => dep.id === d.id);
       return selectedCollege === 'all' || dept?.college === selectedCollege;
     })
-    .slice(0, 15);
+    .slice(0, 12);
 
   const downloadData = () => {
     const csv = [
@@ -185,7 +185,7 @@ export default function DashboardView() {
               <select
                 value={selectedSurvey}
                 onChange={(e) => setSelectedSurvey(e.target.value)}
-                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition"
+                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-40"
               >
                 <option value="1">1차 조사</option>
                 <option value="2">2차 조사</option>
@@ -196,7 +196,7 @@ export default function DashboardView() {
                 onChange={(e) => {
                   setSelectedCollege(e.target.value);
                 }}
-                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-44"
+                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-64"
               >
                 {colleges.map((college) => (
                   <option key={college.id} value={college.id}>

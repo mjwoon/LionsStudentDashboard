@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const ADMIN_PASSWORD = import.meta.env.VITE_LOGIN_PASSWORD;
 const HYU_SEAL = '/HYU_symbol_basic_png.png';
 
 interface LoginViewProps {
@@ -45,8 +45,8 @@ export default function LoginView({ onLogin }: LoginViewProps) {
 
           {/* Title block */}
           <div className="flex flex-col items-center gap-1 text-center">
-            <h1 className="font-bold text-[32px] text-black leading-normal">학생 관리 시스템</h1>
-            <p className="text-[18px] text-black/50 leading-normal">HANYANG UNIVERSITY ERICA</p>
+            <h1 className="justify-center font-bold text-[32px] text-black leading-normal">학생 관리 시스템</h1>
+            <p className="justify-center text-[18px] text-black/50 leading-normal">HANYANG UNIVERSITY ERICA</p>
           </div>
 
           {/* Form */}

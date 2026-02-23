@@ -50,8 +50,9 @@ export const getDecisionCertaintyColor = (certainty?: number): string => {
 export const getCourseProgressColor = (percentage?: string | number): string => {
   if (!percentage) return 'bg-gray-400';
   const num = typeof percentage === 'string' ? parseInt(percentage) : percentage;
-  if (num >= 80) return 'bg-green-400';
-  if (num >= 60) return 'bg-blue-400';
+  if (num >= 80) return 'bg-blue-400';
+  if (num >= 60) return 'bg-green-400';
   if (num >= 40) return 'bg-yellow-400';
+  if (num >= 20) return 'bg-orange-400';
   return 'bg-red-400';
 };

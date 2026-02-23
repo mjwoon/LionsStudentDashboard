@@ -124,9 +124,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
           <div className="flex flex-col gap-[12px] w-full">
             {/* 메인 평가 배너 */}
               {evaluationData.ai_summary && (
-              <div className="bg-gradient-to-r from-[#f0f9ff] to-[#e0f2fe] rounded-[14px] px-[36px] py-[24px] border border-blue-100">
-                <div className="flex items-start gap-[12px]">
-                  <div className="bg-white p-2 rounded-full shadow-sm shrink-0">
+              <div className="bg-gradient-to-r from-[#f0f9ff] to-[#e0f2fe] rounded-[14px] px-[36px] py-[20px] border border-blue-100">
+                <div className="flex items-start gap-[10px]">
+                  <div className="rounded-full shrink-0">
                     <svg className="w-[24px] h-[24px] shrink-0 text-[#0284c7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                     </svg>
@@ -134,7 +134,6 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
                   <div>
                     <h3 className="text-[18px] font-bold text-[#0369a1] mb-2 flex items-center gap-2">
                       AI 튜터 종합 평가
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-medium">BETA</span>
                     </h3>
                     <div className="text-[16px] leading-relaxed text-[#334155] whitespace-pre-wrap">
                       {evaluationData.ai_summary}
