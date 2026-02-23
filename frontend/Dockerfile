@@ -10,7 +10,6 @@ COPY package*.json ./
 RUN npm install
 
 # 빌드 시점 환경변수 (Render 대시보드 또는 --build-arg로 주입)
-ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
 # 소스 코드 복사 및 빌드
