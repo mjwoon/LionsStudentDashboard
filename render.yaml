@@ -28,13 +28,6 @@ services:
           name: lions-redis
           type: redis
           property: connectionString
-      # Neo4j Aura 무료 티어 사용 시 아래 값을 Render 대시보드에서 직접 설정
-      - key: NEO4J_URI
-        sync: false   # Render 대시보드에서 입력 (예: neo4j+s://xxxx.databases.neo4j.io)
-      - key: NEO4J_USER
-        value: neo4j
-      - key: NEO4J_PASSWORD
-        sync: false   # Render 대시보드에서 입력
       # CORS: 프론트엔드 Render URL로 설정 (lions-frontend 서비스 배포 후 확인)
       - key: CORS_ORIGINS
         sync: false   # 예: https://lions-frontend.onrender.com
