@@ -18,19 +18,6 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const [selectedCollege, setSelectedCollege] = useState<string>('');
   const [curriculum, setCurriculum] = useState<Record<string, Record<string, CurriculumCourse[]>> | null>(null);
   const [curriculumLoading, setCurriculumLoading] = useState(false);
-
-  // Evaluation Thresholds & Messages
-  const SCORE_THRESHOLDS = {
-    GOOD: 80,
-    AVERAGE: 60
-  };
-
-  const EVALUATION_MESSAGES = {
-    GOOD: '양호: 전공진입 필수 과목을 충실히 이수하고 있습니다.',
-    AVERAGE: '보통: 전공진입 필수 과목을 이수하고 있습니다.',
-    WARNING: '주의: 추가 노력이 필요합니다. 필수 과목 이수를 권장합니다.'
-  };
-
   const isEvaluationAvailable = true;
 
   useEffect(() => {

@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  envDir: path.resolve(__dirname, '..'),
   server: {
     host: true,    // 0.0.0.0으로 설정하여 외부 접근 허용
     port: 5173,    // Vite 기본 포트
