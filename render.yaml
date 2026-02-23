@@ -1,8 +1,13 @@
+
 databases:
   - name: lions-db
     plan: free
     databaseName: my_db
     user: user
+
+  - name: lions-redis
+    plan: starter  # Redis는 무료 티어 없음. Upstash 무료 플랜을 대신 사용할 수도 있음.
+    ipAllowList: []
 
 services:
   # ─────────────────────────────────────────
@@ -20,17 +25,15 @@ services:
           name: lions-db
           property: connectionString
       - key: REDIS_URL
-        sync: false   # Upstash Redis URL 입력: rediss://default:xxxx@xxxx.upstash.io:6379
-      - key: NEO4J_URI
-        sync: false   # Neo4j Aura URI 입력: neo4j+s://xxxxxxxx.databases.neo4j.io
-      - key: NEO4J_USER
-        value: neo4j
-      - key: NEO4J_PASSWORD
-        sync: false   # Neo4j Aura 비밀번호 입력
+        fromService:
+          name: lions-redis
+          type: redis
+          property: connectionString
+      # CORS: 프론트엔드 Render URL로 설정 (lions-frontend 서비스 배포 후 확인)
       - key: CORS_ORIGINS
-        sync: false   # 프론트 배포 후 입력: https://lions-frontend.onrender.com
+        sync: false   # 예: https://lions-frontend.onrender.com
       - key: OPENAI_API_KEY
-        sync: false
+        sync: false   # Render 대시보드에서 입력
       - key: OPENAI_MODEL
         value: gpt-4o-mini
 
@@ -43,18 +46,19 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     plan: free
-    dockerBuildArgs:
+    buildArgs:
+      # 백엔드 Render URL 입력 (lions-backend 서비스 배포 후 확인)
       - key: VITE_API_URL
-        sync: false   # 백엔드 배포 후 입력: https://lions-backend.onrender.com
+        sync: false   # 예: https://lions-backend.onrender.com
 
   # ─────────────────────────────────────────
-  # 3. AI Worker (Celery)  ← ai/Dockerfile.prod 없으면 주석 처리하세요
+  # 3. AI Worker (Celery)
   # ─────────────────────────────────────────
   - type: worker
     name: lions-ai-worker
     runtime: docker
     dockerfilePath: ./ai/Dockerfile.prod
-    dockerContext: .
+    dockerContext: .           # 루트 컨텍스트 (backend/, graphDB/ 포함)
     plan: free
     envVars:
       - key: DATABASE_URL
@@ -62,7 +66,10 @@ services:
           name: lions-db
           property: connectionString
       - key: REDIS_URL
-        sync: false
+        fromService:
+          name: lions-redis
+          type: redis
+          property: connectionString
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
@@ -71,3 +78,4 @@ services:
         value: /backend
       - key: PYTHONPATH
         value: /app:/backend
+
