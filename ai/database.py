@@ -15,7 +15,7 @@ elif DATABASE_URL.startswith("postgresql://"):
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    echo=False  # production에서는 False
+    echo=False
 )
 
 # Create SessionLocal class
