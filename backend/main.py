@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
@@ -12,9 +13,13 @@ app = FastAPI(
 )
 
 # CORS middleware
+# CORS_ORIGINS: 쉼표로 구분된 허용 오리진 목록 (예: https://lions-frontend.onrender.com,http://localhost:5173)
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
+cors_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 환경에서 모든 오리진 허용
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

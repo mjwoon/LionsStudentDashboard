@@ -1,18 +1,33 @@
-# 1. Node.js 가벼운 버전을 베이스 이미지로 사용
-FROM node:20-slim
+# ======================
+# Stage 1: Build
+# ======================
+FROM node:20-slim AS builder
 
-# 2. 컨테이너 내부 작업 디렉토리 설정
 WORKDIR /app
 
-# 3. 의존성 설치 (package.json만 먼저 복사하여 캐싱 활용)
+# 의존성 설치 (캐싱 활용)
 COPY package*.json ./
 RUN npm install
 
-# 4. 나머지 소스 코드 복사
+# 빌드 시점 환경변수 (Render 대시보드 또는 --build-arg로 주입)
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
+# 소스 코드 복사 및 빌드
 COPY . .
+RUN npm run build
 
-# 5. Vite 기본 포트 개방
-EXPOSE 5173
+# ======================
+# Stage 2: Serve (nginx)
+# ======================
+FROM nginx:alpine
 
-# 6. 개발 서버 실행 (vite.config.ts의 host 설정이 적용됨)
-CMD ["npm", "run", "dev"]
+# 빌드 결과물 복사
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# SPA 라우팅 설정
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

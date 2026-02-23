@@ -24,6 +24,7 @@ services:
   backend:
     build: ./backend
     container_name: fastapi_backend
+    command: sh -c "uv run fastapi dev main.py --host 0.0.0.0 --port 8080"  # dev 모드 (hot-reload)
     volumes:
       - ./backend:/app
       - /app/.venv
@@ -95,6 +96,7 @@ services:
   frontend:
     build: ./frontend
     container_name: react_frontend
+    command: npm run dev  # dev 모드 (HMR)
     volumes:
       - ./frontend:/app
       - /app/node_modules

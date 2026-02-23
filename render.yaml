@@ -1,0 +1,86 @@
+databases:
+  - name: lions-db
+    plan: free
+    databaseName: my_db
+    user: user
+
+  - name: lions-redis
+    plan: starter  # Redis는 무료 티어 없음. Upstash 무료 플랜을 대신 사용할 수도 있음.
+    ipAllowList: []
+
+services:
+  # ─────────────────────────────────────────
+  # 1. Backend (FastAPI)
+  # ─────────────────────────────────────────
+  - type: web
+    name: lions-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lions-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: lions-redis
+          type: redis
+          property: connectionString
+      # Neo4j Aura 무료 티어 사용 시 아래 값을 Render 대시보드에서 직접 설정
+      - key: NEO4J_URI
+        sync: false   # Render 대시보드에서 입력 (예: neo4j+s://xxxx.databases.neo4j.io)
+      - key: NEO4J_USER
+        value: neo4j
+      - key: NEO4J_PASSWORD
+        sync: false   # Render 대시보드에서 입력
+      # CORS: 프론트엔드 Render URL로 설정 (lions-frontend 서비스 배포 후 확인)
+      - key: CORS_ORIGINS
+        sync: false   # 예: https://lions-frontend.onrender.com
+      - key: OPENAI_API_KEY
+        sync: false   # Render 대시보드에서 입력
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+
+  # ─────────────────────────────────────────
+  # 2. Frontend (React → nginx)
+  # ─────────────────────────────────────────
+  - type: web
+    name: lions-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    buildArgs:
+      # 백엔드 Render URL 입력 (lions-backend 서비스 배포 후 확인)
+      - key: VITE_API_URL
+        sync: false   # 예: https://lions-backend.onrender.com
+
+  # ─────────────────────────────────────────
+  # 3. AI Worker (Celery)
+  # ─────────────────────────────────────────
+  - type: worker
+    name: lions-ai-worker
+    runtime: docker
+    dockerfilePath: ./ai/Dockerfile.prod
+    dockerContext: .           # 루트 컨텍스트 (backend/, graphDB/ 포함)
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lions-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: lions-redis
+          type: redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: BACKEND_PATH
+        value: /backend
+      - key: PYTHONPATH
+        value: /app:/backend

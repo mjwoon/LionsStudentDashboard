@@ -21,6 +21,6 @@ RUN uv sync --frozen --no-cache
 # 6. 소스 코드 복사
 COPY . .
 
-# 7. FastAPI 실행
+# 7. FastAPI 실행 (production)
 # DB 테이블은 main.py의 startup_event에서 Base.metadata.create_all로 자동 생성됨
-CMD ["sh", "-c", "uv run fastapi dev main.py --host 0.0.0.0 --port 8080"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
