@@ -1,14 +1,41 @@
+import { useState, useCallback } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
 import StudentDetailView from './components/student/StudentDetailView';
 import AdminView from './components/AdminView';
+import LoginView from './components/LoginView';
+import SessionWarningModal from './components/SessionWarningModal';
+import { useInactivityTimeout } from './hooks/useInactivityTimeout';
 
 const LOGO_URL = '/HYU_logo.svg';
 const SYMBOL_URL = '/HYU_logotype_ERICA_white_kor.png';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => localStorage.getItem('isAuthenticated') === 'true'
+  );
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('sessionExpiresAt');
+    setSessionExpiresAt(null);
+    setIsAuthenticated(false);
+  }, []);
+
+  const { extendSession } = useInactivityTimeout({
+    enabled: isAuthenticated,
+    onTimeout: handleLogout,
+    onShowWarning: (expiresAt) => setSessionExpiresAt(expiresAt),
+    onHideWarning: () => setSessionExpiresAt(null),
+  });
+
   const navigate = useNavigate();
   const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   const getActiveView = () => {
     const path = location.pathname;
@@ -21,6 +48,13 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen min-w-[1200px] bg-[#f5f7fa]">
+      {sessionExpiresAt !== null && (
+        <SessionWarningModal
+          expiresAt={sessionExpiresAt}
+          onExtend={extendSession}
+          onLogout={handleLogout}
+        />
+      )}
       {/* Header Navigation */}
       <header className="bg-linear-to-r from-[#0e4a84] to-[#0a3a6b] border-b border-[#e5e7eb] h-16 md:h-20 lg:h-22">
         <div className="flex items-center justify-between px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-30 h-full max-w-[1920px] mx-auto">
