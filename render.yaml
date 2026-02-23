@@ -43,7 +43,7 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     plan: free
-    buildArgs:
+    dockerBuildArgs:
       - key: VITE_API_URL
         sync: false   # 백엔드 배포 후 입력: https://lions-backend.onrender.com
 
