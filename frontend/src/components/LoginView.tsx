@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const ADMIN_PASSWORD = import.meta.env.VITE_LOGIN_PASSWORD;
+const ADMIN_PASSWORD = 'lions1234erica';
 const HYU_SEAL = '/HYU_symbol_basic_png.png';
 
 interface LoginViewProps {

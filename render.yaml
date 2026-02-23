@@ -46,6 +46,10 @@ services:
     envVars:
       - key: VITE_API_URL
         sync: false   # 백엔드 배포 후 입력: https://lions-backend.onrender.com
+      - key: VITE_LOGIN_PASSWORD
+        sync: false
+      - key: VITE_ADMIN_PASSWORD
+        sync: false
 
   # ─────────────────────────────────────────
   # 3. AI Worker (Celery)

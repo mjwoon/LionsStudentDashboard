@@ -6,7 +6,7 @@ import SystemStatsTab from './SystemStatsTab';
 
 type TabType = 'upload' | 'diagnosis' | 'stats';
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'lions';
+const ADMIN_PASSWORD = 'admin@2048';
 
 export default function AdminView() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
