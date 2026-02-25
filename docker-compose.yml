@@ -94,7 +94,9 @@ services:
 
   # 6. Frontend: React Typescript
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev    
     container_name: react_frontend
     command: npm run dev  # dev 모드 (HMR)
     volumes:
