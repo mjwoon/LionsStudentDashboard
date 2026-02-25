@@ -1,6 +1,6 @@
 // API 기본 설정
 // 개발 환경에서는 백엔드 포트(8080)를 사용
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://lions-backend-h1lg.onrender.com'
 
 // Import only types that are used in this file
 import type {
