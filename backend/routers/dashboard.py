@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
-from models.models import Student, Department, College, MajorSurvey, StudentCourse, Course
+from models.models import Student, Department, College, MajorSurvey, StudentCourse, Course, SurveyRound
 from database import get_db
 from sqlalchemy import func, desc, case
 
@@ -194,7 +194,66 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
                 })
     
     dept_gpa_stats.sort(key=lambda x: x["avg_gpa"], reverse=True)
-    
+
+    # 7. 설문 라운드 정보 및 회차별 현재 데이터
+    # round_ids는 섹션 4에서 이미 계산됨 (MajorSurvey.survey_round_id 기준)
+    # SurveyRound 테이블과 매핑 (있는 경우 title 등 메타 정보 활용)
+    all_survey_rounds = db.query(SurveyRound).order_by(SurveyRound.round_number).all()
+    round_id_to_obj = {r.id: r for r in all_survey_rounds}
+
+    # survey_rounds_data: 실제 MajorSurvey 데이터에 존재하는 회차 기준으로 생성
+    survey_rounds_data = []
+    for rid in round_ids:
+        round_obj = round_id_to_obj.get(rid)
+        if round_obj:
+            survey_rounds_data.append({"round_number": round_obj.round_number, "title": round_obj.title})
+        else:
+            survey_rounds_data.append({"round_number": rid, "title": f"{rid}차 조사"})
+
+    # 회차별 학과 희망 집계 (섹션 4와 동일한 round_ids 기준)
+    current_data_by_round: dict[int, list] = {}
+    for rid in round_ids:
+        round_surveys = db.query(MajorSurvey).filter(
+            MajorSurvey.survey_round_id == rid
+        ).all()
+
+        round_dept_count: dict[int, int] = {}
+        for survey in round_surveys:
+            if survey.first_choice_id:
+                round_dept_count[survey.first_choice_id] = round_dept_count.get(survey.first_choice_id, 0) + 1
+
+        round_total = sum(round_dept_count.values())
+        round_current_data = []
+        for dept in departments:
+            count = round_dept_count.get(dept.id, 0)
+            percent = round((count / round_total * 100), 1) if round_total > 0 else 0
+            round_current_data.append({"id": dept.id, "name": dept.name, "students": count, "percent": percent})
+        round_current_data.sort(key=lambda x: x["students"], reverse=True)
+
+        # 키: SurveyRound.round_number (있으면), 없으면 survey_round_id 그대로 사용
+        round_obj = round_id_to_obj.get(rid)
+        key = round_obj.round_number if round_obj else rid
+        current_data_by_round[key] = round_current_data
+
+    latest_round = all_survey_rounds[-1] if all_survey_rounds else None
+    survey_info = None
+    if latest_round:
+        survey_info = {
+            "round_number": latest_round.round_number,
+            "title": latest_round.title,
+            "status": latest_round.status,
+            "end_date": latest_round.end_date.strftime("%Y.%m.%d") if latest_round.end_date else None,
+        }
+    elif round_ids:
+        # SurveyRound 테이블이 비어 있을 때 fallback
+        latest_rid = round_ids[-1]
+        survey_info = {
+            "round_number": latest_rid,
+            "title": f"{latest_rid}차 조사",
+            "status": "CLOSED",
+            "end_date": None,
+        }
+
     return {
         "colleges": colleges_data,
         "departments": departments_data,
@@ -202,5 +261,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         "trend_data": trend_data,
         "student_stats": student_stats,
         "grade_distribution": grade_distribution,
-        "department_gpa_stats": dept_gpa_stats[:10]
+        "department_gpa_stats": dept_gpa_stats[:10],
+        "survey_info": survey_info,
+        "survey_rounds": survey_rounds_data,
+        "current_data_by_round": current_data_by_round,
     }

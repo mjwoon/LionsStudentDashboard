@@ -27,7 +27,7 @@ function getRandomColor(deptId: string | number): string {
 }
 
 export default function DashboardView() {
-  const [selectedSurvey, setSelectedSurvey] = useState('3');
+  const [selectedSurvey, setSelectedSurvey] = useState('all');
   const [selectedCollege, setSelectedCollege] = useState('all');
   const [checkedColleges, setCheckedColleges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -37,6 +37,9 @@ export default function DashboardView() {
   const [trendData, setTrendData] = useState<Record<string, string | number>[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [topDept, setTopDept] = useState<{ dept: string; students: number; percent: number } | null>(null);
+  const [surveyInfo, setSurveyInfo] = useState<{ round_number: number; title: string; status: string; end_date: string | null } | null>(null);
+  const [availableRounds, setAvailableRounds] = useState<{ round_number: number; title: string }[]>([]);
+  const [currentDataByRound, setCurrentDataByRound] = useState<Record<string, { dept: string; students: number; percent: number; id: string | number }[]>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,11 +81,43 @@ export default function DashboardView() {
         setTopDept(formattedCurrent[0] || null);
 
         // Convert trend data to format expected by chart
+        // 모든 학과를 0으로 초기화 후 실제 데이터로 덮어써서 0인 학과도 표시
+        const allDeptIds = data.departments.map(d => String(d.id));
+        const zeroBase = Object.fromEntries(allDeptIds.map(id => [id, 0]));
         const formattedTrend = data.trend_data.map(t => ({
           period: t.period,
+          ...zeroBase,
           ...t.data
         }));
         setTrendData(formattedTrend);
+
+        if (data.survey_info) {
+          setSurveyInfo(data.survey_info);
+        }
+
+        if (data.survey_rounds && data.survey_rounds.length > 0) {
+          setAvailableRounds(data.survey_rounds);
+        } else if (data.trend_data && data.trend_data.length > 0) {
+          // 백엔드가 survey_rounds를 반환하지 않는 경우 trend_data에서 파생
+          const derivedRounds = data.trend_data.map((t, i) => ({
+            round_number: i + 1,
+            title: `${t.period} 조사`,
+          }));
+          setAvailableRounds(derivedRounds);
+        }
+
+        if (data.current_data_by_round) {
+          const formatted: Record<string, { dept: string; students: number; percent: number; id: string | number }[]> = {};
+          for (const [roundNum, items] of Object.entries(data.current_data_by_round)) {
+            formatted[roundNum] = (items as { id: string | number; name: string; students: number; percent: number }[]).map(d => ({
+              dept: d.name,
+              students: d.students,
+              percent: d.percent,
+              id: d.id,
+            }));
+          }
+          setCurrentDataByRound(formatted);
+        }
 
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -107,8 +142,11 @@ export default function DashboardView() {
     .filter(d => checkedColleges.has(String(d.college)))
     .map(d => String(d.id));
 
-  // 현재 데이터 필터링 (상위 15개로 제한)
-  const filteredCurrentData = currentData
+  // 선택된 회차 데이터 ('all' 이거나 해당 회차 데이터 없으면 currentData fallback)
+  const activeRoundData = (selectedSurvey !== 'all' && currentDataByRound[selectedSurvey]) || currentData;
+
+  // 현재 데이터 필터링 (상위 12개로 제한)
+  const filteredCurrentData = activeRoundData
     .filter((d) => {
       const dept = departments.find((dep) => dep.id === d.id);
       return selectedCollege === 'all' || dept?.college === selectedCollege;
@@ -155,7 +193,7 @@ export default function DashboardView() {
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
             <div className="flex items-center gap-2 mb-1 md:mb-2">
               <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">전체 응답 학생</p>
-              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">3차 조사 기준</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{surveyInfo ? `${surveyInfo.round_number}차 조사 기준` : ''}</p>
             </div>
             <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{totalStudents}명</p>
           </div>
@@ -171,9 +209,9 @@ export default function DashboardView() {
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2 mb-1 md:mb-2">
               <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">조사 진행률</p>
-              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">2025.11.06 기준</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{surveyInfo?.end_date ? `${surveyInfo.end_date} 기준` : ''}</p>
             </div>
-            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">3차 조사 완료</p>
+            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{surveyInfo ? `${surveyInfo.round_number}차 조사 완료` : '-'}</p>
           </div>
         </div>
 
@@ -185,11 +223,14 @@ export default function DashboardView() {
               <select
                 value={selectedSurvey}
                 onChange={(e) => setSelectedSurvey(e.target.value)}
-                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-32 md:w-40 lg:w-40"
+                className="px-3 md:px-4 py-2 md:py-3 bg-white border border-black/10 rounded-lg text-[#101828] text-sm md:text-base lg:text-lg font-medium cursor-pointer hover:border-black/20 transition w-58 md:w-48 lg:w-60"
               >
-                <option value="1">1차 조사</option>
-                <option value="2">2차 조사</option>
-                <option value="3">3차 조사</option>
+                <option value="all">전체</option>
+                {availableRounds.map((r) => (
+                  <option key={r.round_number} value={String(r.round_number)}>
+                    {r.title}
+                  </option>
+                ))}
               </select>
               <select
                 value={selectedCollege}
@@ -265,7 +306,7 @@ export default function DashboardView() {
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="period" tick={{ fontSize: 12, fill: '#6a7282' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#6a7282' }} allowDecimals={false} />
                 <Tooltip />
                 <Legend />
                 {trendDeptIds.map((deptId) => {

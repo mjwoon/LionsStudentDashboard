@@ -302,26 +302,47 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     ).all()
     
     total_students = sum(stat.count for stat in current_stats)
-    
-    departments_list = []
+
+    # current_data: 최신 회차 응답 있는 학과만 (막대 차트용)
     current_data_list = []
-    
     for stat in current_stats:
         dept_id = dept_code_map.get(stat.code, stat.code.lower())
         college_id = str(stat.college_id)
         color = dept_colors.get(dept_id, '#6b7280')
         percent = (stat.count / total_students * 100) if total_students > 0 else 0
-        
-        dept_data = DepartmentWithStats(
+        current_data_list.append(DepartmentWithStats(
             id=dept_id,
             name=stat.name,
             college=college_id,
             color=color,
             students=stat.count,
             percent=round(percent, 1)
-        )
-        departments_list.append(dept_data)
-        current_data_list.append(dept_data)
+        ))
+
+    # departments: LIONSE 제외 전체 학과 (추세 차트에서 0값 포함 표시용)
+    all_depts = db.query(
+        Department.code,
+        Department.name,
+        College.id.label('college_id'),
+    ).join(
+        College, Department.college_id == College.id
+    ).filter(
+        Department.code != 'LIONSE'
+    ).all()
+
+    departments_list = []
+    for dept in all_depts:
+        dept_id = dept_code_map.get(dept.code, dept.code.lower())
+        college_id = str(dept.college_id)
+        color = dept_colors.get(dept_id, '#6b7280')
+        departments_list.append(DepartmentWithStats(
+            id=dept_id,
+            name=dept.name,
+            college=college_id,
+            color=color,
+            students=0,
+            percent=0.0
+        ))
     
     # Get trend data (all rounds)
     rounds = db.query(SurveyRound).order_by(SurveyRound.round_number).all()
@@ -350,9 +371,74 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             data=data_dict
         ))
     
+    # Get per-round data
+    all_survey_round_ids = db.query(MajorSurvey.survey_round_id).distinct().order_by(MajorSurvey.survey_round_id).all()
+    round_ids = [r[0] for r in all_survey_round_ids]
+    round_id_to_obj = {r.id: r for r in rounds}
+
+    survey_rounds_data = []
+    for rid in round_ids:
+        round_obj = round_id_to_obj.get(rid)
+        if round_obj:
+            survey_rounds_data.append({"round_number": round_obj.round_number, "title": round_obj.title})
+        else:
+            survey_rounds_data.append({"round_number": rid, "title": f"{rid}차 조사"})
+
+    current_data_by_round: dict = {}
+    for rid in round_ids:
+        round_stats_per_round = db.query(
+            Department.code,
+            Department.name,
+            College.id.label('college_id'),
+            func.count(MajorSurvey.id).label('count')
+        ).join(
+            MajorSurvey, Department.id == MajorSurvey.first_choice_id
+        ).join(
+            College, Department.college_id == College.id
+        ).filter(
+            MajorSurvey.survey_round_id == rid,
+            Department.code != 'LIONSE'
+        ).group_by(
+            Department.id, Department.code, Department.name, College.id
+        ).order_by(
+            func.count(MajorSurvey.id).desc()
+        ).all()
+
+        round_total = sum(s.count for s in round_stats_per_round)
+        round_data = []
+        for stat in round_stats_per_round:
+            dept_id = dept_code_map.get(stat.code, stat.code.lower())
+            college_id = str(stat.college_id)
+            color = dept_colors.get(dept_id, '#6b7280')
+            percent = round((stat.count / round_total * 100), 1) if round_total > 0 else 0
+            round_data.append(DepartmentWithStats(
+                id=dept_id,
+                name=stat.name,
+                college=college_id,
+                color=color,
+                students=stat.count,
+                percent=percent
+            ))
+
+        round_obj = round_id_to_obj.get(rid)
+        key = round_obj.round_number if round_obj else rid
+        current_data_by_round[key] = round_data
+
+    survey_info = None
+    if latest_round:
+        survey_info = {
+            "round_number": latest_round.round_number,
+            "title": latest_round.title,
+            "status": latest_round.status,
+            "end_date": latest_round.end_date.strftime("%Y.%m.%d") if latest_round.end_date else None,
+        }
+
     return DashboardStatsResponse(
         colleges=colleges,
         departments=departments_list,
         current_data=current_data_list,
-        trend_data=trend_data_list
+        trend_data=trend_data_list,
+        survey_info=survey_info,
+        survey_rounds=survey_rounds_data,
+        current_data_by_round=current_data_by_round,
     )

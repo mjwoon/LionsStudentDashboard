@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, AliasChoices
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -288,11 +288,26 @@ class TrendDataPoint(BaseModel):
         from_attributes = True
 
 
+class SurveyRoundInfo(BaseModel):
+    round_number: int
+    title: str
+    status: str
+    end_date: Optional[str] = None
+
+
+class SurveyRoundSummary(BaseModel):
+    round_number: int
+    title: str
+
+
 class DashboardStatsResponse(BaseModel):
     colleges: List[CollegeBase]
     departments: List[DepartmentWithStats]
     current_data: List[DepartmentWithStats]
     trend_data: List[TrendDataPoint]
+    survey_info: Optional[SurveyRoundInfo] = None
+    survey_rounds: Optional[List[SurveyRoundSummary]] = None
+    current_data_by_round: Optional[Dict[int, List[DepartmentWithStats]]] = None
 
     class Config:
         from_attributes = True

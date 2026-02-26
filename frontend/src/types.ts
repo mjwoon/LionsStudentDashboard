@@ -237,6 +237,17 @@ export interface DashboardStatsResponse {
   departments: DepartmentWithStats[]
   current_data: DepartmentWithStats[]
   trend_data: TrendDataPoint[]
+  survey_info?: {
+    round_number: number
+    title: string
+    status: string
+    end_date: string | null
+  }
+  survey_rounds?: {
+    round_number: number
+    title: string
+  }[]
+  current_data_by_round?: Record<number, DepartmentWithStats[]>
 }
 
 export interface College {
