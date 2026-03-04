@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(uv run python:*)",
-      "mcp__figma-remote-mcp__get_design_context"
-    ]
-  }
-}
