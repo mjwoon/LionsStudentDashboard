@@ -115,55 +115,52 @@ export default function AdminView() {
 
   // 인증된 경우 관리자 화면 표시
 
-  const tabs = [
-    { id: 'upload' as TabType, label: '데이터 업로드', icon: Upload },
-    { id: 'diagnosis' as TabType, label: '진단 관리', icon: Activity },
-    { id: 'stats' as TabType, label: '시스템 현황', icon: BarChart },
-  ];
-
   return (
-    <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div>
+      <div className="py-4 md:py-6">
         {/* 헤더 */}
-        <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start justify-between mb-4 ">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2">관리자</h1>
-            <p className="text-sm md:text-base text-gray-600">
-              데이터 업로드, 진단 관리 및 시스템 현황을 확인할 수 있습니다
-            </p>
+            <h1 className="text-2xl md:text-3xl lg:text-3xl font-bold text-[#101828]">관리자</h1>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-3 md:px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors self-start"
+            className="flex items-center px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50 cursor-pointer"
           >
             <LogOut className="h-4 w-4" />
-            <span>로그아웃</span>
+            <span className="text-[12pt] font-medium text-[#101828]">로그아웃</span>
           </button>
         </div>
 
         {/* 탭 네비게이션 */}
-        <div className="bg-white rounded-lg shadow mb-4 md:mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px overflow-x-auto">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 lg:px-6 py-3 md:py-4 border-b-2 font-medium text-xs md:text-sm transition-colors whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 md:h-5 md:w-5" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+        <div className="flex items-start gap-0 mb-6 border-b border-[#e5e7eb]">
+         <button
+              onClick={() => setActiveTab('upload')}
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'upload'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
+                : 'text-[#6a7282] font-medium'
+                }`}
+            >
+              데이터 업로드
+            </button>
+            <button
+              onClick={() => setActiveTab('diagnosis')}
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'diagnosis'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
+                : 'text-[#6a7282] font-medium'
+                }`}
+            >
+              진단 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`px-6 py-6 text-xl font-semibold transition-all cursor-pointer ${activeTab === 'stats'
+                ? 'text-[#0e4a84] border-b-2 border-[#0e4a84] font-bold'
+                : 'text-[#6a7282] font-medium'
+                }`}
+            >
+              시스템 현황
+            </button>
         </div>
 
         {/* 탭 컨텐츠 */}

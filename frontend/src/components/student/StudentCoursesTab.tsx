@@ -81,33 +81,33 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 학적 통계 카드들 */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">총 취득학점</p>
-          <p className="text-[22pt] font-bold text-[#101828]">{totalCredits}학점</p>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white border border-black/10 rounded-2xl p-6">
+          <p className="text-[9pt] text-[#6a7282] font-medium mb-2">총 취득학점</p>
+          <p className="text-[15pt] font-bold text-[#101828]">{totalCredits}학점</p>
         </div>
-        <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">평균 학점</p>
-          <p className="text-[22pt] font-bold text-[#101828] mb-2">{gpa.toFixed(2)} / 4.5</p>
+        <div className="bg-white border border-black/10 rounded-2xl p-6">
+          <p className="text-[9pt] text-[#6a7282] font-medium mb-2">평균 학점</p>
+          <p className="text-[15pt] font-bold text-[#101828] mb-1">{gpa.toFixed(2)} / 4.5</p>
         </div>
-        <div className="bg-white border border-black/10 rounded-2xl p-9">
-          <p className="text-[12pt] text-[#6a7282] font-medium mb-3">희망 전공</p>
-          <p className="text-[22pt] font-bold text-[#101828]">{student.latest_major_choice || '-'}</p>
+        <div className="bg-white border border-black/10 rounded-2xl p-6">
+          <p className="text-[9pt] text-[#6a7282] font-medium mb-2">희망 전공</p>
+          <p className="text-[15pt] font-bold text-[#101828]">{student.latest_major_choice || '-'}</p>
         </div>
       </div>
-
+``
       {/* 수강 과목 목록 테이블 */}
       <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
-        <div className="p-9 border-b border-black/10 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-black/10 flex items-center justify-between">
           <div>
-            <h4 className="text-[22pt] font-bold text-[#101828] mb-2">수강 과목 목록</h4>
-            <p className="text-xl text-[#6a7282]">전체 과목 {filteredCourses.length}개</p>
+            <h4 className="text-[15pt] font-bold text-[#101828] mb-1">수강 과목 목록</h4>
+            <p className="text-sm text-[#6a7282]">전체 과목 {filteredCourses.length}개</p>
           </div>
           <div className="relative">
             <select
-              className="bg-white border border-black/10 rounded-lg px-4 py-3 text-lg text-[#101828] font-medium appearance-none pr-10 focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+              className="bg-white border border-black/10 rounded-lg px-3 py-2 text-sm text-[#101828] font-medium appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
             >
@@ -115,7 +115,7 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
                 <option key={type} value={type}>{type === '전체' ? '이수구분: 전체' : type}</option>
               ))}
             </select>
-            <svg className="w-4 h-4 text-[#101828] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-[#101828] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
@@ -125,19 +125,19 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
           <table className="w-full">
             <thead>
               <tr className="bg-[#f9fafb] border-b border-[#e5e7eb] border-t">
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">년도</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">학기</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-28">과목코드</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-44">과목명</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-20">학점</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-20 bg-[#F2F5F9]">성적</th>
-                <th className="px-9 py-4 text-center font-bold text-lg text-[#6a7282] whitespace-nowrap w-40 bg-[#F2F5F9]">이수구분</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-20">년도</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-20">학기</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-20">과목코드</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-32">과목명</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-14">학점</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-14 bg-[#F2F5F9]">성적</th>
+                <th className="px-6 py-2.5 text-center font-bold text-[13px] text-[#6a7282] whitespace-nowrap w-28 bg-[#F2F5F9]">이수구분</th>
               </tr>
             </thead>
             <tbody>
               {filteredCourses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-9 py-12 text-center text-lg text-[#6a7282]">
+                  <td colSpan={7} className="px-6 py-8 text-center text-[13px] text-[#6a7282]">
                     수강 이력이 없습니다.
                   </td>
                 </tr>
@@ -146,28 +146,28 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
                   const catStyle = getCategoryStyle(course.completion_type);
                   return (
                     <tr key={`${course.course_id}-${course.year}-${course.semester}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}>
-                      <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.year}</td>
-                      <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.semester}학기</td>
-                      <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.course_code}</td>
-                      <td className="px-9 py-5 text-center text-lg font-medium text-[#101828]">{course.course_name}</td>
-                      <td className="px-9 py-5 text-center text-lg text-[#6a7282]">{course.credits}</td>
-                      <td className="px-9 py-5 text-center text-lg bg-[#F8FAFD]">
+                      <td className="px-6 py-3 text-center text-[13px] text-[#6a7282]">{course.year}</td>
+                      <td className="px-6 py-3 text-center text-[13px] text-[#6a7282]">{course.semester}학기</td>
+                      <td className="px-6 py-3 text-center text-[13px] text-[#6a7282]">{course.course_code}</td>
+                      <td className="px-6 py-3 text-center text-[13px] font-medium text-[#101828]">{course.course_name}</td>
+                      <td className="px-6 py-3 text-center text-[13px] text-[#6a7282]">{course.credits}</td>
+                      <td className="px-6 py-3 text-center text-[13px] bg-[#F8FAFD]">
                         {course.grade ? (
-                          <div className="rounded-lg px-3 py-2 inline-flex items-center justify-center w-16"
+                          <div className="rounded-lg px-2 py-1 inline-flex items-center justify-center w-12"
                             style={{
                               borderColor: getGradeColor(course.grade),
                               color: getGradeColor(course.grade),
                             }}>
-                            <span className="text-lg font-semibold">{course.grade}</span>
+                            <span className="text-[13px] font-semibold">{course.grade}</span>
                           </div>
                         ) : (
-                          <span className="text-lg font-semibold" style={{ color: '#898F99' }}>수강중</span>
+                          <span className="text-[13px] font-semibold" style={{ color: '#898F99' }}>수강중</span>
                         )}
                       </td>
-                      <td className="px-9 py-5 text-center text-lg bg-[#F8FAFD]">
-                        <div className="px-6 py-2 rounded-full inline-flex items-center justify-center"
+                      <td className="px-6 py-3 text-center text-[13px] bg-[#F8FAFD]">
+                        <div className="px-4 py-1 rounded-full inline-flex items-center justify-center"
                           style={{ backgroundColor: catStyle.bg }}>
-                          <span className="text-lg font-bold" style={{ color: catStyle.color }}>
+                          <span className="text-[13px] font-bold" style={{ color: catStyle.color }}>
                             {course.completion_type || '-'}
                           </span>
                         </div>

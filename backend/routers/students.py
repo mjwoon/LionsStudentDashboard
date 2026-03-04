@@ -47,9 +47,10 @@ def get_students(
         query = query.filter(Student.status == status)
     if search:
         # Search in student_id, name, email
+        from sqlalchemy import cast, String
         search_pattern = f"%{search}%"
         query = query.filter(
-            (Student.student_id.like(search_pattern)) |
+            (cast(Student.student_id, String).like(search_pattern)) |
             (Student.name.like(search_pattern)) |
             (Student.email.like(search_pattern))
         )

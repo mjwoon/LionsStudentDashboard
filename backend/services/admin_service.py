@@ -291,7 +291,7 @@ class AdminService:
                     if course_data.course_type:
                         existing_course.course_type = course_data.course_type
                     if department:
-                        existing_course.course_department = department.id
+                        existing_course.course_department = department.name
                     if course_data.course_year is not None:
                         existing_course.course_year = course_data.course_year
                     if course_data.credits is not None:
@@ -310,7 +310,7 @@ class AdminService:
                         course_name=course_data.course_name,
                         credits=course_data.credits or 3,
                         course_type=course_data.course_type,
-                        course_department=department.id if department else None,
+                        course_department=department.name if department else None,
                         course_year=course_data.course_year or 1,
                         semester=course_data.semester or 1,
                         description=course_data.description
@@ -517,7 +517,14 @@ class AdminService:
                 if getattr(data, 'department_id', None):
                     department = db.query(Department).filter(Department.id == data.department_id).first()
                 elif getattr(data, 'department_code', None):
-                    department = db.query(Department).filter(Department.code == data.department_code).first()
+                    # department_code가 숫자면 Department.id를 먼저 시도 (CSV의 교육과정학과코드가 ID인 경우)
+                    if data.department_code.isdigit():
+                        department = db.query(Department).filter(Department.id == int(data.department_code)).first()
+                    if not department:
+                        department = db.query(Department).filter(Department.code == data.department_code).first()
+                    # 학과명으로도 시도
+                    if not department:
+                        department = db.query(Department).filter(Department.name == data.department_code).first()
                 
                 if not department:
                     dept_info = data.department_id or data.department_code

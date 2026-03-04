@@ -695,12 +695,9 @@ class EvaluationService:
             
             if enrollment:
                 # 타학과 이수인 경우 학과명 기록
-                if course.course_department != department_id:
-                    enrolled_dept = self.db.query(Department).filter(
-                        Department.id == course.course_department
-                    ).first()
-                    if enrolled_dept:
-                        enrolled_dept_name = enrolled_dept.name
+                # course_department는 학과명(string)이므로 department.name과 비교
+                if course.course_department and course.course_department != department.name:
+                    enrolled_dept_name = course.course_department
             
             requirement_type = None
             if course.course_code in necessary_course_codes:

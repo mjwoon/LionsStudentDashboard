@@ -91,10 +91,10 @@ export default function StudentDetailView() {
             </div>
             <button
               onClick={handleBackToList}
-              className="flex items-center gap-3 px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50 cursor-pointer"
+              className="flex items-center px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-gray-50 cursor-pointer"
             >
               <ChevronLeft className="w-5 h-5 text-[#101828]" />
-              <span className="text-lg font-medium text-[#101828]">목록으로 돌아가기</span>
+              <span className="text-[12pt] font-medium text-[#101828]">목록으로 돌아가기</span>
             </button>
           </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BarChart, Trash2, RefreshCw, AlertCircle, CheckCircle, Database } from 'lucide-react';
+import { Trash2, RefreshCw, AlertCircle, CheckCircle, Database } from 'lucide-react';
 import { api } from '../api';
 import type { CachedEvaluationStats } from '../types';
 
@@ -71,12 +71,12 @@ export default function SystemStatsTab() {
   return (
     <div className="space-y-6">
       {/* 안내 메시지 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-[#FEF9C3] border border-[#FEF9C3] rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-800">
+          <AlertCircle className="h-5 w-5 text-[#95430E] shrink-0 mt-0.5" />
+          <div className="text-sm text-[#95430E]">
             <p className="font-medium mb-1">시스템 현황 안내</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-700">
+            <ul className="list-disc list-inside space-y-1 text-[#95430E]">
               <li>캐시된 진단 결과 현황을 확인할 수 있습니다</li>
               <li>학과별로 캐시된 진단 수를 확인할 수 있습니다</li>
               <li>불필요한 캐시는 삭제하여 공간을 확보할 수 있습니다</li>
@@ -112,10 +112,9 @@ export default function SystemStatsTab() {
       )}
 
       {/* 통계 요약 */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg border border-[#E5E5E5] p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Database className="h-5 w-5 text-blue-600" />
             <h3 className="text-lg font-semibold text-gray-900">캐시 통계</h3>
           </div>
           <button
@@ -171,9 +170,8 @@ export default function SystemStatsTab() {
 
       {/* 학과별 통계 */}
       {stats && stats.cached_by_department && Object.keys(stats.cached_by_department).length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg p-6 border-1 border-[#E5E5E5]">
           <div className="flex items-center gap-3 mb-6">
-            <BarChart className="h-5 w-5 text-blue-600" />
             <h3 className="text-lg font-semibold text-gray-900">학과별 캐시 현황</h3>
           </div>
 
@@ -197,7 +195,7 @@ export default function SystemStatsTab() {
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-blue-600 h-2 rounded-full transition-all"
+                            className="bg-[#0F4A84] h-2 rounded-full transition-all"
                             style={{ width: `${percentage}%` }}
                           ></div>
                         </div>

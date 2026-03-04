@@ -173,7 +173,7 @@ export default function DashboardView() {
   return (
     <div className="py-4 md:py-6">
       {/* Title Section */}
-      <div className="flex items-start justify-between  mb-8">
+      <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl lg:text-3xl font-bold text-[#101828]">학과 관심 현황 대시보드</h1>
         </div>

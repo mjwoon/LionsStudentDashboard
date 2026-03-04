@@ -5,6 +5,33 @@ import type { Student, Department, EvaluationResult, CurriculumCourse } from '..
 import DepartmentSelector from './DepartmentSelector';
 import CurriculumTable from './CurriculumTable';
 
+// 상태값 파싱 헬퍼: AI 총평 문자열에서 상태값과 의견을 분리
+const STATUS_STYLES: Record<string, { bg: string; border: string; titleColor: string; textColor: string }> = {
+  '양호': { bg: 'from-[#ecfdf5] to-[#d1fae5]', border: 'border-emerald-200', titleColor: 'text-[#065f46]', textColor: 'text-[#064e3b]' },
+  '우수': { bg: 'from-[#f0f9ff] to-[#e0f2fe]', border: 'border-blue-100',    titleColor: 'text-[#0369a1]', textColor: 'text-[#334155]' },
+  '주의': { bg: 'from-[#fffbeb] to-[#fef3c7]', border: 'border-amber-200',   titleColor: 'text-[#92400e]', textColor: 'text-[#78350f]' },
+  '위험': { bg: 'from-[#fef2f2] to-[#fee2e2]', border: 'border-red-200',     titleColor: 'text-[#991b1b]', textColor: 'text-[#7f1d1d]' },
+};
+
+const STATUS_BADGE_COLORS: Record<string, string> = {
+  '양호': 'bg-emerald-100 text-emerald-800',
+  '우수': 'bg-blue-100 text-blue-800',
+  '주의': 'bg-amber-100 text-amber-800',
+  '위험': 'bg-red-100 text-red-800',
+};
+
+function parseAiStatus(summary: string) {
+  const defaultStyle = STATUS_STYLES['양호'];
+  if (summary.includes(' : ')) {
+    const [label, ...rest] = summary.split(' : ');
+    const trimmed = label.trim();
+    if (trimmed in STATUS_STYLES) {
+      return { label: trimmed, opinion: rest.join(' : '), style: STATUS_STYLES[trimmed] };
+    }
+  }
+  return { label: '양호', opinion: summary, style: defaultStyle };
+}
+
 interface StudentEntryTabProps {
   student: Student;
   selectedDepartmentId: string | null;
@@ -105,25 +132,31 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
     }
 
     if (isEvaluationAvailable && evaluationData) {
+      // AI 상태값 파싱
+      const aiStatus = evaluationData.ai_summary ? parseAiStatus(evaluationData.ai_summary) : null;
+
       return (
         <>
           {/* 안내 배너 목록 */}
           <div className="flex flex-col gap-[12px] w-full">
-            {/* 메인 평가 배너 */}
-              {evaluationData.ai_summary && (
-              <div className="bg-gradient-to-r from-[#f0f9ff] to-[#e0f2fe] rounded-[14px] px-[36px] py-[20px] border border-blue-100">
+            {/* 메인 평가 배너 - 상태값에 따라 색상 분기 */}
+              {aiStatus && (
+              <div className={`bg-gradient-to-r ${aiStatus.style.bg} rounded-[14px] px-[36px] py-[20px] border ${aiStatus.style.border}`}>
                 <div className="flex items-start gap-[10px]">
                   <div className="rounded-full shrink-0">
-                    <svg className="w-[24px] h-[24px] shrink-0 text-[#0284c7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-[24px] h-[24px] shrink-0 ${aiStatus.style.titleColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-[18px] font-bold text-[#0369a1] mb-2 flex items-center gap-2">
+                    <h3 className={`text-[18px] font-bold ${aiStatus.style.titleColor} mb-2 flex items-center gap-2`}>
                       AI 튜터 종합 평가
+                      <span className={`text-[13px] font-semibold px-2.5 py-0.5 rounded-full ${STATUS_BADGE_COLORS[aiStatus.label]}`}>
+                        {aiStatus.label}
+                      </span>
                     </h3>
-                    <div className="text-[16px] leading-relaxed text-[#334155] whitespace-pre-wrap">
-                      {evaluationData.ai_summary}
+                    <div className={`text-[16px] leading-relaxed ${aiStatus.style.textColor} whitespace-pre-wrap`}>
+                      {aiStatus.opinion}
                     </div>
                   </div>
                 </div>

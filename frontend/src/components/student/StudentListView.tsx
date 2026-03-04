@@ -161,15 +161,26 @@ export default function StudentListView({ onStudentSelect }: StudentListViewProp
           <div className="bg-white p-6 border-b border-black/10">
             <div className="flex items-center justify-between gap-4">
               {/* Search Input */}
-              <div className="relative w-56">
-                <input
-                  type="text"
-                  placeholder="이름으로 검색 ..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#6a7282] placeholder-[#6a7282] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative w-56">
+                  <input
+                    type="text"
+                    placeholder="이름으로 검색 ..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="w-full px-4 py-2.5 border border-black/10 rounded-lg text-base text-[#6a7282] placeholder-[#6a7282] focus:outline-none focus:ring-2 focus:ring-[#0e4a84]"
+                  />
+                </div>
+                <button
+                  onClick={handleSearch}
+                  className="p-2.5 bg-[#0e4a84] text-white rounded-lg hover:bg-[#0a3a6b] transition shrink-0"
+                  title="검색"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
               </div>
 
               {/* Filter Dropdowns */}

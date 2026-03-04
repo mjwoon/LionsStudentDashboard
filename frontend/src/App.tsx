@@ -103,7 +103,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-30 py-1">
+      <main className="flex-1 px-2 sm:px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-30">
         <Routes>
           <Route path="/" element={<DashboardView />} />
           <Route path="/student" element={<StudentDetailView />} />

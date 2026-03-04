@@ -576,7 +576,7 @@ class RecommendationDataUpload(BaseModel):
 class RequirementDataUpload(BaseModel):
     """학과 요건 데이터 업로드 스키마"""
     id: Optional[int] = Field(None, validation_alias=AliasChoices("id", "ID", "요건ID"))
-    department_code: Optional[str] = Field(None, validation_alias=AliasChoices("department_code", "학과코드", "소속학과", "학과"))
+    department_code: Optional[str] = Field(None, validation_alias=AliasChoices("department_code", "dept_code", "학과코드", "소속학과", "학과"))
     department_id: Optional[int] = Field(None, validation_alias=AliasChoices("department_id", "소속학과ID", "학과ID"))
     admission_year: int = Field(..., validation_alias=AliasChoices("admission_year", "적용학번", "적용 학번"))
     requirement_group: int = Field(..., validation_alias=AliasChoices("requirement_group", "요건그룹", "요건 그룹", "그룹"))

@@ -18,7 +18,7 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
 
   return (
     <div className="space-y-[16px]">
-      {Object.entries(curriculumData).sort(([a], [b]) => a.localeCompare(b)).map(([year, semesters]) => (
+      {Object.entries(curriculumData).filter(([year]) => year.includes('1')).sort(([a], [b]) => a.localeCompare(b)).map(([year, semesters]) => (
         <div key={year} className="bg-white border border-black/10 rounded-[12px] overflow-hidden flex flex-col items-center">
           {/* Year Header */}
           <div className="bg-white px-[24px] py-[20px] w-full items-start justify-center flex flex-col">
@@ -53,7 +53,7 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
                         </td>
                         <td className="px-[24px] align-middle">
                           {(() => {
-                            const displayType = course.requirement_type || course.course_type;
+                            const displayType = course.requirement_type;
                             if (!displayType) return <span className="text-[15px] text-[#6A7282]">-</span>;
 
                             if (displayType === '전공진입') {
@@ -79,7 +79,15 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
 
                         <td className="px-[24px] align-middle">
                           <div className="flex items-center justify-center gap-[8px]">
-                            {course.enrolled && course.grade ? (
+                            {course.enrolled_department_name && course.course_type !== '교양필수' ? (
+                              <>
+                                <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" xmlns="http://www.w3.org/2000/svg">
+                                  <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                                  <path d="M12 10v4m0 3h.01" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                <span className="text-[15px] text-[#f59e0b]">유사과목 이수</span>
+                              </>
+                            ) : course.enrolled && course.grade ? (
                               <>
                                 <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="#26BD89" xmlns="http://www.w3.org/2000/svg">
                                   <circle cx="12" cy="12" r="10" strokeWidth="2" />
@@ -109,9 +117,20 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
                           </div>
                         </td>
                         <td className="px-[24px] text-[15px] text-[#6a7282] align-middle">
-                          {(course as any).enrolled_department_name && course.course_type !== '교양필수'
-                            ? `유사/동등 인정`
-                            : '-'}
+                          {(() => {
+                            if (course.course_type === '교양필수') return '-';
+                            if (course.enrolled_department_name) {
+                              return (
+                                <span className="text-[#f59e0b]">{course.enrolled_department_name}</span>
+                              );
+                            }
+                            if (course.enrolled) {
+                              return (
+                                <span className="text-[#26BD89]">동등인정</span>
+                              );
+                            }
+                            return '-';
+                          })()}
                         </td>
                       </tr>
                     ))}

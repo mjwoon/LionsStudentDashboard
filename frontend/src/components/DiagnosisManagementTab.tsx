@@ -95,15 +95,14 @@ export default function DiagnosisManagementTab() {
   return (
     <div className="space-y-6">
       {/* 안내 메시지 */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-[#FEF9C3] rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-yellow-800">
+          <AlertCircle className="h-5 w-5 text-[#95430E] flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-[#95430E]">
             <p className="font-medium mb-1">대량 진단 안내</p>
-            <ul className="list-disc list-inside space-y-1 text-yellow-700">
-              <li>모든 학생-학과 조합에 대한 진단 결과를 미리 계산하여 저장합니다</li>
+            <ul className="list-disc list-inside space-y-1 text-[#95430E]">
+              <li>모든 학생-학과 조합에 대한 진단 결과를 계산하여 AI 총평이 함께 생성됩니다</li>
               <li>백그라운드에서 처리되므로 페이지를 떠나도 진행됩니다</li>
-              <li>AI 총평이 함께 생성됩니다 (OpenAI API 사용)</li>
               <li>강제 재계산 옵션을 선택하면 기존 캐시를 무시하고 재계산합니다</li>
             </ul>
           </div>
@@ -111,10 +110,9 @@ export default function DiagnosisManagementTab() {
       </div>
 
       {/* 진단 실행 */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg border border-[#E5E5E5] p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Activity className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900">전체 학생 진단</h3>
+          <h3 className="text-lg font-semibold text-gray-900">학생 데이터</h3>
         </div>
 
         <div className="space-y-6">

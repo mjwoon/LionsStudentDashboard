@@ -23,6 +23,7 @@ import type {
   EvaluationStatistics,
   DepartmentRankings,
   UploadResponse,
+  GroupedUploadResponse,
   BulkEvaluationRequest,
   BulkEvaluationResponse,
   CachedEvaluationStats,
@@ -390,6 +391,77 @@ export const api = {
       return await response.json()
     },
 
+    // 통합 업로드 (5개 그룹)
+    uploadGroupedOrg: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/org`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
+    uploadGroupedStudents: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/students`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
+    uploadGroupedRequirements: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/requirements`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
+    uploadGroupedCourses: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/courses`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
+    uploadGroupedEnrollments: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/enrollments`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
     // 진단 관리 (비동기)
     bulkEvaluate: (request: BulkEvaluationRequest) =>
       fetchAPI<{ job_id: string; status: string; message: string }>('/api/admin/evaluate/bulk', {
@@ -459,6 +531,8 @@ export type {
   EvaluationStatistics,
   DepartmentRankings,
   UploadResponse,
+  GroupedUploadResponse,
+  SubUploadResult,
   BulkEvaluationRequest,
   BulkEvaluationResponse,
   CachedEvaluationStats,

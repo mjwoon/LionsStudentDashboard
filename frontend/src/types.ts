@@ -400,6 +400,20 @@ export interface UploadResponse {
   detailed_errors?: ErrorDetail[]
 }
 
+export interface SubUploadResult {
+  label: string
+  success: boolean
+  message: string
+  uploaded_count: number
+  updated_count: number
+  errors?: string[] | null
+  detailed_errors?: ErrorDetail[] | null
+}
+
+export interface GroupedUploadResponse extends UploadResponse {
+  sub_results?: SubUploadResult[]
+}
+
 export interface BulkEvaluationRequest {
   student_ids?: string[]
   department_ids?: number[]
