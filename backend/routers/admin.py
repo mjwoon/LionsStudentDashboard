@@ -463,6 +463,12 @@ async def clear_cached_evaluations(
     return AdminService.clear_cached_evaluations(db, department_id)
 
 
+@router.delete("/data/all")
+async def delete_all_data(db: Session = Depends(get_db)):
+    """모든 업로드 데이터 삭제"""
+    return AdminService.delete_all_data(db)
+
+
 @router.get("/health")
 async def admin_health():
     """관리자 API 상태 확인"""

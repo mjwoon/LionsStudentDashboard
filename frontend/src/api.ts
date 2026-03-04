@@ -489,13 +489,18 @@ export const api = {
       fetchAPI<CachedEvaluationStats>('/api/admin/evaluate/stats'),
 
     clearCache: (departmentId?: string) => {
-      const params = departmentId 
-        ? `?department_id=${departmentId}` 
+      const params = departmentId
+        ? `?department_id=${departmentId}`
         : ''
       return fetchAPI<ClearCacheResponse>(`/api/admin/evaluate/cache${params}`, {
         method: 'DELETE',
       })
     },
+
+    deleteAllData: () =>
+      fetchAPI<{ success: boolean; message: string }>('/api/admin/data/all', {
+        method: 'DELETE',
+      }),
   },
 }
 
