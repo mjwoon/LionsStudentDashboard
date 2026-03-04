@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Activity, Play, AlertCircle, CheckCircle } from 'lucide-react';
+import { Play, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import type { BulkEvaluationResponse } from '../types';
 

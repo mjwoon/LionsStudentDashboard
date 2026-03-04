@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Activity, BarChart, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import DataUploadTab from './DataUploadTab';
 import DiagnosisManagementTab from './DiagnosisManagementTab';
 import SystemStatsTab from './SystemStatsTab';
