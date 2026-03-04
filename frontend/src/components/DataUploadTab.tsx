@@ -418,12 +418,12 @@ export default function DataUploadTab() {
   return (
     <div className="space-y-6">
       {/* 안내 배너 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-[#FEF9C3] rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-800">
+          <AlertCircle className="h-5 w-5 text-[#95430E] shrink-0 mt-0.5" />
+          <div className="text-sm text-[#95430E]">
             <p className="font-medium mb-1">데이터 업로드 안내</p>
-            <ul className="list-disc list-inside space-y-1 text-blue-700">
+            <ul className="list-disc list-inside space-y-1 text-[#95430E]">
               <li>CSV 형식의 파일 업로드가 가능합니다</li>
               <li>기존 데이터는 자동으로 업데이트됩니다</li>
               <li>샘플 버튼을 클릭하여 CSV 형식을 확인하세요</li>

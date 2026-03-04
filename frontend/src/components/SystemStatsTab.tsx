@@ -71,7 +71,7 @@ export default function SystemStatsTab() {
   return (
     <div className="space-y-6">
       {/* 안내 메시지 */}
-      <div className="bg-[#FEF9C3] border border-[#FEF9C3] rounded-lg p-4">
+      <div className="bg-[#FEF9C3] rounded-lg p-4">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-5 w-5 text-[#95430E] shrink-0 mt-0.5" />
           <div className="text-sm text-[#95430E]">
