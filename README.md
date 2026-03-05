@@ -4,7 +4,7 @@
 
 ## 📋 프로젝트 개요
 
-이 프로젝트는 학생 정보, 학과 정보, 강좌 정보, 그리고 전공 설문조사를 관리하는 풀스택 웹 애플리케이션입니다. Neo4j 그래프 데이터베이스를 활용한 교과목 유사도 분석 및 추천 기능도 포함되어 있습니다.
+이 프로젝트는 학생 정보, 학과 정보, 강좌 정보, 그리고 전공 설문조사를 관리하는 풀스택 웹 애플리케이션입니다. Neo4j 그래프 데이터베이스를 활용한 교과목 유사도 분석 및 추천 기능, Celery 기반 비동기 일괄 평가, OpenAI를 활용한 AI 총평 생성 기능이 포함되어 있습니다.
 
 ### 기술 스택
 
@@ -13,8 +13,13 @@
 - SQLAlchemy 2.0 (ORM)
 - PostgreSQL (pgvector)
 - Neo4j (그래프 DB - 교과목 유사도 분석)
+- Celery (비동기 작업 처리)
 - uv (패키지 관리자)
 - Pydantic (데이터 검증)
+
+**AI:**
+- OpenAI API (gpt-4o-mini, AI 총평 생성)
+- Celery Worker (비동기 일괄 평가)
 
 **Frontend:**
 - React 19.2.0
@@ -24,7 +29,7 @@
 
 **Infrastructure:**
 - Docker & Docker Compose
-- Redis
+- Redis (Celery 메시지 브로커)
 
 ## 🚀 시작하기
 
@@ -32,6 +37,7 @@
 
 - Docker Desktop
 - Git
+- OpenAI API Key (AI 총평 기능 사용 시)
 
 ### 1. 프로젝트 클론
 
@@ -40,33 +46,28 @@ git clone https://github.com/mjwoon/LionsStudentDashboard.git
 cd LionsStudentDashboard
 ```
 
-### 2. 프로젝트 빌드 및 실행
-
-**전체 프로젝트 빌드 및 실행:**
+### 2. 환경 변수 설정
 
 ```bash
-docker-compose up --build
+# 프로젝트 루트에 .env 파일 생성
+OPENAI_API_KEY=sk-...           # AI 총평 생성 (없으면 총평 미생성)
+OPENAI_MODEL=gpt-4o-mini
+VITE_LOGIN_PASSWORD=...         # 일반 사용자 로그인 비밀번호
+VITE_ADMIN_PASSWORD=...         # 관리자 로그인 비밀번호
 ```
 
-**백그라운드 실행:**
+### 3. 프로젝트 빌드 및 실행
 
 ```bash
+# 전체 프로젝트 빌드 및 실행 (neo4j-init이 자동으로 그래프 데이터 로드)
 docker-compose up -d --build
 ```
 
-### 3. 초기 데이터 설정
+### 4. 초기 데이터 설정
 
 1. 프론트엔드 로그인 후 **관리자 페이지**로 이동
-2. `Data Upload` 탭에서 학생, 과목, 학과 요건, 수강 이력을 CSV/Excel 형태로 일괄 업로드
+2. `Data Upload` 탭에서 학생, 과목, 학과 요건, 수강 이력을 CSV 형태로 일괄 업로드
 3. 데이터가 업로드되면 자동으로 DB에 적재되고 평가 시스템이 활성화됩니다.
-
-### 4. Neo4j 그래프 데이터 로드 (선택사항)
-
-```bash
-# graphDB 폴더에서 Neo4j에 교과목 유사도 그래프 생성
-cd graphDB
-uv run python quick_start.py
-```
 
 ### 5. 접속
 
@@ -77,7 +78,7 @@ uv run python quick_start.py
 | **API 문서** | http://localhost:8080/docs | Swagger UI |
 | **Neo4j Browser** | http://localhost:7474 | 그래프 DB 관리 콘솔 |
 | **PostgreSQL** | localhost:5432 | 관계형 DB |
-| **Redis** | localhost:6379 | 캐시/메시지 브로커 |
+| **Redis** | localhost:6380 | Celery 메시지 브로커 |
 
 ## 📁 프로젝트 구조
 
@@ -94,34 +95,51 @@ LionsStudentDashboard/
 │   │   ├── evaluation.py      # 학생 평가 API
 │   │   ├── dashboard.py       # 대시보드 통계 API
 │   │   ├── admin.py           # 관리자 API
+│   │   ├── admin_upload_grouped.py  # 그룹별 통합 업로드 API
 │   │   └── graph.py           # 그래프 분석 API (Neo4j)
 │   ├── services/              # 비즈니스 로직
-│   │   ├── evaluation_service.py  # 평가 알고리즘
+│   │   ├── evaluation_service.py  # 평가 알고리즘 (3-메트릭)
 │   │   ├── student_service.py     # 학생 서비스
 │   │   ├── admin_service.py       # 관리자 서비스
 │   │   └── graph_service.py       # Neo4j 그래프 서비스
-│   ├── data/                  # 커리큘럼 JSON 데이터
 │   ├── main.py                # FastAPI 앱 진입점
 │   ├── database.py            # DB 연결 설정
 │   └── Dockerfile
 │
+├── ai/                         # AI Worker (Celery)
+│   ├── ai_services/
+│   │   └── ai_service.py      # OpenAI 기반 AI 총평 생성
+│   ├── celery_app.py          # Celery 앱 설정
+│   ├── database.py            # Worker용 DB 연결
+│   ├── tasks.py               # 비동기 태스크 (일괄 평가, 그래프 재구축)
+│   └── Dockerfile
+│
 ├── frontend/                   # React 프론트엔드
 │   ├── src/
-│   │   ├── components/        # React 컴포넌트
+│   │   ├── components/
+│   │   │   ├── student/               # 학생 관련 컴포넌트
+│   │   │   │   ├── StudentListView.tsx
+│   │   │   │   ├── StudentDetailView.tsx
+│   │   │   │   ├── StudentCoursesTab.tsx
+│   │   │   │   ├── StudentEntryTab.tsx
+│   │   │   │   └── StudentSurveyTab.tsx
 │   │   │   ├── DashboardView.tsx      # 대시보드
-│   │   │   ├── StudentDetailView.tsx  # 학생 상세
+│   │   │   ├── AdminView.tsx          # 관리자
 │   │   │   ├── CurriculumView.tsx     # 커리큘럼
-│   │   │   └── AdminView.tsx          # 관리자
+│   │   │   ├── LoginView.tsx          # 로그인
+│   │   │   └── SessionWarningModal.tsx
+│   │   ├── hooks/
+│   │   │   └── useInactivityTimeout.ts
 │   │   ├── App.tsx            # 메인 앱
 │   │   ├── api.ts             # API 클라이언트
 │   │   └── types.ts           # TypeScript 타입
-│   └── Dockerfile
+│   └── Dockerfile.dev
 │
 ├── graphDB/                    # Neo4j 그래프 DB 모듈
 │   ├── course_similarity_graph.py  # 그래프 빌더
 │   ├── course_graph_analysis.py    # 그래프 분석
 │   ├── quick_start.py              # 빠른 시작 스크립트
-│   ├── final_course.csv            # 교과목 데이터
+│   ├── final_course.csv            # 교과목 데이터 (854개)
 │   └── README.md
 │
 ├── docker-compose.yml          # Docker 구성
@@ -142,6 +160,7 @@ docker-compose restart backend
 
 # 로그 확인
 docker-compose logs -f backend
+docker-compose logs -f ai-worker
 docker-compose logs -f neo4j
 
 # 컨테이너 상태 확인
@@ -217,11 +236,11 @@ cd ai
 uv sync
 
 # Celery 워커 실행
-uv run celery -A tasks worker --loglevel=info
+BACKEND_PATH=../backend PYTHONPATH=..:../backend uv run celery -A tasks worker --loglevel=info
 ```
 
-- Redis 브로커 필요 (localhost:6379)
-- 비동기 작업: 학생 일괄 평가, 그래프 재구축
+- Redis 브로커 필요 (localhost:6380)
+- 비동기 작업: 학생 일괄 평가 (`bulk_evaluate`), 그래프 재구축 (`rebuild_graph`)
 - 백엔드 모듈 직접 import (`BACKEND_PATH` 환경변수 설정 필요)
 
 ---
@@ -245,6 +264,7 @@ uv run python course_graph_analysis.py    # 그래프 분석
 - Neo4j 필요 (localhost:7474, 기본 계정: neo4j/password123)
 - Sentence-BERT 임베딩으로 교과목 유사도 계산
 - 유사도 ≥ 0.8인 교과목 간 `SIMILAR_TO` 관계 생성
+- Docker 실행 시 `neo4j-init` 컨테이너가 자동으로 처리
 
 ## 📊 주요 API 엔드포인트
 
@@ -255,6 +275,13 @@ uv run python course_graph_analysis.py    # 그래프 분석
 ### 평가 API (`/api/evaluation`)
 - `GET /student/{id}/department/{dept_id}` - 학생 학과 적합도 평가
 - `GET /student/{id}/all-departments` - 전체 학과 평가
+
+### 관리자 통합 업로드 API (`/api/admin/upload-grouped`)
+- `POST /org` - 단과대학 + 학과 통합 업로드
+- `POST /students` - 학생 + 희망전공조사 통합 업로드
+- `POST /requirements` - 진입요건 + 권장과목 통합 업로드
+- `POST /courses` - 과목 + 교육과정 통합 업로드
+- `POST /enrollments` - 수강 데이터 업로드
 
 ### 그래프 API (`/graph`) - Neo4j
 - `GET /graph/health` - Neo4j 연결 상태
@@ -282,6 +309,15 @@ docker logs neo4j-course-graph
 
 # Neo4j 재시작
 docker-compose restart neo4j
+```
+
+### AI Worker 연결 실패
+```bash
+# AI Worker 로그 확인
+docker logs ai_worker
+
+# Redis 연결 확인
+docker-compose logs redis
 ```
 
 ### 데이터베이스 완전 초기화
