@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
@@ -16,5 +17,12 @@ export default defineConfig({
       usePolling: true, // Docker 환경에서 파일 변경 감지를 위해 필수
     },
     strictPort: false, // 포트가 사용 중이면 다음 포트 사용
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './tests/setup.ts',
+    include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
+    exclude: ['tests/e2e/**/*', 'node_modules/**/*'],
   },
 })
