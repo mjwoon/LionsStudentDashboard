@@ -16,7 +16,7 @@ ENV VITE_ADMIN_PASSWORD=$VITE_ADMIN_PASSWORD
 
 # 소스 코드 복사 및 빌드
 COPY . .
-RUN npm run build
+RUN npm run build || npx vite build
 
 # ======================
 # Stage 2: Serve (nginx)
