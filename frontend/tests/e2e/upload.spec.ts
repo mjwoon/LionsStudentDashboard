@@ -67,4 +67,54 @@ test.describe('Admin Data Upload Tab', () => {
     await expect(resultBox).toContainText('총 새로 추가: 10개');
     await expect(resultBox).toContainText('총 업데이트: 5개');
   });
+
+  test('should show error dialog when upload fails', async ({ page }) => {
+    // Navigate to admin
+    await page.goto('/admin');
+
+    // Bypass login logic (App component and AdminView component)
+    await page.evaluate(() => {
+      localStorage.setItem('isAuthenticated', 'true');
+      sessionStorage.setItem('admin_authenticated', 'true');
+    });
+    await page.reload();
+
+    // Verify Data Upload tab is active
+    await expect(page.locator('button:has-text("데이터 업로드")')).toBeVisible();
+
+    // Intercept upload request and return a 400 error
+    await page.route('**/api/admin/upload-grouped/students', async route => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Invaild file format' })
+      });
+    });
+
+    // Find the right card
+    const studentCard = page.locator('.bg-white', { hasText: '학생 + 희망전공조사' });
+    
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await studentCard.locator('label:has-text("파일 선택")').click();
+    const fileChooser = await fileChooserPromise;
+    
+    // Create a mock file
+    const buffer = Buffer.from('student_id,name\n20260001,John');
+    
+    // Set files
+    await fileChooser.setFiles({
+      name: 'bad_students.csv',
+      mimeType: 'text/csv',
+      buffer
+    });
+
+    // Click upload
+    await studentCard.locator('button:has-text("업로드")').click();
+
+    // Verify error message appears in the card
+    // Verify error message appears in the card
+    const resultBox = studentCard.locator('.bg-red-50');
+    await expect(resultBox).toBeVisible({ timeout: 10000 });
+    await expect(resultBox.locator('p.text-red-800')).toContainText('Invaild file format');
+  });
 });

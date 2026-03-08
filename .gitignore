@@ -91,5 +91,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+playwright-report/
+test-results/
 
 CLAUDE.md
