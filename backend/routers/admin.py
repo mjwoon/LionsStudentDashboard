@@ -26,45 +26,41 @@ logger = logging.getLogger(__name__)
 _celery_app_cache = None
 
 
+def _get_redis_url():
+    """Redis URL을 가져오고 필요시 변환"""
+    import os
+    url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    if url.startswith("https://"):
+        logger.warning("REDIS_URL이 https://로 시작합니다. rediss://로 변환합니다.")
+        url = "rediss://" + url[len("https://"):]
+    return url
+
+
 def _get_celery_app():
-    """Celery 앱을 생성하고 SSL 설정을 적용하는 헬퍼 (싱글톤)"""
+    """Celery 앱을 생성하는 헬퍼 (싱글톤, broker only)"""
     global _celery_app_cache
     if _celery_app_cache is not None:
         return _celery_app_cache
 
-    import os
     from celery import Celery
 
-    REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
-    # Upstash REST API URL(https://)이 들어온 경우 rediss://로 변환
-    if REDIS_URL.startswith("https://"):
-        logger.warning("REDIS_URL이 https://로 시작합니다. rediss://로 변환합니다.")
-        REDIS_URL = "rediss://" + REDIS_URL[len("https://"):]
-
+    REDIS_URL = _get_redis_url()
     logger.info(f"Celery broker URL scheme: {REDIS_URL.split('://')[0]}")
 
-    celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
+    # broker만 설정, result backend는 사용하지 않음 (연결 문제 회피)
+    celery_app = Celery("ai_worker", broker=REDIS_URL)
 
-    # 연결 타임아웃 설정 (무한 대기 방지)
-    transport_opts = {
+    # 연결 타임아웃 설정
+    celery_app.conf.broker_transport_options = {
         'socket_timeout': 15,
         'socket_connect_timeout': 15,
         'retry_on_timeout': True,
         'max_retries': 5,
     }
-    celery_app.conf.broker_transport_options = transport_opts
-    celery_app.conf.result_backend_transport_options = transport_opts
-
-    # 연결 재시도 설정
     celery_app.conf.broker_connection_retry_on_startup = True
-    celery_app.conf.result_backend_always_retry = True
-    celery_app.conf.result_backend_max_retries = 10
 
     if REDIS_URL.startswith("rediss://"):
-        ssl_opts = {'ssl_cert_reqs': ssl.CERT_NONE}
-        celery_app.conf.broker_use_ssl = ssl_opts
-        celery_app.conf.redis_backend_use_ssl = ssl_opts
+        celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
 
     _celery_app_cache = celery_app
     return celery_app
@@ -423,44 +419,80 @@ async def bulk_evaluate(
 @router.get("/evaluate/jobs/{job_id}")
 async def get_job_status(job_id: str):
     """
-    비동기 일괄 평가 진행 상태 조회
-    
-    Returns:
-        - status: PENDING | STARTED | PROGRESS | SUCCESS | FAILURE
-        - progress: 진행률 정보 (PROGRESS 상태일 때)
-        - result: 최종 결과 (SUCCESS 상태일 때)
+    비동기 일괄 평가 진행 상태 조회 (Redis에서 직접 조회)
     """
     try:
-        from celery.result import AsyncResult
-        celery_app = _get_celery_app()
-        
-        result = AsyncResult(job_id, app=celery_app)
-        
+        import redis as redis_lib
+
+        REDIS_URL = _get_redis_url()
+        r = redis_lib.from_url(
+            REDIS_URL,
+            socket_timeout=10,
+            socket_connect_timeout=10,
+            ssl_cert_reqs=None if REDIS_URL.startswith("rediss://") else ssl.CERT_REQUIRED,
+        )
+
+        # Celery는 결과를 'celery-task-meta-{task_id}' 키에 저장
+        raw = r.get(f"celery-task-meta-{job_id}")
+        if raw is None:
+            return {
+                "job_id": job_id,
+                "status": "PENDING",
+                "progress": {
+                    "current": 0,
+                    "total": 0,
+                    "percent": 0,
+                    "status": "대기 중..."
+                }
+            }
+
+        import json as _json
+        data = _json.loads(raw)
+        status = data.get("status", "UNKNOWN")
+
         response = {
             "job_id": job_id,
-            "status": result.state,
+            "status": status,
         }
-        
-        if result.state == "PROGRESS":
-            response["progress"] = result.info
-        elif result.state == "SUCCESS":
-            response["result"] = result.result
-        elif result.state == "FAILURE":
-            response["error"] = str(result.info)
-        elif result.state == "PENDING":
-            response["progress"] = {
-                "current": 0,
-                "total": 0,
-                "percent": 0,
-                "status": "대기 중..."
-            }
-        
+
+        if status == "PROGRESS":
+            response["progress"] = data.get("result", {})
+        elif status == "SUCCESS":
+            response["result"] = data.get("result")
+        elif status == "FAILURE":
+            response["error"] = str(data.get("result", "Unknown error"))
+
         return response
-    
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Celery가 설치되지 않았습니다.")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"상태 조회 실패: {str(e)}")
+
+
+@router.get("/redis-test")
+async def test_redis_connection():
+    """Redis 연결 테스트 (디버깅용)"""
+    try:
+        import redis as redis_lib
+
+        REDIS_URL = _get_redis_url()
+        r = redis_lib.from_url(
+            REDIS_URL,
+            socket_timeout=10,
+            socket_connect_timeout=10,
+            ssl_cert_reqs=None if REDIS_URL.startswith("rediss://") else ssl.CERT_REQUIRED,
+        )
+        pong = r.ping()
+        return {
+            "status": "connected",
+            "ping": pong,
+            "url_scheme": REDIS_URL.split("://")[0],
+        }
+    except Exception as e:
+        return {
+            "status": "failed",
+            "error": str(e),
+            "url_scheme": _get_redis_url().split("://")[0],
+        }
 
 
 @router.post("/rebuild-graph")
