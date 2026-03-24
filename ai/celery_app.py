@@ -13,6 +13,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 if REDIS_URL.startswith("https://"):
     REDIS_URL = "rediss://" + REDIS_URL[len("https://"):]
 
+# Upstash는 TLS 필수: redis:// → rediss://
+if REDIS_URL.startswith("redis://") and "upstash" in REDIS_URL:
+    REDIS_URL = "rediss://" + REDIS_URL[len("redis://"):]
+
 celery_app = Celery(
     "ai_worker",
     broker=REDIS_URL,

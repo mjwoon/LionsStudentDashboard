@@ -27,12 +27,17 @@ _celery_app_cache = None
 
 
 def _get_redis_url():
-    """Redis URL을 가져오고 필요시 변환"""
+    """Redis URL을 가져오고 필요시 변환 (Upstash는 TLS 필수)"""
     import os
     url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    # https:// → rediss://
     if url.startswith("https://"):
         logger.warning("REDIS_URL이 https://로 시작합니다. rediss://로 변환합니다.")
         url = "rediss://" + url[len("https://"):]
+    # Upstash는 TLS 필수: redis:// → rediss://
+    if url.startswith("redis://") and "upstash" in url:
+        logger.warning("Upstash URL이 redis://로 시작합니다. rediss://로 변환합니다.")
+        url = "rediss://" + url[len("redis://"):]
     return url
 
 
@@ -425,12 +430,10 @@ async def get_job_status(job_id: str):
         import redis as redis_lib
 
         REDIS_URL = _get_redis_url()
-        r = redis_lib.from_url(
-            REDIS_URL,
-            socket_timeout=10,
-            socket_connect_timeout=10,
-            ssl_cert_reqs=None if REDIS_URL.startswith("rediss://") else ssl.CERT_REQUIRED,
-        )
+        kwargs = {'socket_timeout': 10, 'socket_connect_timeout': 10}
+        if REDIS_URL.startswith("rediss://"):
+            kwargs['ssl_cert_reqs'] = 'none'
+        r = redis_lib.from_url(REDIS_URL, **kwargs)
 
         # Celery는 결과를 'celery-task-meta-{task_id}' 키에 저장
         raw = r.get(f"celery-task-meta-{job_id}")
@@ -475,12 +478,10 @@ async def test_redis_connection():
         import redis as redis_lib
 
         REDIS_URL = _get_redis_url()
-        r = redis_lib.from_url(
-            REDIS_URL,
-            socket_timeout=10,
-            socket_connect_timeout=10,
-            ssl_cert_reqs=None if REDIS_URL.startswith("rediss://") else ssl.CERT_REQUIRED,
-        )
+        kwargs = {'socket_timeout': 10, 'socket_connect_timeout': 10}
+        if REDIS_URL.startswith("rediss://"):
+            kwargs['ssl_cert_reqs'] = 'none'
+        r = redis_lib.from_url(REDIS_URL, **kwargs)
         pong = r.ping()
         return {
             "status": "connected",
