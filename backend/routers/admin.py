@@ -23,6 +23,29 @@ import ssl
 
 logger = logging.getLogger(__name__)
 
+
+def _get_celery_app():
+    """Celery 앱을 생성하고 SSL 설정을 적용하는 헬퍼"""
+    import os
+    from celery import Celery
+
+    REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+    # Upstash REST API URL(https://)이 들어온 경우 rediss://로 변환
+    if REDIS_URL.startswith("https://"):
+        logger.warning(f"REDIS_URL이 https://로 시작합니다. Celery는 redis:// 또는 rediss:// 프로토콜이 필요합니다. rediss://로 변환합니다.")
+        REDIS_URL = "rediss://" + REDIS_URL[len("https://"):]
+
+    logger.info(f"Celery broker URL scheme: {REDIS_URL.split('://')[0]}")
+
+    celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
+
+    if REDIS_URL.startswith("rediss://"):
+        celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+        celery_app.conf.redis_backend_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+
+    return celery_app
+
 async def parse_upload_file(file: UploadFile) -> List[dict]:
     """
     Parse JSON, CSV, or Excel file into a list of dictionaries.
@@ -348,14 +371,7 @@ async def bulk_evaluate(
     - GET /evaluate/jobs/{job_id}로 진행상황 확인
     """
     try:
-        from celery import Celery
-        import os
-        
-        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
-        if REDIS_URL.startswith("rediss://"):
-            celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
-            celery_app.conf.redis_backend_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+        celery_app = _get_celery_app()
         
         task = celery_app.send_task(
             "bulk_evaluate",
@@ -393,14 +409,7 @@ async def get_job_status(job_id: str):
     """
     try:
         from celery.result import AsyncResult
-        from celery import Celery
-        import os
-        
-        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
-        if REDIS_URL.startswith("rediss://"):
-            celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
-            celery_app.conf.redis_backend_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+        celery_app = _get_celery_app()
         
         result = AsyncResult(job_id, app=celery_app)
         
@@ -437,14 +446,7 @@ async def trigger_rebuild_graph():
     GraphDB 재구축 비동기 실행 (Celery Worker)
     """
     try:
-        from celery import Celery
-        import os
-        
-        REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-        celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
-        if REDIS_URL.startswith("rediss://"):
-            celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
-            celery_app.conf.redis_backend_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+        celery_app = _get_celery_app()
         
         task = celery_app.send_task("rebuild_graph")
         

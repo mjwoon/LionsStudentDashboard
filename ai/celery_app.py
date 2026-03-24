@@ -9,6 +9,10 @@ from celery import Celery
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+# Upstash REST API URL(https://)이 들어온 경우 rediss://로 변환
+if REDIS_URL.startswith("https://"):
+    REDIS_URL = "rediss://" + REDIS_URL[len("https://"):]
+
 celery_app = Celery(
     "ai_worker",
     broker=REDIS_URL,
