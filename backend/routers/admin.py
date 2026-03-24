@@ -23,9 +23,15 @@ import ssl
 
 logger = logging.getLogger(__name__)
 
+_celery_app_cache = None
+
 
 def _get_celery_app():
-    """Celery 앱을 생성하고 SSL 설정을 적용하는 헬퍼"""
+    """Celery 앱을 생성하고 SSL 설정을 적용하는 헬퍼 (싱글톤)"""
+    global _celery_app_cache
+    if _celery_app_cache is not None:
+        return _celery_app_cache
+
     import os
     from celery import Celery
 
@@ -33,17 +39,34 @@ def _get_celery_app():
 
     # Upstash REST API URL(https://)이 들어온 경우 rediss://로 변환
     if REDIS_URL.startswith("https://"):
-        logger.warning(f"REDIS_URL이 https://로 시작합니다. Celery는 redis:// 또는 rediss:// 프로토콜이 필요합니다. rediss://로 변환합니다.")
+        logger.warning("REDIS_URL이 https://로 시작합니다. rediss://로 변환합니다.")
         REDIS_URL = "rediss://" + REDIS_URL[len("https://"):]
 
     logger.info(f"Celery broker URL scheme: {REDIS_URL.split('://')[0]}")
 
     celery_app = Celery("ai_worker", broker=REDIS_URL, backend=REDIS_URL)
 
-    if REDIS_URL.startswith("rediss://"):
-        celery_app.conf.broker_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
-        celery_app.conf.redis_backend_use_ssl = {'ssl_cert_reqs': ssl.CERT_NONE}
+    # 연결 타임아웃 설정 (무한 대기 방지)
+    transport_opts = {
+        'socket_timeout': 15,
+        'socket_connect_timeout': 15,
+        'retry_on_timeout': True,
+        'max_retries': 5,
+    }
+    celery_app.conf.broker_transport_options = transport_opts
+    celery_app.conf.result_backend_transport_options = transport_opts
 
+    # 연결 재시도 설정
+    celery_app.conf.broker_connection_retry_on_startup = True
+    celery_app.conf.result_backend_always_retry = True
+    celery_app.conf.result_backend_max_retries = 10
+
+    if REDIS_URL.startswith("rediss://"):
+        ssl_opts = {'ssl_cert_reqs': ssl.CERT_NONE}
+        celery_app.conf.broker_use_ssl = ssl_opts
+        celery_app.conf.redis_backend_use_ssl = ssl_opts
+
+    _celery_app_cache = celery_app
     return celery_app
 
 async def parse_upload_file(file: UploadFile) -> List[dict]:
