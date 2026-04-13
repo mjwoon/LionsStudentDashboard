@@ -197,7 +197,7 @@ graphDB/
 │   └── analyze_curriculum()    # 교과과정 분석
 │
 ├── quick_start.py              # 빠른 시작 스크립트 (neo4j-init 컨테이너에서 실행)
-├── final_course.csv            # 교과목 데이터 (854개)
+├── course_all_aggregated.csv            # 교과목 데이터 (854개)
 └── pyproject.toml              # Python 의존성
 ```
 

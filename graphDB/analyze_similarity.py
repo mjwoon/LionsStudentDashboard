@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import re
 
 # 데이터 로드
-df = pd.read_csv('final_course.csv', encoding='utf-8-sig')
+df = pd.read_csv('course_all_aggregated.csv', encoding='utf-8-sig')
 
 print('=== 데이터 기본 정보 ===')
 print(f'총 교과목 수: {len(df)}')

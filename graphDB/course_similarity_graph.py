@@ -54,10 +54,14 @@ class CourseGraphBuilder:
         df['feature_text'] = df['교과목 이름'] + " " + df['교과목개요'].fillna("")
         
         # 동일 학수번호/다른 학과 체크용 분석
-        id_counts = df.groupby('학수번호')['설강학과'].nunique()
-        shared_ids = id_counts[id_counts > 1].index.tolist()
-        print(f"데이터 로드 완료: {len(df)} 개 교과목")
-        print(f"여러 학과에서 공유하는 학수번호 개수: {len(shared_ids)}")
+        if '학수번호' in df.columns:
+            id_counts = df.groupby('학수번호')['설강학과'].nunique()
+            shared_ids = id_counts[id_counts > 1].index.tolist()
+            print(f"데이터 로드 완료: {len(df)} 개 교과목")
+            print(f"여러 학과에서 공유하는 학수번호 개수: {len(shared_ids)}")
+        else:
+            print(f"데이터 로드 완료: {len(df)} 개 교과목")
+            print("학수번호 컬럼이 없어 공유 과목 분석을 생략합니다.")
         
         return df
     
@@ -73,8 +77,8 @@ class CourseGraphBuilder:
         Returns:
             임베딩 벡터 배열 (n_courses, embedding_dim)
         """
-        # 교과목개요만 사용 (교과목 이름 제외하여 더 정확한 내용 기반 유사도)
-        texts = df['교과목개요'].fillna("").tolist()
+        # 교과목 이름 + 교과목개요 사용 (사용자 요청 사항)
+        texts = df['feature_text'].tolist()
         
         # 상투적 표현 제거
         stopwords = {
@@ -142,7 +146,8 @@ class CourseGraphBuilder:
         # 실제 저장되는 임베딩은 SBERT 임베딩 유지
         # 유사도 계산 시 하이브리드로 조합
         
-        # 메타데이터로 TF-IDF 정보 저장 (나중에 compute_similarity에서 사용)
+        # 메타데이터로 TF-IDF 정보 저장 (나중에 compute_similarity 및 선수강 매핑에서 사용)
+        self._tfidf_vectorizer = tfidf
         self._tfidf_vectors = tfidf_norm
         self._hybrid_weight = 0.7  # 임베딩 가중치
         
@@ -191,6 +196,103 @@ class CourseGraphBuilder:
         
         return False
     
+    def compute_prerequisite_edges(self, df: pd.DataFrame, course_embeddings: np.ndarray, threshold: float = 0.7) -> Tuple[List[Tuple[int, int, float, str]], dict]:
+        """
+        선수강과목 매핑 연산
+        
+        Returns:
+            prereq_edges: [(source_idx, target_idx, sim, raw_text), ...]
+            unmapped: {course_idx: [unmapped_texts...]}
+        """
+        print(f"선수강과목 파싱 및 매핑 중... (임계값: {threshold})")
+        
+        prereq_edges = []
+        unmapped = {}
+        
+        course_names_raw = df['교과목 이름'].tolist()
+        course_names_clean = [str(n).strip().replace(" ", "").lower() for n in course_names_raw]
+        name_to_idx = {name: idx for idx, name in enumerate(course_names_clean)}
+        
+        stopwords = {
+            '대한', '통해', '여러', '다양한', '되는', '이해하고', '있는', '한다',
+            '등을', '개념을', '위한', '능력을', '있도록', '이를', '있다', '위해',
+            '이해를', '배우고', '학습한다', '익힌다', '다룬다', '강의한다',
+            '수업은', '과목은', '본', '및', '등', '수', '것', '더', '또한',
+            '대해', '관한', '하는', '되어', '같은', '따른', '따라', '관련',
+            '기반으로', '목표로', '중심으로', '통하여', '바탕으로',
+            '이', '그', '저', '매우', '수강하셨으면', '필수', '요구', 
+            '요구됨', '필요', '필요함', '필요합니다', '수강', '선수강', '추천', '좋습니다', '아닙니다'
+        }
+        
+        exact_match_count = 0
+        semantic_match_count = 0
+        unmapped_count = 0
+        
+        col_name = '선수강 과목' if '선수강 과목' in df.columns else '선수강과목'
+        if col_name not in df.columns:
+            print("선수강과목 컬럼을 찾을 수 없습니다.")
+            return [], {}
+            
+        for idx, row in df.iterrows():
+            prereq_text = row.get(col_name)
+            if pd.isna(prereq_text) or str(prereq_text).strip() == "":
+                continue
+                
+            raw_items = [item.strip() for item in str(prereq_text).split(',')]
+            unmapped_for_this_course = []
+            
+            for item in raw_items:
+                if not item: continue
+                clean_item = item.replace(" ", "").lower()
+                
+                # 1. Exact Match 시도
+                if clean_item in name_to_idx:
+                    target_idx = name_to_idx[clean_item]
+                    prereq_edges.append((idx, target_idx, 1.0, item))
+                    exact_match_count += 1
+                    continue
+                    
+                # 2. Semantic Match (임베딩 하이브리드)
+                filtered_item = ' '.join([w for w in item.split() if w not in stopwords and len(w) > 1])
+                if not filtered_item:
+                    unmapped_for_this_course.append(item)
+                    unmapped_count += 1
+                    continue
+                    
+                item_emb = self.embedding_model.encode([filtered_item], convert_to_numpy=True)
+                item_emb_norm = item_emb / (np.linalg.norm(item_emb, axis=1, keepdims=True) + 1e-8)
+                sim_embedding = cosine_similarity(item_emb_norm, course_embeddings)[0]
+                
+                if hasattr(self, '_tfidf_vectorizer') and self._tfidf_vectors is not None:
+                    item_tfidf = self._tfidf_vectorizer.transform([filtered_item]).toarray()
+                    item_tfidf_norm = item_tfidf / (np.linalg.norm(item_tfidf, axis=1, keepdims=True) + 1e-8)
+                    sim_tfidf = cosine_similarity(item_tfidf_norm, self._tfidf_vectors)[0]
+                    
+                    weight = getattr(self, '_hybrid_weight', 0.7)
+                    sim_final = weight * sim_embedding + (1 - weight) * sim_tfidf
+                else:
+                    sim_final = sim_embedding
+                
+                best_idx = np.argmax(sim_final)
+                best_score = sim_final[best_idx]
+                
+                if best_score >= threshold:
+                    prereq_edges.append((idx, int(best_idx), float(best_score), item))
+                    semantic_match_count += 1
+                else:
+                    unmapped_for_this_course.append(item)
+                    unmapped_count += 1
+                    
+            if unmapped_for_this_course:
+                unmapped[idx] = unmapped_for_this_course
+                
+        print(f"선수강과목 매핑 완료:")
+        print(f"  - 정확히 일치 (Exact Match): {exact_match_count} 건")
+        print(f"  - 유사도 일치 (Semantic Match >= {threshold}): {semantic_match_count} 건")
+        print(f"  - 매핑 실패 (Unmapped): {unmapped_count} 건")
+        
+        return prereq_edges, unmapped
+    
     def compute_similarity(self, df: pd.DataFrame, embeddings: np.ndarray, 
                           threshold: float = 0.7) -> List[Tuple[int, int, float]]:
         """
@@ -221,7 +323,7 @@ class CourseGraphBuilder:
             similarity_matrix = sim_embedding
         
         # 학수번호, 과목명 리스트
-        course_codes = df['학수번호'].tolist()
+        course_codes = df['학수번호'].tolist() if '학수번호' in df.columns else [''] * len(df)
         course_names = df['교과목 이름'].tolist()
         
         edges = []
@@ -232,7 +334,7 @@ class CourseGraphBuilder:
         for i in range(n):
             for j in range(i+1, n):  # 상삼각 행렬만 확인 (중복 방지)
                 # 같은 학수번호면 스킵
-                if course_codes[i] == course_codes[j]:
+                if course_codes[i] and course_codes[i] == course_codes[j]:
                     same_code_skipped += 1
                     continue
                 
@@ -261,6 +363,9 @@ class CourseGraphBuilder:
             (course_i, course_j, dept_i, dept_j) 튜플 리스트
         """
         print("학수번호 기반 엣지 계산 중...")
+        if '학수번호' not in df.columns:
+            print("  - 학수번호 컬럼이 없으므로 계산을 생략합니다.")
+            return []
         
         edges = []
         course_codes = df['학수번호'].tolist()
@@ -295,7 +400,9 @@ class CourseGraphBuilder:
         print("기존 데이터베이스 초기화 완료")
     
     def create_graph(self, df: pd.DataFrame, edges: List[Tuple[int, int, float]], 
-                    identical_edges: List[Tuple[int, int, str, str]] = None):
+                    identical_edges: List[Tuple[int, int, str, str]] = None,
+                    prereq_edges: List[Tuple[int, int, float, str]] = None,
+                    unmapped_prereqs: dict = None):
         """
         Neo4j 그래프 생성
         
@@ -303,9 +410,14 @@ class CourseGraphBuilder:
             df: 교과목 데이터프레임
             edges: 유사도 기반 엣지 리스트 (course_i, course_j, similarity)
             identical_edges: 학수번호 기반 엣지 리스트 (course_i, course_j, dept_i, dept_j)
+            prereq_edges: 선수강과목 매핑 엣지 (source, target, sim, raw_text)
+            unmapped_prereqs: 매핑 실패한 선수강과목 텍스트 딕셔너리
         """
         print("그래프 생성 중...")
         
+        if unmapped_prereqs is None:
+            unmapped_prereqs = {}
+            
         with self.driver.session() as session:
             # 1. 노드 생성 (교과목)
             print("  - 노드 생성 중...")
@@ -317,6 +429,8 @@ class CourseGraphBuilder:
                 elif '학년' in df.columns and pd.notna(row.get('학년')):
                     credits = int(row['학년'])  # 학년을 임시로 사용
                 
+                unmapped_text = ", ".join(unmapped_prereqs.get(idx, []))
+                
                 session.run(
                     """
                     CREATE (c:Course {
@@ -327,17 +441,19 @@ class CourseGraphBuilder:
                         category: $category,
                         department: $department,
                         description: $description,
-                        summary: $summary
+                        summary: $summary,
+                        unmapped_prerequisites: $unmapped_reqs
                     })
                     """,
                     id=int(idx),
-                    code=row['학수번호'],
+                    code=row.get('학수번호', ''),
                     name=row['교과목 이름'],
                     credits=credits,
                     category=row['이수구분'] if pd.notna(row['이수구분']) else '',
                     department=row['설강학과'] if pd.notna(row['설강학과']) else '',
                     description=row['교과목개요'] if pd.notna(row['교과목개요']) else '',
-                    summary=row.get('교과목개요_요약', '') if pd.notna(row.get('교과목개요_요약')) else ''
+                    summary=row.get('교과목개요_요약', '') if pd.notna(row.get('교과목개요_요약')) else '',
+                    unmapped_reqs=unmapped_text
                 )
             
             # 2. 엣지 생성 (유사도 관계)
@@ -381,7 +497,30 @@ class CourseGraphBuilder:
                         ]
                     )
                     print(f"    진행: {min(i+batch_size, len(identical_edges))}/{len(identical_edges)} 엣지")
-        
+            
+            # 4. 선수강과목 엣지 생성 (REQUIRES 관계)
+            if prereq_edges:
+                print("  - 선수강과목 엣지 생성 중...")
+                for i in range(0, len(prereq_edges), batch_size):
+                    batch = prereq_edges[i:i+batch_size]
+                    session.run(
+                        """
+                        UNWIND $edges AS edge
+                        MATCH (c1:Course {id: edge.source})
+                        MATCH (c2:Course {id: edge.target})
+                        CREATE (c1)-[:REQUIRES {
+                            similarity: edge.weight, 
+                            raw_text: edge.raw_text,
+                            note: '선수강과목 매핑'
+                        }]->(c2)
+                        """,
+                        edges=[
+                            {'source': e[0], 'target': e[1], 'weight': e[2], 'raw_text': e[3]}
+                            for e in batch
+                        ]
+                    )
+                    print(f"    진행: {min(i+batch_size, len(prereq_edges))}/{len(prereq_edges)} 엣지")
+                    
         print("그래프 생성 완료!")
     
     def create_indexes(self):
@@ -395,6 +534,7 @@ class CourseGraphBuilder:
     def get_statistics(self) -> dict:
         """그래프 통계 조회"""
         with self.driver.session() as session:
+            # 기본 교과목 및 유사도 엣지 통계
             result = session.run(
                 """
                 MATCH (c:Course)
@@ -408,12 +548,18 @@ class CourseGraphBuilder:
                 """
             )
             stats = result.single()
+            
+            # 선수강과목 매핑 엣지 (REQUIRES) 통계
+            result_req = session.run("MATCH ()-[r:REQUIRES]->() RETURN count(r) as num_requires")
+            req_stats = result_req.single()
+            
             return {
                 'num_courses': stats['num_courses'],
-                'num_edges': stats['num_edges'] // 2,  # 양방향이므로 2로 나눔
-                'avg_similarity': stats['avg_similarity'],
-                'max_similarity': stats['max_similarity'],
-                'min_similarity': stats['min_similarity']
+                'num_edges': stats['num_edges'] // 2 if stats['num_edges'] else 0,
+                'num_requires': req_stats['num_requires'],
+                'avg_similarity': stats['avg_similarity'] or 0.0,
+                'max_similarity': stats['max_similarity'] or 0.0,
+                'min_similarity': stats['min_similarity'] or 0.0
             }
     
     def find_similar_courses(self, course_name: str, top_k: int = 10) -> List[dict]:
@@ -448,7 +594,7 @@ def main():
     """메인 실행 함수"""
     
     # 설정
-    CSV_PATH = "C/Users/mjwoon/Workspace/LionsStudentDashboard/graphDB/final_course.csv"
+    CSV_PATH = "C/Users/mjwoon/Workspace/LionsStudentDashboard/graphDB/course_all_aggregated.csv"
     NEO4J_URI = "bolt://localhost:7687"
     NEO4J_USER = "neo4j"
     NEO4J_PASSWORD = "your_password"  # 실제 비밀번호로 변경 필요
@@ -478,13 +624,18 @@ def main():
         print("\n[3-2단계] 학수번호 기반 관계 계산")
         identical_edges = builder.compute_identical_id_edges(df)
         
+        # 3-3. 선수강과목 매핑
+        print("\n[3-3단계] 선수강과목 기반 관계 변환 (Threshold 0.6)")
+        PREREQ_THRESHOLD = 0.6
+        prereq_edges, unmapped_prereqs = builder.compute_prerequisite_edges(df, embeddings, threshold=PREREQ_THRESHOLD)
+        
         # 4. 기존 데이터 삭제 (선택사항)
         print("\n[4단계] 데이터베이스 초기화")
         # builder.clear_database()  # 주석 해제하여 사용
         
         # 5. 그래프 생성
         print("\n[5단계] Neo4j 그래프 생성")
-        builder.create_graph(df, edges, identical_edges)
+        builder.create_graph(df, edges, identical_edges, prereq_edges, unmapped_prereqs)
         
         # 6. 인덱스 생성
         print("\n[6단계] 인덱스 생성")
@@ -494,7 +645,8 @@ def main():
         print("\n[7단계] 그래프 통계")
         stats = builder.get_statistics()
         print(f"  - 교과목 수: {stats['num_courses']}")
-        print(f"  - 엣지 수: {stats['num_edges']}")
+        print(f"  - 유사성 엣지(SIMILAR_TO) 수: {stats['num_edges']}")
+        print(f"  - 선수강 엣지(REQUIRES) 수: {stats['num_requires']}")
         print(f"  - 평균 유사도: {stats['avg_similarity']:.4f}")
         print(f"  - 최대 유사도: {stats['max_similarity']:.4f}")
         print(f"  - 최소 유사도: {stats['min_similarity']:.4f}")

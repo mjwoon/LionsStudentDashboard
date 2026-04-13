@@ -462,7 +462,7 @@ def main() -> None:
         '--exp', nargs='+', choices=['1', '2', '3', 'all'], default=['all'],
         help='실행할 실험 번호 (예: --exp 1 3, --exp all)',
     )
-    parser.add_argument('--csv',        type=str,   default='final_course.csv')
+    parser.add_argument('--csv',        type=str,   default='course_all_aggregated.csv')
     parser.add_argument('--output-dir', type=str,   default='results')
     parser.add_argument('--gt-threshold', type=float, default=0.30,
                         help='GT 레이블 생성용 TF-IDF threshold (기본값: 0.30)')

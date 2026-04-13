@@ -18,7 +18,7 @@ def quick_start_example():
     NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
     NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password123")
-    CSV_PATH = "final_course.csv"
+    CSV_PATH = "course_all_aggregated.csv"
     SIMILARITY_THRESHOLD = 0.5  # 유사도 임계값
     
     print("=" * 80)
@@ -52,10 +52,15 @@ def quick_start_example():
         identical_edges = builder.compute_identical_id_edges(df)
         print(f"✓ {len(identical_edges)}개 동일 학수번호 관계 생성 완료\n")
         
+        # 선수강과목 매핑
+        print("선수강과목 파싱 및 매핑 중...")
+        prereq_edges, unmapped_prereqs = builder.compute_prerequisite_edges(df, embeddings, threshold=0.6)
+        print(f"✓ {len(prereq_edges)}개 엣지 생성 및 Unmapped 데이터 분류 완료\n")
+        
         # 그래프 생성
         print("Neo4j 그래프 생성 중...")
         builder.clear_database()  # 기존 데이터 삭제
-        builder.create_graph(df, edges, identical_edges)
+        builder.create_graph(df, edges, identical_edges, prereq_edges, unmapped_prereqs)
         builder.create_indexes()
         print("✓ 그래프 생성 완료\n")
         
@@ -185,6 +190,13 @@ WITH c.code as course_code,
      collect(DISTINCT c.department) + collect(DISTINCT c2.department) as depts
 RETURN course_code, depts, size(depts) as dept_count
 ORDER BY dept_count DESC
+LIMIT 10
+
+# 6. 선수강과목(Prerequisite) 매핑 결과 (NEW!)
+MATCH (c1:Course)-[r:REQUIRES]->(c2:Course)
+RETURN c1.name as source_course, c1.department as dept, 
+       c2.name as required_course, r.raw_text as raw_text, r.similarity as sim
+ORDER BY sim DESC
 LIMIT 10
 """)
 
