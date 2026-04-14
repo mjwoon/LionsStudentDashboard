@@ -97,7 +97,6 @@ export default function StudentCoursesTab({ student }: StudentCoursesTabProps) {
           <p className="text-[15pt] font-bold text-[#101828]">{student.latest_major_choice || '-'}</p>
         </div>
       </div>
-``
       {/* 수강 과목 목록 테이블 */}
       <div className="bg-white border border-black/10 rounded-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-black/10 flex items-center justify-between">
