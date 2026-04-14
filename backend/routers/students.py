@@ -10,8 +10,6 @@ from models.schemas import (
     SurveyChoiceBase
 )
 from services.student_service import calculate_entry_requirement_completion
-from datetime import datetime
-import math
 
 router = APIRouter(prefix="/api", tags=["students"])
 

@@ -9,12 +9,10 @@ from pydantic import BaseModel, Field
 
 from services.graph_service import CourseGraphService
 
-
 router = APIRouter(
     prefix="/graph",
     tags=["Graph Analysis - 교과목 그래프 분석"]
 )
-
 
 # ==================== Pydantic 모델 ====================
 
