@@ -43,14 +43,6 @@ class EvaluationService:
         self._similarity_threshold = 0.7  # 유사과목 인정 최소 유사도
         self._graph_available = None      # Neo4j 연결 상태 캐시 (None=미확인)
     
-    def _load_necessary_courses(self) -> Dict:
-        """Deprecated: Use DB directly"""
-        return {}
-    
-    def _load_recommended_courses(self) -> Dict:
-        """Deprecated: Use DB directly"""
-        return {}
-    
     def _load_all_curriculum_data(self) -> Dict[str, List[Dict]]:
         """모든 학과 교육과정 DB 로드 (유사과목 판정용)"""
         if self._curriculum_data_cache:
@@ -573,22 +565,6 @@ class EvaluationService:
                     return (True, 1.0, detail)
         
         return (False, 0.0, None)
-    
-    def _find_similar_courses(
-        self,
-        target_course_name: str,
-        student_completed_courses: Dict
-    ) -> bool:
-        """
-        학생이 이수한 과목 중 타겟 과목과 유사한 과목이 있는지 확인
-        (하위 호환용 - 내부적으로 _find_best_similar_course 사용)
-        """
-        course_name_to_codes = self._get_all_course_codes_by_name()
-        target_codes = course_name_to_codes.get(target_course_name, set())
-        is_similar, _, _ = self._find_best_similar_course(
-            target_codes, target_course_name, student_completed_courses
-        )
-        return is_similar
     
     def _save_evaluation_result(
         self,

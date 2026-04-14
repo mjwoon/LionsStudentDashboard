@@ -59,7 +59,6 @@ def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[flo
     
     return current_gpa, total_earned_credits
 
-
 def update_student_gpa(db: Session, student_id: int) -> Tuple[float, int]:
     """
     Update student's current_gpa and total_credits fields.
@@ -80,74 +79,6 @@ def update_student_gpa(db: Session, student_id: int) -> Tuple[float, int]:
         db.flush()
     
     return gpa, credits
-
-
-def refresh_all_student_gpas(db: Session) -> int:
-    """
-    Refresh GPA and credits for all students in the database.
-    Useful for batch updates or data migration.
-    
-    Args:
-        db: Database session
-        
-    Returns:
-        int: Number of students updated
-    """
-    students = db.query(Student).all()
-    
-    for student in students:
-        update_student_gpa(db, student.student_id)
-    
-    db.commit()
-    
-    return len(students)
-
-
-def calculate_first_year_completion(
-    db: Session,
-    student_id: int,
-    department_id: int
-) -> Tuple[int, int]:
-    """
-    Calculate first-year course completion for a student in a specific department.
-    
-    Args:
-        db: Database session
-        student_id: Student PK (student_id VARCHAR)
-        department_id: Department ID to check courses for
-        
-    Returns:
-        Tuple[int, int]: (completed_count, total_count)
-    """
-    from constants import FIRST_YEAR, FAILING_GRADE
-    from models.models import Department
-    
-    dept = db.query(Department).filter(Department.id == department_id).first()
-    if not dept:
-        return 0, 0
-    
-    # Get all first-year courses for the department
-    first_year_courses = db.query(Course).filter(
-        Course.course_department == dept.name,
-        Course.course_year == FIRST_YEAR
-    ).all()
-    
-    if not first_year_courses:
-        return 0, 0
-    
-    total_count = len(first_year_courses)
-    first_year_course_codes = [c.course_code for c in first_year_courses]
-    
-    # Count completed courses (excluding F grades)
-    completed_count = db.query(StudentCourse).filter(
-        StudentCourse.student_id == student_id,
-        StudentCourse.course_code.in_(first_year_course_codes),
-        StudentCourse.grade.isnot(None),
-        StudentCourse.grade != FAILING_GRADE
-    ).count()
-    
-    return completed_count, total_count
-
 
 def calculate_entry_requirement_completion(
     db: Session,
@@ -185,55 +116,3 @@ def calculate_entry_requirement_completion(
 
     return completed_count, total_count
 
-
-def get_student_grade_summary(db: Session, student_id: int) -> dict:
-    """
-    Get comprehensive grade summary for a student.
-    
-    Args:
-        db: Database session
-        student_id: Student PK (student_id VARCHAR)
-        
-    Returns:
-        dict: Summary including GPA, credits, grade distribution, etc.
-    """
-    from constants import FAILING_GRADE
-    
-    student = db.query(Student).filter(Student.student_id == student_id).first()
-    if not student:
-        return None
-    
-    # Get all enrollments with grades
-    enrollments = db.query(StudentCourse).filter(
-        StudentCourse.student_id == student_id,
-        StudentCourse.grade.isnot(None),
-        StudentCourse.grade != ""
-    ).all()
-    
-    # Grade distribution
-    grade_counts = {}
-    for enrollment in enrollments:
-        grade = enrollment.grade
-        grade_counts[grade] = grade_counts.get(grade, 0) + 1
-    
-    # Course type distribution
-    course_codes = [e.course_code for e in enrollments]
-    courses = db.query(Course).filter(Course.course_code.in_(course_codes)).all()
-    course_type_credits = {}
-    
-    for course in courses:
-        course_type = course.course_type
-        # Find enrollment for this course
-        enrollment = next((e for e in enrollments if e.course_code == course.course_code), None)
-        if enrollment and enrollment.grade != FAILING_GRADE:
-            course_type_credits[course_type] = course_type_credits.get(course_type, 0) + course.credits
-    
-    return {
-        "student_id": student.student_id,
-        "name": student.name,
-        "current_gpa": student.current_gpa,
-        "total_credits": student.total_credits,
-        "total_courses": len(enrollments),
-        "grade_distribution": grade_counts,
-        "credits_by_course_type": course_type_credits
-    }

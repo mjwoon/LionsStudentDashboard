@@ -22,10 +22,10 @@ export const FAILING_GRADE = 'F';
  * Grade display options for UI
  */
 export const GRADE_OPTIONS = [
-  'A+', 'A0', 'A-',
-  'B+', 'B0', 'B-',
-  'C+', 'C0', 'C-',
-  'D+', 'D0', 'D-',
+  'A+', 'A0', 
+  'B+', 'B0', 
+  'C+', 'C0',
+  'D+', 'D0', 
   'F'
 ] as const;
 
@@ -83,25 +83,6 @@ export const SCORE_COLORS = {
 } as const;
 
 /**
- * Get score color based on value
- */
-export function getScoreColor(score: number): string {
-  if (score >= 90) return SCORE_COLORS.excellent;
-  if (score >= 80) return SCORE_COLORS.good;
-  if (score >= 70) return SCORE_COLORS.average;
-  if (score >= 60) return SCORE_COLORS.below;
-  return SCORE_COLORS.poor;
-}
-
-/**
- * Get grade badge color
- */
-export function getGradeBadgeColor(grade: string): string {
-  const firstChar = grade.charAt(0) as keyof typeof GRADE_COLORS;
-  return GRADE_COLORS[firstChar] || GRADE_COLORS.F;
-}
-
-/**
  * Course type badge colors
  */
 export const COURSE_TYPE_COLORS: Record<string, string> = {
@@ -112,60 +93,6 @@ export const COURSE_TYPE_COLORS: Record<string, string> = {
   '교양필수': 'bg-yellow-100 text-yellow-800',
   '교양선택': 'bg-gray-100 text-gray-800',
 } as const;
-
-/**
- * Get course type badge color
- */
-export function getCourseTypeBadgeColor(type: string): string {
-  return COURSE_TYPE_COLORS[type] || 'bg-gray-100 text-gray-800';
-}
-
-/**
- * Get decision certainty label and color
- */
-export function getDecisionCertaintyDisplay(certainty?: number): { label: string; color: string } {
-  if (!certainty) {
-    return { label: '-', color: 'text-gray-500' };
-  }
-  
-  const label = DECISION_SCALE.LABELS[certainty as keyof typeof DECISION_SCALE.LABELS] || '-';
-  
-  const colorMap: Record<number, string> = {
-    5: 'bg-green-100 text-green-800',
-    4: 'bg-blue-100 text-blue-800',
-    3: 'bg-gray-100 text-gray-800',
-    2: 'bg-orange-100 text-orange-800',
-    1: 'bg-red-100 text-red-800'
-  };
-  
-  const color = colorMap[certainty] || 'bg-gray-100 text-gray-800';
-  
-  return { label, color };
-}
-
-/**
- * Get score badge color based on value
- */
-export function getScoreBadgeColor(score: number | string): string {
-  const numScore = typeof score === 'string' ? parseInt(score) : score;
-  
-  if (numScore >= 80) return 'bg-green-100 text-green-800';
-  if (numScore >= 60) return 'bg-blue-100 text-blue-800';
-  if (numScore >= 40) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-800';
-}
-
-/**
- * Get badge variant for UI Badge component
- */
-export function getScoreBadgeVariant(score: number | string): 'green' | 'blue' | 'yellow' | 'red' {
-  const numScore = typeof score === 'string' ? parseInt(score) : score;
-  
-  if (numScore >= 80) return 'green';
-  if (numScore >= 60) return 'blue';
-  if (numScore >= 40) return 'yellow';
-  return 'red';
-}
 
 // ============================================================================
 // Pagination Constants
