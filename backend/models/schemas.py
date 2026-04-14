@@ -552,7 +552,7 @@ class EnrollmentDataUpload(BaseModel):
 class CurriculumDataUpload(BaseModel):
     """교육과정 데이터 업로드 스키마"""
     department_code: Optional[str] = Field(None, validation_alias=AliasChoices("department_code", "학과코드", "소속학과", "학과"))
-    department_id: Optional[int] = Field(None, validation_alias=AliasChoices("department_id", "소속학과ID", "학과ID"))
+    department_id: Optional[int] = Field(None, validation_alias=AliasChoices("department_id", "소속학과ID", "학과ID", "교육과정학과코드", "설강학과"))
     course_year: int = Field(..., validation_alias=AliasChoices("course_year", "권장학년", "학년", "수강학년"))
     course_code: str = Field(..., validation_alias=AliasChoices("course_code", "학수번호", "과목코드", "교과목번호"))
     course_name: str = Field(..., validation_alias=AliasChoices("course_name", "과목명", "교과목이름", "교과목명"))
@@ -629,7 +629,6 @@ class CourseDataUpload(BaseModel):
     course_name: str = Field(..., validation_alias=AliasChoices("course_name", "과목명", "교과목이름", "교과목 이름", "교과목명"))
     course_type: Optional[str] = Field(None, validation_alias=AliasChoices("course_type", "이수구분"))
     course_year: Optional[int] = Field(None, validation_alias=AliasChoices("course_year", "학년", "권장학년", "권장 학년"))
-    semester: Optional[int] = Field(None, validation_alias=AliasChoices("semester", "학기", "권장학기", "권장 학기"))
     department_name: Optional[str] = Field(None, validation_alias=AliasChoices("department_name", "설강학과", "관장학과"))
     department_code: Optional[str] = Field(None, validation_alias=AliasChoices("department_code"))
     credits: Optional[int] = Field(None, validation_alias=AliasChoices("credits", "학점"))

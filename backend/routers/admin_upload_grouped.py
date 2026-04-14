@@ -3,9 +3,10 @@
 
 1. 단과대학 + 학과 → colleges, departments
 2. 학생 + 희망전공조사 → students, major_surveys
-3. 진입요건 + 권장과목 → department_entry_requirements, requirement_courses, course_recommendations
-4. 과목 + 교육과정 → courses, curriculums
-5. 수강 데이터 → student_courses
+3. 과목 → courses
+4. 교육과정 → curriculums
+5. 진입요건 + 권장과목 → department_entry_requirements, requirement_courses, course_recommendations
+6. 수강 데이터 → student_courses
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -208,9 +209,114 @@ async def upload_students_grouped(
         logger.error(f"Grouped students upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"업로드 실패: {str(e)}")
 
+# ─────────────────────────────────────────────
+# 그룹 3: 과목 
+# ─────────────────────────────────────────────
+@router.post("/courses", response_model=GroupedUploadResponse)
+async def upload_courses_grouped(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    과목 업로드
+
+    CSV 컬럼:
+    학수번호, 교과목이름, 학점, 이수구분, 학년, 설강학과, 교과목개요
+    """
+    try:
+        data = await parse_upload_file(file)
+        if not data:
+            raise ValueError("파일에 데이터가 없습니다.")
+
+        sub_results = []
+        total_uploaded = 0
+        total_updated = 0
+
+        # Step 1: courses 업로드
+        courses_list = []
+        for row in data:
+            code = row.get("course_code") or row.get("학수번호") or row.get("과목코드")
+            name = row.get("course_name") or row.get("과목명") or row.get("교과목이름") or row.get("교과목 이름") or row.get("교과목명")
+            if code and name:
+                courses_list.append(CourseDataUpload(**row))
+
+        if courses_list:
+            courses_resp = AdminService.upload_courses(db, courses_list)
+            sub_results.append(_make_sub_result("과목", courses_resp))
+            total_uploaded += courses_resp.uploaded_count
+            total_updated += courses_resp.updated_count
+        else:
+            sub_results.append({"label": "과목", "success": True, "message": "과목 데이터 없음", "uploaded_count": 0, "updated_count": 0})
+
+        all_success = all(r.get("success", True) for r in sub_results)
+        return GroupedUploadResponse(
+            success=all_success,
+            message=f"과목 업로드 완료 (추가: {total_uploaded}, 업데이트: {total_updated})",
+            uploaded_count=total_uploaded,
+            updated_count=total_updated,
+            sub_results=sub_results,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Grouped courses upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"업로드 실패: {str(e)}")
+
 
 # ─────────────────────────────────────────────
-# 그룹 3: 진입요건 + 권장과목
+# 그룹 4: 교육과정
+# ─────────────────────────────────────────────
+@router.post("/curriculum", response_model=GroupedUploadResponse)
+async def upload_curriculum_grouped(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    교육과정 업로드
+
+    CSV 컬럼:
+    학수번호, 교과목이름, 학점, 이수구분, 학년, 학기, 설강학과, 교육과정학과코드
+    """
+    try:
+        data = await parse_upload_file(file)
+        if not data:
+            raise ValueError("파일에 데이터가 없습니다.")
+
+        sub_results = []
+        total_uploaded = 0
+        total_updated = 0
+
+        # Step 1: curriculums 업로드
+        curr_list = []
+        for row in data:
+            curr_list.append(CurriculumDataUpload(**row))
+
+        if curr_list:
+            curr_resp = AdminService.upload_curriculums(db, curr_list)
+            sub_results.append(_make_sub_result("교육과정", curr_resp))
+            total_uploaded += curr_resp.uploaded_count
+            total_updated += curr_resp.updated_count
+        else:
+            sub_results.append({"label": "교육과정", "success": True, "message": "교육과정 데이터 없음", "uploaded_count": 0, "updated_count": 0})
+
+        all_success = all(r.get("success", True) for r in sub_results)
+        return GroupedUploadResponse(
+            success=all_success,
+            message=f"교육과정 업로드 완료 (추가: {total_uploaded}, 업데이트: {total_updated})",
+            uploaded_count=total_uploaded,
+            updated_count=total_updated,
+            sub_results=sub_results,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Grouped curriculum upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"업로드 실패: {str(e)}")
+
+# ─────────────────────────────────────────────
+# 그룹 5: 진입요건 + 권장과목
 # ─────────────────────────────────────────────
 @router.post("/requirements", response_model=GroupedUploadResponse)
 async def upload_requirements_grouped(
@@ -336,101 +442,7 @@ async def upload_requirements_grouped(
 
 
 # ─────────────────────────────────────────────
-# 그룹 4: 과목 + 교육과정
-# ─────────────────────────────────────────────
-@router.post("/courses", response_model=GroupedUploadResponse)
-async def upload_courses_grouped(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-):
-    """
-    과목 + 교육과정 통합 업로드
-
-    CSV 컬럼:
-    학수번호, 교과목이름, 학점, 이수구분, 학년, 학기, 설강학과, 교과목개요, 교육과정학과코드
-    """
-    try:
-        data = await parse_upload_file(file)
-        if not data:
-            raise ValueError("파일에 데이터가 없습니다.")
-
-        sub_results = []
-        total_uploaded = 0
-        total_updated = 0
-
-        # Step 1: courses 업로드
-        courses_list = []
-        for row in data:
-            code = row.get("course_code") or row.get("학수번호") or row.get("과목코드")
-            name = row.get("course_name") or row.get("과목명") or row.get("교과목이름") or row.get("교과목 이름") or row.get("교과목명")
-            if code and name:
-                courses_list.append(CourseDataUpload(**row))
-
-        if courses_list:
-            courses_resp = AdminService.upload_courses(db, courses_list)
-            sub_results.append(_make_sub_result("과목", courses_resp))
-            total_uploaded += courses_resp.uploaded_count
-            total_updated += courses_resp.updated_count
-        else:
-            sub_results.append({"label": "과목", "success": True, "message": "과목 데이터 없음", "uploaded_count": 0, "updated_count": 0})
-
-        # Step 2: curriculums 추출 (교육과정학과코드가 있는 행, 중복 제거)
-        curr_list = []
-        seen_curr_pairs = set()  # (department_code, course_code) 중복 방지
-        for row in data:
-            curr_dept = row.get("curriculum_dept_code") or row.get("교육과정학과코드") or row.get("교육과정학과")
-            code = row.get("course_code") or row.get("학수번호") or row.get("과목코드")
-            name = row.get("course_name") or row.get("과목명") or row.get("교과목이름") or row.get("교과목 이름") or row.get("교과목명")
-            if curr_dept and code and name:
-                # pandas가 숫자를 float로 읽을 수 있으므로 str 변환
-                curr_dept_str = str(int(curr_dept)) if isinstance(curr_dept, float) else str(curr_dept)
-                code_str = str(int(code)) if isinstance(code, float) else str(code)
-                pair_key = (curr_dept_str, code_str)
-                if pair_key in seen_curr_pairs:
-                    continue
-                seen_curr_pairs.add(pair_key)
-                curr_list.append(CurriculumDataUpload(
-                    department_code=curr_dept_str,
-                    course_year=row.get("course_year") or row.get("학년") or row.get("권장학년") or 1,
-                    course_code=code_str,
-                    course_name=name,
-                    credits=row.get("credits") or row.get("학점") or 3,
-                    course_type=row.get("course_type") or row.get("이수구분"),
-                    semester=row.get("semester") or row.get("학기") or row.get("권장학기") or 1,
-                ))
-
-        if curr_list:
-            logger.info(f"교육과정 {len(curr_list)}건 업로드 시도")
-            curr_resp = AdminService.upload_curriculums(db, curr_list)
-            logger.info(f"교육과정 업로드 결과: 추가={curr_resp.uploaded_count}, 업데이트={curr_resp.updated_count}")
-            if curr_resp.detailed_errors:
-                for err in curr_resp.detailed_errors:
-                    logger.warning(f"교육과정 업로드 에러 - 행:{err.row}, 과목:{err.item_id}, 사유:{err.reason}")
-            sub_results.append(_make_sub_result("교육과정", curr_resp))
-            total_uploaded += curr_resp.uploaded_count
-            total_updated += curr_resp.updated_count
-        else:
-            logger.info("교육과정 데이터 없음 (교육과정학과코드 컬럼이 없거나 비어있음)")
-            sub_results.append({"label": "교육과정", "success": True, "message": "교육과정 데이터 없음", "uploaded_count": 0, "updated_count": 0})
-
-        all_success = all(r.get("success", True) for r in sub_results)
-        return GroupedUploadResponse(
-            success=all_success,
-            message=f"과목+교육과정 업로드 완료 (추가: {total_uploaded}, 업데이트: {total_updated})",
-            uploaded_count=total_uploaded,
-            updated_count=total_updated,
-            sub_results=sub_results,
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Grouped courses upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"업로드 실패: {str(e)}")
-
-
-# ─────────────────────────────────────────────
-# 그룹 5: 수강 데이터
+# 그룹 6: 수강 데이터
 # ─────────────────────────────────────────────
 @router.post("/enrollments", response_model=GroupedUploadResponse)
 async def upload_enrollments_grouped(

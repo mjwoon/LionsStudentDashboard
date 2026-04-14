@@ -73,19 +73,35 @@ const UPLOAD_GROUPS: UploadGroup[] = [
   },
   {
     id: 'courses',
-    title: '과목 + 교육과정',
+    title: '과목',
     uploadFn: api.admin.uploadGroupedCourses,
     sampleFilename: 'sample_courses.csv',
     sampleData: [
       {
         학수번호: 'CSE101',
-        '교과목 이름': '컴퓨터공학개론',
+        교과목이름: '컴퓨터공학개론',
+        학점: 3,
+        이수구분: '전공기초',
+        학년: 1,
+        설강학과: '컴퓨터전공',
+        교과목개요: '컴퓨터공학의 기초를 학습한다.',
+      },
+    ],
+  },
+  {
+    id: 'curriculum',
+    title: '교육과정',
+    uploadFn: api.admin.uploadGroupedCurriculum,
+    sampleFilename: 'sample_curriculum.csv',
+    sampleData: [
+      {
+        학수번호: 'CSE101',
+        교과목이름: '컴퓨터공학개론',
         학점: 3,
         이수구분: '전공기초',
         학년: 1,
         학기: 1,
         설강학과: '컴퓨터전공',
-        교과목개요: '컴퓨터공학의 기초를 학습한다.',
         교육과정학과코드: '301',
       },
     ],
@@ -218,11 +234,10 @@ export default function DataUploadTab() {
       {subResults.map((sub, idx) => (
         <div
           key={idx}
-          className={`flex items-center justify-between px-3 py-2 rounded-md text-sm ${
-            sub.success
+          className={`flex items-center justify-between px-3 py-2 rounded-md text-sm ${sub.success
               ? 'bg-green-50 text-green-800'
               : 'bg-red-50 text-red-800'
-          }`}
+            }`}
         >
           <span className="font-medium">{sub.label}</span>
           <span>
@@ -254,11 +269,10 @@ export default function DataUploadTab() {
           {/* 파일 선택 + 파일명 + 샘플 */}
           <div className="flex items-center gap-3">
             <label
-              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors whitespace-nowrap ${
-                state.uploading
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer transition-colors whitespace-nowrap ${state.uploading
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
+                }`}
             >
               파일 선택
               <input
@@ -310,11 +324,10 @@ export default function DataUploadTab() {
           {/* 결과 표시 */}
           {state.result && (
             <div
-              className={`p-4 rounded-lg ${
-                state.result.success
+              className={`p-4 rounded-lg ${state.result.success
                   ? 'bg-green-50 border border-green-200'
                   : 'bg-red-50 border border-red-200'
-              }`}
+                }`}
             >
               <div className="flex items-start gap-2">
                 {state.result.success ? (
@@ -324,9 +337,8 @@ export default function DataUploadTab() {
                 )}
                 <div className="flex-1">
                   <p
-                    className={`font-medium ${
-                      state.result.success ? 'text-green-800' : 'text-red-800'
-                    }`}
+                    className={`font-medium ${state.result.success ? 'text-green-800' : 'text-red-800'
+                      }`}
                   >
                     {state.result.message}
                   </p>
@@ -432,7 +444,7 @@ export default function DataUploadTab() {
         </div>
       </div>
 
-      {/* 5개 그룹 카드 */}
+      {/* 6개 그룹 카드 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {UPLOAD_GROUPS.map((group) => renderGroupCard(group))}
       </div>

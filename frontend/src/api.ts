@@ -448,6 +448,20 @@ export const api = {
       return await response.json()
     },
 
+    uploadGroupedCurriculum: async (file: File): Promise<GroupedUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch(`${API_BASE}/api/admin/upload-grouped/curriculum`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+      }
+      return await response.json()
+    },
+
     uploadGroupedEnrollments: async (file: File): Promise<GroupedUploadResponse> => {
       const formData = new FormData()
       formData.append('file', file)
