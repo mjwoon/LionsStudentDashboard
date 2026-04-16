@@ -4,6 +4,8 @@ Neo4j 그래프 데이터베이스 서비스
 """
 
 import os
+import time
+from functools import lru_cache
 from typing import List, Dict, Optional
 from neo4j import GraphDatabase
 from contextlib import contextmanager
@@ -54,6 +56,33 @@ def get_session():
         session.close()
 
 
+# ==================== 모듈 레벨 연결 상태 캐시 ====================
+# 인스턴스마다 연결 확인을 반복하지 않도록 30초 TTL로 모듈 단위에서 관리
+# - 일시적 Neo4j 장애 복구 시 최대 30초 이내에 자동 정상화
+# - 모든 요청 간 공유 (EvaluationService 인스턴스 재생성과 무관)
+_HEALTH_TTL_SECONDS = 30.0
+_health_cache: Dict = {"available": None, "checked_at": 0.0}
+
+
+def is_graph_available() -> bool:
+    """
+    Neo4j 연결 가능 여부 확인 (30초 TTL 모듈 레벨 캐시)
+
+    Returns:
+        True: Neo4j 연결 정상
+        False: 연결 불가 (최대 30초 후 재확인)
+    """
+    now = time.monotonic()
+    if now - _health_cache["checked_at"] > _HEALTH_TTL_SECONDS:
+        try:
+            get_neo4j_driver().verify_connectivity()
+            _health_cache["available"] = True
+        except Exception:
+            _health_cache["available"] = False
+        _health_cache["checked_at"] = now
+    return bool(_health_cache["available"])
+
+
 class CourseGraphService:
     """교과목 그래프 분석 서비스"""
     
@@ -92,13 +121,13 @@ class CourseGraphService:
     
     @staticmethod
     def check_connection() -> bool:
-        """Neo4j 연결 상태 확인"""
-        try:
-            driver = get_neo4j_driver()
-            driver.verify_connectivity()
-            return True
-        except Exception:
-            return False
+        """
+        Neo4j 연결 상태 확인
+
+        내부적으로 모듈 레벨 TTL 캐시(is_graph_available)를 사용합니다.
+        /graph/health 엔드포인트 등 외부 노출용으로 유지합니다.
+        """
+        return is_graph_available()
     
     # ==================== 교과목 검색 ====================
     
@@ -418,48 +447,69 @@ class CourseGraphService:
             return [dict(record) for record in result]
     
     # ==================== 교과과정 분석 ====================
-    
+
     @staticmethod
     def get_curriculum_structure(department: Optional[str] = None) -> Dict:
         """
         교과과정 구조 분석
-        
+
+        f-string Cypher 주입 방지를 위해 department 유무에 따라
+        쿼리를 완전히 분리합니다 (WHERE 절 코드 주입 위험 제거).
+
         Args:
             department: 분석할 학과 (None이면 전체)
         """
         with get_session() as session:
-            # 부서 필터
-            dept_filter = "WHERE c.department CONTAINS $dept" if department else ""
-            dept_param = department or ""
-            
-            # 이수구분별 통계
-            cat_result = session.run(
-                f"""
-                MATCH (c:Course)
-                {dept_filter}
-                WITH c.category as category, 
-                     count(*) as course_count,
-                     avg(c.credits) as avg_credits
-                RETURN category, course_count, avg_credits
-                ORDER BY course_count DESC
-                """,
-                dept=dept_param
-            )
-            categories = [dict(record) for record in cat_result]
-            
-            # 전체 통계
-            total_result = session.run(
-                f"""
-                MATCH (c:Course)
-                {dept_filter}
-                RETURN count(*) as total_courses,
-                       sum(c.credits) as total_credits,
-                       avg(c.credits) as avg_credits
-                """,
-                dept=dept_param
-            )
+            if department:
+                # ── 학과 필터 있는 경우: 값은 파라미터, 구조 변경 없음 ──────
+                cat_result = session.run(
+                    """
+                    MATCH (c:Course)
+                    WHERE c.department CONTAINS $dept
+                    WITH c.category as category,
+                         count(*) as course_count,
+                         avg(c.credits) as avg_credits
+                    RETURN category, course_count, avg_credits
+                    ORDER BY course_count DESC
+                    """,
+                    dept=department
+                )
+                categories = [dict(record) for record in cat_result]
+
+                total_result = session.run(
+                    """
+                    MATCH (c:Course)
+                    WHERE c.department CONTAINS $dept
+                    RETURN count(*) as total_courses,
+                           sum(c.credits) as total_credits,
+                           avg(c.credits) as avg_credits
+                    """,
+                    dept=department
+                )
+            else:
+                # ── 전체 조회: WHERE 절 자체가 없는 별개 쿼리 ────────────────
+                cat_result = session.run(
+                    """
+                    MATCH (c:Course)
+                    WITH c.category as category,
+                         count(*) as course_count,
+                         avg(c.credits) as avg_credits
+                    RETURN category, course_count, avg_credits
+                    ORDER BY course_count DESC
+                    """
+                )
+                categories = [dict(record) for record in cat_result]
+
+                total_result = session.run(
+                    """
+                    MATCH (c:Course)
+                    RETURN count(*) as total_courses,
+                           sum(c.credits) as total_credits,
+                           avg(c.credits) as avg_credits
+                    """
+                )
+
             total_stats = total_result.single()
-            
             return {
                 'department': department or '전체',
                 'total_courses': total_stats['total_courses'] if total_stats else 0,
@@ -533,19 +583,27 @@ class CourseGraphService:
             return [dict(record) for record in result]
     
     # ==================== 유사도 조회 ====================
-    
+
     @staticmethod
+    @lru_cache(maxsize=4096)
     def get_similarity_between(code1: str, code2: str) -> float:
         """
-        두 과목 간 유사도 조회
-        
+        두 과목 간 유사도 조회 (프로세스 레벨 LRU 캐시 적용)
+
+        그래프는 오프라인 파이프라인으로 구축 후 변하지 않으므로
+        lru_cache로 반복 Neo4j 왕복 쿼리를 방지합니다.
+        - 최대 4096쌍 캐싱
+        - 캐시 초기화 필요 시: CourseGraphService.get_similarity_between.cache_clear()
+
         Args:
             code1: 첫 번째 과목 학수번호
             code2: 두 번째 과목 학수번호
-            
+
         Returns:
             유사도 (0.0 ~ 1.0), 관계 없으면 0.0
         """
+        # 키 정규화: (A,B) == (B,A) 동일 처리
+        c1, c2 = sorted([code1, code2])
         with get_session() as session:
             result = session.run(
                 """
@@ -553,8 +611,76 @@ class CourseGraphService:
                 RETURN r.similarity as similarity
                 LIMIT 1
                 """,
-                code1=code1,
-                code2=code2
+                code1=c1,
+                code2=c2
             )
             record = result.single()
             return float(record['similarity']) if record else 0.0
+
+    # ==================== 선수강 관계 (REQUIRES) ====================
+
+    @staticmethod
+    def get_prerequisites(course_name: str) -> List[Dict]:
+        """
+        특정 교과목의 직접 선수강 과목 목록 조회 (REQUIRES 관계)
+
+        graphDB 파이프라인에서 구성한 REQUIRES 엣지를 조회합니다.
+        - REQUIRES.raw_text: 원본 선수강 텍스트 (CSV 원문)
+        - REQUIRES.similarity: 텍스트 매핑 신뢰도 (exact match = 1.0)
+
+        Args:
+            course_name: 조회할 교과목 이름
+
+        Returns:
+            선수강 과목 리스트 (name, code, department, credits, raw_text, match_confidence)
+        """
+        with get_session() as session:
+            result = session.run(
+                """
+                MATCH (c:Course {name: $name})-[r:REQUIRES]->(prereq:Course)
+                RETURN prereq.name        as name,
+                       prereq.code        as code,
+                       prereq.department  as department,
+                       prereq.category    as category,
+                       prereq.credits     as credits,
+                       r.raw_text         as raw_text,
+                       r.similarity       as match_confidence
+                ORDER BY r.similarity DESC
+                """,
+                name=course_name
+            )
+            return [dict(record) for record in result]
+
+    @staticmethod
+    def get_learning_path(course_name: str, max_depth: int = 3) -> List[Dict]:
+        """
+        특정 교과목까지의 선수강 체인 탐색
+
+        REQUIRES 관계를 재귀적으로 따라가며 해당 과목을 수강하기 위해
+        미리 이수해야 하는 과목들의 모든 경로를 반환합니다.
+
+        Args:
+            course_name: 목표 교과목 이름
+            max_depth: 최대 선수강 체인 깊이 (기본 3단계)
+
+        Returns:
+            경로 리스트 [{path_names, depth}, ...]
+            - path_names: 시작 과목부터 목표 과목까지 이름 순서
+            - depth: 경로 깊이 (선수강 단계 수)
+        """
+        ALLOWED_DEPTHS = {1, 2, 3, 4, 5}
+        if max_depth not in ALLOWED_DEPTHS:
+            raise ValueError(f"max_depth는 {ALLOWED_DEPTHS} 중 하나여야 합니다.")
+
+        with get_session() as session:
+            result = session.run(
+                f"""
+                MATCH path = (start:Course)-[:REQUIRES*1..{max_depth}]->(end:Course {{name: $name}})
+                RETURN [n IN nodes(path) | n.name] AS path_names,
+                       length(path)                AS depth
+                ORDER BY depth
+                LIMIT 30
+                """,
+                name=course_name
+            )
+            return [dict(record) for record in result]

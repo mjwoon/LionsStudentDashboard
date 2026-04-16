@@ -93,6 +93,23 @@ class HealthResponse(BaseModel):
     message: str
 
 
+class PrerequisiteCourse(BaseModel):
+    """선수강 과목 정보 (REQUIRES 관계)"""
+    name: str
+    code: Optional[str] = None
+    department: Optional[str] = None
+    category: Optional[str] = None
+    credits: Optional[int] = None
+    raw_text: Optional[str] = None          # CSV 원본 선수강 텍스트
+    match_confidence: Optional[float] = None  # 매핑 신뢰도 (1.0=완전 일치)
+
+
+class LearningPathEntry(BaseModel):
+    """선수강 체인 경로 단건"""
+    path_names: List[str]   # [시작과목, ..., 목표과목] 순서
+    depth: int              # 선수강 단계 수
+
+
 # ==================== 상태 확인 ====================
 
 @router.get("/health", response_model=HealthResponse, summary="Neo4j 연결 상태 확인")
@@ -333,3 +350,58 @@ def get_categories():
         return CourseGraphService.get_categories()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"조회 실패: {str(e)}")
+
+
+# ==================== 선수강 관계 (REQUIRES) ====================
+
+@router.get(
+    "/prerequisites/{course_name}",
+    response_model=List[PrerequisiteCourse],
+    summary="선수강 과목 조회",
+)
+def get_prerequisites(course_name: str):
+    """
+    특정 교과목의 직접 선수강 과목 목록을 조회합니다.
+
+    graphDB 파이프라인에서 구성된 REQUIRES 관계를 기반으로 합니다.
+    - **raw_text**: CSV에 기재된 원본 선수강 과목 텍스트
+    - **match_confidence**: 텍스트 매핑 신뢰도 (1.0 = 완전 일치, 0.6 이상 = 의미 매칭)
+    """
+    try:
+        return CourseGraphService.get_prerequisites(course_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"선수강 과목 조회 실패: {str(e)}")
+
+
+@router.get(
+    "/learning-path/{course_name}",
+    response_model=List[LearningPathEntry],
+    summary="선수강 체인 탐색",
+)
+def get_learning_path(
+    course_name: str,
+    max_depth: int = Query(3, ge=1, le=5, description="최대 선수강 체인 깊이 (1~5)"),
+):
+    """
+    특정 교과목을 수강하기 위한 선수강 체인(학습 경로)을 탐색합니다.
+
+    REQUIRES 관계를 재귀적으로 따라가며 목표 과목을 이수하기 위해
+    미리 완료해야 하는 과목들의 모든 경로를 반환합니다.
+
+    예: '고급알고리즘' 조회 시 → ['자료구조', '알고리즘', '고급알고리즘'] 경로 반환
+    """
+    try:
+        paths = CourseGraphService.get_learning_path(course_name, max_depth)
+        if not paths:
+            raise HTTPException(
+                status_code=404,
+                detail=f"'{course_name}'의 선수강 체인을 찾을 수 없습니다."
+            )
+        return paths
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"선수강 체인 탐색 실패: {str(e)}")
+

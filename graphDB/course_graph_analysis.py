@@ -1,442 +1,382 @@
 """
-GraphRAG를 활용한 교과목 분석 및 추천 시스템
+교과목 그래프 오프라인 분석 스크립트
+======================================
+이 파일은 graphDB 파이프라인 전용 분석/검증 도구입니다.
+백엔드 API 서빙과는 무관하며, 그래프 구축 결과를 로컬에서 검증할 때 사용합니다.
+
+[역할 분리]
+- course_similarity_graph.py : 그래프 구축 (CSV → Neo4j 쓰기)
+- course_graph_analysis.py   : 그래프 검증 (Neo4j 읽기, 오프라인 전용)  ← 이 파일
+- backend/services/graph_service.py : 런타임 API 서빙 (Neo4j 읽기, 백엔드 전용)
+
+[중복 제거 이력]
+이전에는 CourseGraphAnalyzer가 backend/services/graph_service.py의
+CourseGraphService와 거의 동일한 Cypher 쿼리를 중복 구현하고 있었습니다.
+백엔드 서빙 로직은 graph_service.py로 일원화하고,
+이 파일은 graphDB 파이프라인 고유의 분석 기능만 유지합니다.
+
+  graphDB 고유 분석:
+  - 임계값별 엣지 분포 분석 (threshold sensitivity)
+  - REQUIRES 엣지 매핑 품질 검증 (미매핑 과목 통계)
+  - 그래프 구축 결과 종합 리포트
+  - 연결 컴포넌트 분석
 """
 
 from neo4j import GraphDatabase
-from typing import List, Dict
+from typing import List, Dict, Optional
 import pandas as pd
 
 
-class CourseGraphAnalyzer:
-    """교과목 그래프 분석 및 추천 클래스"""
-    
-    def __init__(self, uri: str = "bolt://localhost:7687", 
-                 user: str = "neo4j", 
+class CourseGraphValidator:
+    """
+    그래프 구축 결과 검증 클래스 (오프라인 전용)
+
+    course_similarity_graph.py 실행 후 Neo4j에 생성된 그래프의
+    품질과 통계를 검증하는 용도로 사용합니다.
+    """
+
+    def __init__(self, uri: str = "bolt://localhost:7687",
+                 user: str = "neo4j",
                  password: str = "password"):
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
-    
+
     def close(self):
         self.driver.close()
-    
-    # ========== 기본 그래프 분석 ==========
-    
-    def get_course_degree_centrality(self, top_k: int = 20) -> List[Dict]:
+
+    # ───────────────────────────────────────────────────────
+    # 1. 그래프 구축 결과 기본 통계
+    # ───────────────────────────────────────────────────────
+
+    def get_build_summary(self) -> Dict:
         """
-        연결 중심성(Degree Centrality) 분석
-        가장 많은 교과목과 유사한 교과목 찾기
-        
-        Args:
-            top_k: 상위 k개 반환
-            
+        그래프 구축 결과 종합 요약
+
         Returns:
-            교과목 리스트 (이름, 학수번호, 연결 개수)
+            노드 수, 엣지 타입별 수, 평균 유사도, REQUIRES 매핑 통계
+        """
+        with self.driver.session() as session:
+            node_result = session.run(
+                "MATCH (c:Course) RETURN count(c) as num_courses"
+            ).single()
+
+            sim_result = session.run(
+                """
+                MATCH ()-[r:SIMILAR_TO]->()
+                RETURN count(r) as num_sim_edges,
+                       avg(r.similarity) as avg_sim,
+                       min(r.similarity) as min_sim,
+                       max(r.similarity) as max_sim
+                """
+            ).single()
+
+            id_result = session.run(
+                "MATCH ()-[r:IDENTICAL_ID]->() RETURN count(r) as num_id_edges"
+            ).single()
+
+            req_result = session.run(
+                """
+                MATCH ()-[r:REQUIRES]->()
+                RETURN count(r) as num_req_edges,
+                       avg(r.similarity) as avg_confidence,
+                       sum(CASE WHEN r.similarity = 1.0 THEN 1 ELSE 0 END) as exact_matches,
+                       sum(CASE WHEN r.similarity < 1.0 THEN 1 ELSE 0 END) as semantic_matches
+                """
+            ).single()
+
+            unmapped_result = session.run(
+                """
+                MATCH (c:Course)
+                WHERE c.unmapped_prerequisites IS NOT NULL
+                  AND c.unmapped_prerequisites <> ''
+                RETURN count(c) as courses_with_unmapped,
+                       collect(c.name)[..10] as sample_courses
+                """
+            ).single()
+
+        return {
+            "node": {
+                "num_courses": node_result["num_courses"],
+            },
+            "similar_to": {
+                "num_edges": sim_result["num_sim_edges"],
+                "avg_similarity": round(sim_result["avg_sim"] or 0, 4),
+                "min_similarity": round(sim_result["min_sim"] or 0, 4),
+                "max_similarity": round(sim_result["max_sim"] or 0, 4),
+            },
+            "identical_id": {
+                "num_edges": id_result["num_id_edges"],
+            },
+            "requires": {
+                "num_edges": req_result["num_req_edges"],
+                "avg_confidence": round(req_result["avg_confidence"] or 0, 4),
+                "exact_matches": req_result["exact_matches"],
+                "semantic_matches": req_result["semantic_matches"],
+            },
+            "unmapped_prerequisites": {
+                "courses_count": unmapped_result["courses_with_unmapped"],
+                "sample": unmapped_result["sample_courses"],
+            },
+        }
+
+    # ───────────────────────────────────────────────────────
+    # 2. 임계값 민감도 분석 (graphDB 파이프라인 고유)
+    # ───────────────────────────────────────────────────────
+
+    def analyze_threshold_sensitivity(
+        self, thresholds: List[float] = None
+    ) -> List[Dict]:
+        """
+        유사도 임계값별 생성 엣지 수 분포 분석
+
+        그래프 구축 시 적절한 threshold를 결정하거나,
+        현재 그래프의 threshold 선택이 적절했는지 사후 검증합니다.
+
+        Args:
+            thresholds: 분석할 임계값 목록 (기본: 0.5 ~ 0.9)
+
+        Returns:
+            [{threshold, num_edges, coverage_rate}, ...]
+        """
+        if thresholds is None:
+            thresholds = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9]
+
+        results = []
+        with self.driver.session() as session:
+            total_result = session.run(
+                "MATCH ()-[r:SIMILAR_TO]->() RETURN count(r) as total"
+            ).single()
+            total_edges = total_result["total"] or 1  # 0 division 방지
+
+            for threshold in thresholds:
+                result = session.run(
+                    """
+                    MATCH ()-[r:SIMILAR_TO]->()
+                    WHERE r.similarity >= $threshold
+                    RETURN count(r) as num_edges
+                    """,
+                    threshold=threshold,
+                ).single()
+                num_edges = result["num_edges"]
+                results.append({
+                    "threshold": threshold,
+                    "num_edges": num_edges,
+                    "coverage_rate": round(num_edges / total_edges * 100, 1),
+                })
+
+        return results
+
+    # ───────────────────────────────────────────────────────
+    # 3. REQUIRES 매핑 품질 검증 (graphDB 파이프라인 고유)
+    # ───────────────────────────────────────────────────────
+
+    def get_unmapped_prerequisites(self, limit: int = 50) -> List[Dict]:
+        """
+        매핑에 실패한 선수강 과목 텍스트 조회
+
+        graphDB 파이프라인에서 Exact/Semantic 매핑 모두 실패한
+        선수강 과목 원문 텍스트를 조회합니다.
+        이 데이터를 기반으로 stopwords나 매핑 임계값을 조정할 수 있습니다.
+
+        Args:
+            limit: 최대 반환 수
+
+        Returns:
+            [{course_name, unmapped_text}, ...]
+        """
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (c:Course)
+                WHERE c.unmapped_prerequisites IS NOT NULL
+                  AND c.unmapped_prerequisites <> ''
+                RETURN c.name as course_name,
+                       c.unmapped_prerequisites as unmapped_text
+                ORDER BY c.name
+                LIMIT $limit
+                """,
+                limit=limit,
+            )
+            return [dict(record) for record in result]
+
+    def get_requires_mapping_quality(self) -> Dict:
+        """
+        REQUIRES 엣지 매핑 품질 상세 통계
+
+        Returns:
+            exact/semantic 비율, 신뢰도 분포
+        """
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH ()-[r:REQUIRES]->()
+                WITH r.similarity as conf
+                RETURN
+                    count(*) as total,
+                    sum(CASE WHEN conf = 1.0 THEN 1 ELSE 0 END) as exact,
+                    sum(CASE WHEN conf >= 0.8 AND conf < 1.0 THEN 1 ELSE 0 END) as high,
+                    sum(CASE WHEN conf >= 0.6 AND conf < 0.8 THEN 1 ELSE 0 END) as medium,
+                    sum(CASE WHEN conf < 0.6 THEN 1 ELSE 0 END) as low,
+                    avg(conf) as avg_confidence
+                """
+            ).single()
+
+            if not result or result["total"] == 0:
+                return {"total": 0}
+
+            total = result["total"]
+            return {
+                "total": total,
+                "exact_match": {"count": result["exact"],
+                                "rate": round(result["exact"] / total * 100, 1)},
+                "high_confidence": {"count": result["high"],
+                                    "rate": round(result["high"] / total * 100, 1)},
+                "medium_confidence": {"count": result["medium"],
+                                      "rate": round(result["medium"] / total * 100, 1)},
+                "low_confidence": {"count": result["low"],
+                                   "rate": round(result["low"] / total * 100, 1)},
+                "avg_confidence": round(result["avg_confidence"] or 0, 4),
+            }
+
+    # ───────────────────────────────────────────────────────
+    # 4. 연결 컴포넌트 분석 (graphDB 파이프라인 고유)
+    # ───────────────────────────────────────────────────────
+
+    def get_isolated_courses(self) -> List[Dict]:
+        """
+        SIMILAR_TO 관계가 전혀 없는 고립 노드 조회
+
+        유사도가 낮아 어떤 과목과도 연결되지 않은 과목들입니다.
+        그래프 구축 임계값 조정이나 데이터 보완이 필요할 수 있습니다.
+
+        Returns:
+            [{name, code, department, category}, ...]
+        """
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (c:Course)
+                WHERE NOT (c)-[:SIMILAR_TO]-()
+                RETURN c.name       as name,
+                       c.code       as code,
+                       c.department as department,
+                       c.category   as category
+                ORDER BY c.department, c.name
+                """
+            )
+            return [dict(record) for record in result]
+
+    def get_highly_connected_courses(self, top_k: int = 20) -> List[Dict]:
+        """
+        연결 수가 가장 많은 과목 (허브 과목) 조회
+
+        허브 과목은 많은 과목과 유사성을 가지는 핵심 과목으로,
+        교육과정에서 중심적인 역할을 할 가능성이 높습니다.
+
+        Args:
+            top_k: 상위 반환 수
+
+        Returns:
+            [{name, code, department, connections}, ...]
         """
         with self.driver.session() as session:
             result = session.run(
                 """
                 MATCH (c:Course)-[r:SIMILAR_TO]-()
                 WITH c, count(r) as connections
-                RETURN c.name as name, 
-                       c.code as code,
-                       c.category as category,
+                RETURN c.name       as name,
+                       c.code       as code,
                        c.department as department,
+                       c.category   as category,
                        connections
                 ORDER BY connections DESC
                 LIMIT $top_k
                 """,
-                top_k=top_k
-            )
-            return [dict(record) for record in result]
-    
-    def get_course_communities(self, similarity_threshold: float = 0.7) -> List[Dict]:
-        """
-        유사도 기반 교과목 커뮤니티 탐지
-        높은 유사도를 가진 교과목 군집 찾기
-        
-        Args:
-            similarity_threshold: 커뮤니티 형성 최소 유사도
-            
-        Returns:
-            커뮤니티별 교과목 그룹
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c1:Course)-[r:SIMILAR_TO]-(c2:Course)
-                WHERE r.similarity >= $threshold
-                WITH c1, collect(DISTINCT c2.name) as similar_courses, 
-                     count(DISTINCT c2) as cluster_size
-                WHERE cluster_size >= 3
-                RETURN c1.name as course_name,
-                       c1.code as code,
-                       similar_courses,
-                       cluster_size
-                ORDER BY cluster_size DESC
-                """,
-                threshold=similarity_threshold
-            )
-            return [dict(record) for record in result]
-    
-    def get_course_path(self, start_course: str, end_course: str, max_hops: int = 3) -> List[Dict]:
-        """
-        두 교과목 간의 유사도 경로 찾기
-        
-        Args:
-            start_course: 시작 교과목 이름
-            end_course: 목표 교과목 이름
-            max_hops: 최대 홉 수
-            
-        Returns:
-            경로 정보
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH path = shortestPath(
-                    (start:Course {name: $start})-[:SIMILAR_TO*..{max_hops}]-(end:Course {name: $end})
-                )
-                RETURN [node in nodes(path) | node.name] as course_path,
-                       [rel in relationships(path) | rel.similarity] as similarities,
-                       length(path) as path_length
-                """.replace('{max_hops}', str(max_hops)),
-                start=start_course,
-                end=end_course
-            )
-            return [dict(record) for record in result]
-    
-    # ========== 교과목 추천 시스템 ==========
-    
-    def recommend_by_similarity(self, course_name: str, 
-                                top_k: int = 10, 
-                                min_similarity: float = 0.5) -> List[Dict]:
-        """
-        특정 교과목과 유사한 교과목 추천
-        
-        Args:
-            course_name: 기준 교과목 이름
-            top_k: 추천 개수
-            min_similarity: 최소 유사도
-            
-        Returns:
-            추천 교과목 리스트
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c1:Course {name: $name})-[r:SIMILAR_TO]-(c2:Course)
-                WHERE r.similarity >= $min_sim
-                WITH DISTINCT c2.name as name,
-                     c2.code as code,
-                     c2.department as department,
-                     c2.category as category,
-                     c2.credits as credits,
-                     c2.summary as summary,
-                     max(r.similarity) as similarity
-                RETURN name, code, department, category, credits, summary, similarity
-                ORDER BY similarity DESC
-                LIMIT $top_k
-                """,
-                name=course_name,
                 top_k=top_k,
-                min_sim=min_similarity
-            )
-            return [dict(record) for record in result]
-    
-    def find_identical_id_courses(self, course_name: str) -> List[Dict]:
-        """
-        동일한 학수번호를 가진 다른 학과의 교과목 찾기
-        (학수번호는 같으나 설강학과가 다른 과목)
-        
-        Args:
-            course_name: 기준 교과목 이름
-            
-        Returns:
-            동일 학수번호 교과목 리스트
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c1:Course {name: $name})-[r:IDENTICAL_ID]-(c2:Course)
-                RETURN c2.name as name,
-                       c2.code as code,
-                       c2.department as department,
-                       c1.department as original_department,
-                       r.note as note
-                ORDER BY c2.department
-                """,
-                name=course_name
-            )
-            return [dict(record) for record in result]
-    
-    def get_shared_course_ids(self, top_k: int = 20) -> List[Dict]:
-        """
-        여러 학과에서 공유하는 학수번호 통계
-        
-        Args:
-            top_k: 상위 k개 반환
-            
-        Returns:
-            학수번호별 공유 학과 정보
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c:Course)-[r:IDENTICAL_ID]-(c2:Course)
-                WITH c.code as course_code,
-                     collect(DISTINCT c.department) + collect(DISTINCT c2.department) as departments,
-                     count(DISTINCT r) as share_count
-                RETURN course_code,
-                       departments,
-                       size(departments) as dept_count,
-                       share_count
-                ORDER BY dept_count DESC, share_count DESC
-                LIMIT $top_k
-                """,
-                top_k=top_k
-            )
-            return [dict(record) for record in result]
-    
-    def recommend_by_multiple_courses(self, course_names: List[str], 
-                                     top_k: int = 10) -> List[Dict]:
-        """
-        여러 교과목을 수강한 학생에게 다음 교과목 추천
-        
-        Args:
-            course_names: 이미 수강한 교과목 리스트
-            top_k: 추천 개수
-            
-        Returns:
-            추천 교과목 리스트
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (taken:Course)-[r:SIMILAR_TO]-(recommended:Course)
-                WHERE taken.name IN $taken_courses
-                  AND NOT recommended.name IN $taken_courses
-                WITH recommended, avg(r.similarity) as avg_similarity, count(*) as common_connections
-                RETURN recommended.name as name,
-                       recommended.code as code,
-                       recommended.category as category,
-                       recommended.summary as summary,
-                       avg_similarity,
-                       common_connections
-                ORDER BY avg_similarity DESC, common_connections DESC
-                LIMIT $top_k
-                """,
-                taken_courses=course_names,
-                top_k=top_k
-            )
-            return [dict(record) for record in result]
-    
-    def recommend_by_department(self, department: str, 
-                               taken_courses: List[str] = None,
-                               top_k: int = 10) -> List[Dict]:
-        """
-        특정 학과의 교과목 중 추천
-        
-        Args:
-            department: 학과명
-            taken_courses: 이미 수강한 교과목 (선택)
-            top_k: 추천 개수
-            
-        Returns:
-            추천 교과목 리스트
-        """
-        taken_courses = taken_courses or []
-        
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c:Course)
-                WHERE c.department CONTAINS $dept
-                  AND NOT c.name IN $taken
-                OPTIONAL MATCH (c)-[r:SIMILAR_TO]-()
-                WITH c, avg(r.similarity) as avg_connectivity, count(r) as connections
-                RETURN c.name as name,
-                       c.code as code,
-                       c.category as category,
-                       c.credits as credits,
-                       c.summary as summary,
-                       avg_connectivity,
-                       connections
-                ORDER BY avg_connectivity DESC, connections DESC
-                LIMIT $top_k
-                """,
-                dept=department,
-                taken=taken_courses,
-                top_k=top_k
-            )
-            return [dict(record) for record in result]
-    
-    # ========== 교과과정 분석 ==========
-    
-    def analyze_curriculum_structure(self, department: str = None) -> Dict:
-        """
-        교과과정 구조 분석
-        
-        Args:
-            department: 분석할 학과 (None이면 전체)
-            
-        Returns:
-            교과과정 통계
-        """
-        with self.driver.session() as session:
-            dept_filter = "WHERE c.department CONTAINS $dept" if department else ""
-            
-            result = session.run(
-                f"""
-                MATCH (c:Course)
-                {dept_filter}
-                WITH c.category as category, 
-                     count(*) as course_count,
-                     avg(c.credits) as avg_credits
-                RETURN category, course_count, avg_credits
-                ORDER BY course_count DESC
-                """,
-                dept=department or ""
-            )
-            
-            categories = [dict(record) for record in result]
-            
-            # 전체 통계
-            total_result = session.run(
-                f"""
-                MATCH (c:Course)
-                {dept_filter}
-                RETURN count(*) as total_courses,
-                       sum(c.credits) as total_credits,
-                       avg(c.credits) as avg_credits
-                """,
-                dept=department or ""
-            )
-            
-            total_stats = total_result.single()
-            
-            return {
-                'department': department or '전체',
-                'total_courses': total_stats['total_courses'],
-                'total_credits': total_stats['total_credits'],
-                'avg_credits': total_stats['avg_credits'],
-                'categories': categories
-            }
-    
-    def find_prerequisite_patterns(self, top_k: int = 20) -> List[Dict]:
-        """
-        선수과목 패턴 분석
-        유사도가 높은 교과목 쌍에서 학년 차이가 있는 경우 찾기
-        
-        Returns:
-            선수과목 후보 리스트
-        """
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (c1:Course)-[r:SIMILAR_TO]-(c2:Course)
-                WHERE r.similarity >= 0.6
-                  AND c1.year < c2.year
-                RETURN c1.name as prerequisite,
-                       c1.code as prereq_code,
-                       c2.name as advanced_course,
-                       c2.code as advanced_code,
-                       r.similarity as similarity,
-                       c2.year - c1.year as year_gap
-                ORDER BY r.similarity DESC
-                LIMIT $top_k
-                """,
-                top_k=top_k
-            )
-            return [dict(record) for record in result]
-    
-    # ========== 검색 및 필터링 ==========
-    
-    def search_courses(self, keyword: str, category: str = None) -> List[Dict]:
-        """
-        키워드로 교과목 검색
-        
-        Args:
-            keyword: 검색 키워드
-            category: 이수구분 필터 (선택)
-            
-        Returns:
-            검색 결과
-        """
-        with self.driver.session() as session:
-            category_filter = "AND c.category = $category" if category else ""
-            
-            result = session.run(
-                f"""
-                MATCH (c:Course)
-                WHERE c.name CONTAINS $keyword 
-                   OR c.summary CONTAINS $keyword
-                   {category_filter}
-                RETURN c.name as name,
-                       c.code as code,
-                       c.category as category,
-                       c.credits as credits,
-                       c.department as department,
-                       c.summary as summary
-                ORDER BY c.name
-                """,
-                keyword=keyword,
-                category=category or ""
             )
             return [dict(record) for record in result]
 
 
-# ========== 사용 예제 ==========
+# ───────────────────────────────────────────────────────────────
+# 실행 예제 (standalone 검증용)
+# ───────────────────────────────────────────────────────────────
 
-def example_usage():
-    """사용 예제"""
-    
-    analyzer = CourseGraphAnalyzer(
-        uri="bolt://localhost:7687",
-        user="neo4j",
-        password="your_password"
-    )
-    
+def run_validation_report(
+    uri: str = "bolt://localhost:7687",
+    user: str = "neo4j",
+    password: str = "your_password",
+):
+    """
+    그래프 구축 결과 전체 검증 리포트 출력
+
+    course_similarity_graph.py 실행 후 이 함수를 호출하여
+    그래프 품질을 확인합니다.
+    """
+    validator = CourseGraphValidator(uri, user, password)
+
     try:
-        print("=" * 80)
-        print("교과목 그래프 분석 예제")
-        print("=" * 80)
-        
-        # 1. 연결 중심성 분석
-        print("\n[1] 가장 많은 교과목과 연결된 교과목 Top 10")
-        central_courses = analyzer.get_course_degree_centrality(top_k=10)
-        for i, course in enumerate(central_courses, 1):
-            print(f"{i}. {course['name']} ({course['code']}) - {course['connections']} 연결")
-        
-        # 2. 유사 교과목 추천
-        print("\n[2] '데이터베이스' 교과목과 유사한 교과목 추천")
-        similar = analyzer.recommend_by_similarity('데이터베이스', top_k=5)
-        for i, course in enumerate(similar, 1):
-            print(f"{i}. {course['name']} - 유사도: {course['similarity']:.4f}")
-        
-        # 3. 여러 교과목 기반 추천
-        print("\n[3] 복수 교과목 기반 추천")
-        taken = ['자료구조', '알고리즘']
-        recommendations = analyzer.recommend_by_multiple_courses(taken, top_k=5)
-        for i, course in enumerate(recommendations, 1):
-            print(f"{i}. {course['name']} - 평균 유사도: {course['avg_similarity']:.4f}")
-        
-        # 4. 교과과정 구조 분석
-        print("\n[4] 컴퓨터공학 교과과정 구조")
-        structure = analyzer.analyze_curriculum_structure('컴퓨터')
-        print(f"총 교과목 수: {structure['total_courses']}")
-        print(f"평균 학점: {structure['avg_credits']:.2f}")
-        print("\n이수구분별 통계:")
-        for cat in structure['categories'][:5]:
-            print(f"  - {cat['category']}: {cat['course_count']}과목 (평균 {cat['avg_credits']:.1f}학점)")
-        
-        # 5. 키워드 검색
-        print("\n[5] '머신러닝' 키워드 검색")
-        search_results = analyzer.search_courses('머신러닝')
-        for i, course in enumerate(search_results[:5], 1):
-            print(f"{i}. {course['name']} ({course['code']}) - {course['category']}")
-        
+        print("=" * 70)
+        print("교과목 그래프 구축 결과 검증 리포트")
+        print("=" * 70)
+
+        # 1. 기본 통계
+        print("\n[1] 그래프 구축 요약")
+        summary = validator.get_build_summary()
+        print(f"  교과목(노드) 수:         {summary['node']['num_courses']}")
+        print(f"  SIMILAR_TO 엣지 수:     {summary['similar_to']['num_edges']}")
+        print(f"  IDENTICAL_ID 엣지 수:   {summary['identical_id']['num_edges']}")
+        print(f"  REQUIRES 엣지 수:       {summary['requires']['num_edges']}")
+        print(f"  평균 유사도:             {summary['similar_to']['avg_similarity']}")
+        print(f"  선수강 미매핑 과목 수:   {summary['unmapped_prerequisites']['courses_count']}")
+
+        # 2. 임계값 민감도
+        print("\n[2] 유사도 임계값별 엣지 수 분포")
+        sensitivity = validator.analyze_threshold_sensitivity()
+        for row in sensitivity:
+            bar = "█" * int(row["coverage_rate"] / 5)
+            print(f"  threshold={row['threshold']:.2f}: {row['num_edges']:6d}개 "
+                  f"({row['coverage_rate']:5.1f}%) {bar}")
+
+        # 3. REQUIRES 매핑 품질
+        print("\n[3] 선수강 매핑 품질")
+        quality = validator.get_requires_mapping_quality()
+        if quality.get("total", 0) > 0:
+            print(f"  전체: {quality['total']} 엣지")
+            print(f"  - Exact match:        {quality['exact_match']['count']} ({quality['exact_match']['rate']}%)")
+            print(f"  - High confidence:    {quality['high_confidence']['count']} ({quality['high_confidence']['rate']}%)")
+            print(f"  - Medium confidence:  {quality['medium_confidence']['count']} ({quality['medium_confidence']['rate']}%)")
+            print(f"  - Low confidence:     {quality['low_confidence']['count']} ({quality['low_confidence']['rate']}%)")
+        else:
+            print("  REQUIRES 엣지가 없습니다.")
+
+        # 4. 미매핑 선수강 샘플
+        print("\n[4] 매핑 실패 선수강 과목 샘플 (최대 10개)")
+        unmapped = validator.get_unmapped_prerequisites(limit=10)
+        if unmapped:
+            for item in unmapped:
+                print(f"  [{item['course_name']}] → {item['unmapped_text']}")
+        else:
+            print("  미매핑 과목이 없습니다.")
+
+        # 5. 고립 노드
+        print("\n[5] 고립 노드 (SIMILAR_TO 관계 없는 과목)")
+        isolated = validator.get_isolated_courses()
+        print(f"  총 {len(isolated)}개")
+        for course in isolated[:5]:
+            print(f"  - {course['name']} ({course['code']}) / {course['department']}")
+        if len(isolated) > 5:
+            print(f"  ... 외 {len(isolated) - 5}개")
+
+        print("\n" + "=" * 70)
+        print("검증 완료")
+        print("=" * 70)
+
     finally:
-        analyzer.close()
+        validator.close()
 
 
 if __name__ == "__main__":
-    example_usage()
+    run_validation_report(
+        uri="bolt://localhost:7687",
+        user="neo4j",
+        password="your_password",  # 실제 비밀번호로 변경
+    )

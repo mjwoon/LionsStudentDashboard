@@ -41,7 +41,9 @@ class EvaluationService:
         self._curriculum_data_cache = {}  # 학과별 교육과정 데이터 캐시
         self._similarity_cache = {}       # Neo4j 유사도 캐시 {(code1, code2): float}
         self._similarity_threshold = 0.7  # 유사과목 인정 최소 유사도
-        self._graph_available = None      # Neo4j 연결 상태 캐시 (None=미확인)
+        # 주의: _graph_available은 제거됨.
+        #   연결 상태는 graph_service.is_graph_available()의
+        #   30초 TTL 모듈 레벨 캐시를 사용합니다.
     
     def _load_all_curriculum_data(self) -> Dict[str, List[Dict]]:
         """모든 학과 교육과정 DB 로드 (유사과목 판정용)"""
@@ -289,31 +291,48 @@ class EvaluationService:
     def _get_student_completed_courses(self, enrollments: List[StudentCourse]) -> Dict:
         """
         학생이 이수한 과목 정보 수집
-        
+
+        N+1 쿼리 방지: 유효 수강 이력의 과목코드를 한 번에 IN 절로 조회합니다.
+
         Returns:
             {
                 "codes": {학수코드 set},
                 "names": {과목명 set},
-                "details": [{course_code, course_name, grade}, ...]
+                "details": [{course_code, course_name, grade, credits}, ...]
             }
         """
         completed_codes = set()
         completed_names = set()
         completed_details = []
-        
-        for enrollment in enrollments:
-            if enrollment.grade and enrollment.grade != FAILING_GRADE:
-                course = self.db.query(Course).filter(Course.course_code == enrollment.course_code).first()
-                if course:
-                    completed_codes.add(course.course_code)
-                    completed_names.add(course.course_name)
-                    completed_details.append({
-                        "course_code": course.course_code,
-                        "course_name": course.course_name,
-                        "grade": enrollment.grade,
-                        "credits": course.credits
-                    })
-        
+
+        # F학점/미수강 제외: 유효한 수강 이력만 필터링
+        valid_enrollments = [
+            e for e in enrollments
+            if e.grade and e.grade != FAILING_GRADE
+        ]
+        if not valid_enrollments:
+            return {"codes": completed_codes, "names": completed_names, "details": completed_details}
+
+        # 과목 정보 일괄 조회 (IN 절, 쿼리 1회)
+        enrollment_codes = [e.course_code for e in valid_enrollments]
+        courses = self.db.query(Course).filter(
+            Course.course_code.in_(enrollment_codes)
+        ).all()
+        course_map = {c.course_code: c for c in courses}
+
+        # grade 역참조 맵
+        grade_map = {e.course_code: e.grade for e in valid_enrollments}
+
+        for code, course in course_map.items():
+            completed_codes.add(course.course_code)
+            completed_names.add(course.course_name)
+            completed_details.append({
+                "course_code": course.course_code,
+                "course_name": course.course_name,
+                "grade": grade_map.get(code, ""),
+                "credits": course.credits
+            })
+
         return {
             "codes": completed_codes,
             "names": completed_names,
@@ -455,20 +474,19 @@ class EvaluationService:
         return round(exact_rate, 2), round(similar_rate, 2)
     
     # ==================== Neo4j 유사도 통합 ====================
-    
+
     def _is_graph_available(self) -> bool:
         """
-        Neo4j 연결 가능 여부 확인 (인스턴스 내 1회 캐싱)
+        Neo4j 연결 가능 여부 확인
+
+        graph_service 모듈의 30초 TTL 캐시(is_graph_available)를 사용합니다.
+        인스턴스 레벨 캐싱 제거 → 요청 간 공유, Neo4j 복구 시 TTL 내 자동 정상화.
         """
-        if self._graph_available is None:
-            try:
-                from services.graph_service import CourseGraphService
-                self._graph_available = CourseGraphService.check_connection()
-            except Exception:
-                self._graph_available = False
-            if not self._graph_available:
-                logger.info("Neo4j 미연결 - 과목명 기반 폴백 모드로 동작")
-        return self._graph_available
+        from services.graph_service import is_graph_available
+        available = is_graph_available()
+        if not available:
+            logger.info("Neo4j 미연결 - 과목명 기반 폴백 모듄로 동작")
+        return available
     
     def _get_similarity_from_graph(
         self,
@@ -476,31 +494,28 @@ class EvaluationService:
         target_course_code: str
     ) -> float:
         """
-        Neo4j에서 두 과목 간 유사도 조회 (캐싱 적용)
-        
+        Neo4j에서 두 과목 간 유사도 조회
+
+        CourseGraphService.get_similarity_between의 lru_cache가
+        프로세스 레벨에서 캐싱을 담당하므로,
+        여기에서는 간단한 에러 핸델링만 수행합니다.
+
         Returns:
             유사도 (0.0 ~ 1.0), 관계 없거나 연결 실패 시 0.0
         """
         if not self._is_graph_available():
             return 0.0
-        
-        # 캐시 확인 (순서 무관하게 동일 키)
-        cache_key = tuple(sorted([source_course_code, target_course_code]))
-        if cache_key in self._similarity_cache:
-            return self._similarity_cache[cache_key]
-        
-        # Neo4j 조회
         try:
             from services.graph_service import CourseGraphService
-            similarity = CourseGraphService.get_similarity_between(
+            return CourseGraphService.get_similarity_between(
                 source_course_code, target_course_code
             )
         except Exception as e:
-            logger.warning(f"Neo4j 유사도 조회 실패 ({source_course_code} <-> {target_course_code}): {e}")
-            similarity = 0.0
-        
-        self._similarity_cache[cache_key] = similarity
-        return similarity
+            logger.warning(
+                f"Neo4j 유사도 조회 실패 "
+                f"({source_course_code} <-> {target_course_code}): {e}"
+            )
+            return 0.0
     
     def _find_best_similar_course(
         self,
@@ -510,36 +525,48 @@ class EvaluationService:
     ) -> Tuple[bool, float, Optional[Dict]]:
         """
         학생이 이수한 과목 중 타겟 과목과 가장 유사한 과목 찾기
-        
-        로직:
-        1. 동일 학수코드 → 유사도 1.0
-        2. Neo4j SIMILAR_TO 관계 조회 → threshold 이상이면 인정
-        3. 폴백: 과목명 일치 → 유사도 1.0으로 인정
-        
+
+        판정 우선순위:
+        1. 동일 학수코드  → 유사도 1.0 (항상 최우선)
+        2. 과목명 직접 일치 → 유사도 1.0 (Neo4j 연결 여부와 무관)
+        3. Neo4j SIMILAR_TO 관계 조회 → threshold(0.7) 이상이면 인정
+
+        [버그 수정 이력]
+        이전 로직은 과목명 일치(3단계)를 Neo4j 미연결 시에만 실행하여
+        Neo4j가 연결되어 있을 때 유사도 < threshold 이면 같은 과목명이라도 미인정되는
+        일관성 문제가 있었습니다. 과목명 일치를 2단계로 올려 항상 실행합니다.
+
         Args:
             target_course_codes: 타겟 과목 학수코드 set (과목명으로 여러 코드 가능)
             target_course_name: 타겟 과목명
             student_completed_courses: 학생 이수 과목 정보
-            
+
         Returns:
             (인정여부, 최고유사도, 매칭된 과목 dict or None)
         """
         completed_codes = student_completed_courses["codes"]
         completed_names = student_completed_courses["names"]
         completed_details = student_completed_courses["details"]
-        
-        # 1. 동일 학수코드 체크
+
+        # ── 1단계: 동일 학수코드 (항상 최우선) ──────────────────────────
         for target_code in target_course_codes:
             if target_code in completed_codes:
                 for detail in completed_details:
                     if detail["course_code"] == target_code:
                         return (True, 1.0, detail)
-        
-        # 2. Neo4j 유사도 기반 매칭
+
+        # ── 2단계: 과목명 직접 일치 (Neo4j 연결 여부와 무관) ────────────
+        # 학수코드가 다른 타 학과 개설 과목이라도 이름이 같으면 인정
+        if target_course_name in completed_names:
+            for detail in completed_details:
+                if detail["course_name"] == target_course_name:
+                    return (True, 1.0, detail)
+
+        # ── 3단계: Neo4j 유사도 매칭 (1·2단계에서 미인정된 경우만) ───────
         if self._is_graph_available():
             best_similarity = 0.0
             best_match = None
-            
+
             for detail in completed_details:
                 for target_code in target_course_codes:
                     sim = self._get_similarity_from_graph(
@@ -549,21 +576,12 @@ class EvaluationService:
                     if sim > best_similarity:
                         best_similarity = sim
                         best_match = detail
-            
+
             if best_similarity >= self._similarity_threshold:
                 return (True, best_similarity, best_match)
-            
-            # Neo4j에서 유사 관계를 못 찾았더라도 과목명 폴백은 하지 않음
-            # (Neo4j가 연결되어 있으면 그래프 결과를 신뢰)
-            if best_similarity > 0:
-                return (False, best_similarity, None)
-        
-        # 3. 폴백: 과목명 일치 (Neo4j 미연결 시)
-        if target_course_name in completed_names:
-            for detail in completed_details:
-                if detail["course_name"] == target_course_name:
-                    return (True, 1.0, detail)
-        
+
+            return (False, best_similarity, None)
+
         return (False, 0.0, None)
     
     def _save_evaluation_result(
