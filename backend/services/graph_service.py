@@ -5,10 +5,13 @@ Neo4j 그래프 데이터베이스 서비스
 
 import os
 import time
+import logging
 from functools import lru_cache
 from typing import List, Dict, Optional
 from neo4j import GraphDatabase
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jConnection:
@@ -77,7 +80,8 @@ def is_graph_available() -> bool:
         try:
             get_neo4j_driver().verify_connectivity()
             _health_cache["available"] = True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Neo4j connectivity verification failed: {e}")
             _health_cache["available"] = False
         _health_cache["checked_at"] = now
     return bool(_health_cache["available"])
