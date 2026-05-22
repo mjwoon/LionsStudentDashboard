@@ -297,7 +297,7 @@ class AdminService:
                         existing_course.course_year = course_data.course_year
                     if course_data.credits is not None:
                         existing_course.credits = course_data.credits
-                    if course_data.semester is not None:
+                    if getattr(course_data, 'semester', None) is not None:
                         existing_course.semester = course_data.semester
                     if course_data.description is not None:
                         existing_course.description = course_data.description
@@ -313,7 +313,7 @@ class AdminService:
                         course_type=course_data.course_type,
                         course_department=department.name if department else None,
                         course_year=course_data.course_year or 1,
-                        semester=course_data.semester or 1,
+                        semester=getattr(course_data, 'semester', None) or 1,
                         description=course_data.description
                     )
                     db.add(new_course)
