@@ -706,7 +706,7 @@ class AdminService:
                         # force_recalculate가 True이거나 캐시가 없으면 계산
                         if request.force_recalculate or not existing_cache:
                             # 진단 수행
-                            evaluation_result = EvaluationService.evaluate_student(
+                            evaluation_result = EvaluationService(db).evaluate_student(
                                 student_id=student.student_id,
                                 department_id=department.id,
                                 admission_year=admission_year,

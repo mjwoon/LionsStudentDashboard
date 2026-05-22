@@ -130,7 +130,7 @@ def bulk_evaluate_task(
         for student in students:
             # 입학년도 추출
             try:
-                admission_year = int(student.student_id[:4])
+                admission_year = int(str(student.student_id)[:4])
             except (ValueError, TypeError):
                 admission_year = 2025
             
