@@ -24,6 +24,7 @@ import ssl
 logger = logging.getLogger(__name__)
 
 _celery_app_cache = None
+_redis_client_cache = None
 
 
 def _get_redis_url():
@@ -39,6 +40,19 @@ def _get_redis_url():
         logger.warning("Upstash URL이 redis://로 시작합니다. rediss://로 변환합니다.")
         url = "rediss://" + url[len("redis://"):]
     return url
+
+
+def _get_redis_client():
+    """Redis 클라이언트 싱글톤 반환 (커넥션 풀 재사용)"""
+    global _redis_client_cache
+    if _redis_client_cache is None:
+        import redis as redis_lib
+        REDIS_URL = _get_redis_url()
+        kwargs = {'socket_timeout': 10, 'socket_connect_timeout': 10}
+        if REDIS_URL.startswith("rediss://"):
+            kwargs['ssl_cert_reqs'] = 'none'
+        _redis_client_cache = redis_lib.from_url(REDIS_URL, **kwargs)
+    return _redis_client_cache
 
 
 def _get_celery_app():
@@ -427,13 +441,7 @@ async def get_job_status(job_id: str):
     비동기 일괄 평가 진행 상태 조회 (Redis에서 직접 조회)
     """
     try:
-        import redis as redis_lib
-
-        REDIS_URL = _get_redis_url()
-        kwargs = {'socket_timeout': 10, 'socket_connect_timeout': 10}
-        if REDIS_URL.startswith("rediss://"):
-            kwargs['ssl_cert_reqs'] = 'none'
-        r = redis_lib.from_url(REDIS_URL, **kwargs)
+        r = _get_redis_client()
 
         # Celery는 결과를 'celery-task-meta-{task_id}' 키에 저장
         raw = r.get(f"celery-task-meta-{job_id}")
@@ -475,18 +483,12 @@ async def get_job_status(job_id: str):
 async def test_redis_connection():
     """Redis 연결 테스트 (디버깅용)"""
     try:
-        import redis as redis_lib
-
-        REDIS_URL = _get_redis_url()
-        kwargs = {'socket_timeout': 10, 'socket_connect_timeout': 10}
-        if REDIS_URL.startswith("rediss://"):
-            kwargs['ssl_cert_reqs'] = 'none'
-        r = redis_lib.from_url(REDIS_URL, **kwargs)
+        r = _get_redis_client()
         pong = r.ping()
         return {
             "status": "connected",
             "ping": pong,
-            "url_scheme": REDIS_URL.split("://")[0],
+            "url_scheme": _get_redis_url().split("://")[0],
         }
     except Exception as e:
         return {

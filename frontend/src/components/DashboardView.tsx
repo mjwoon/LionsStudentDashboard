@@ -35,8 +35,6 @@ export default function DashboardView() {
   const [departments, setDepartments] = useState<{ id: string | number; name: string; college?: string; color?: string }[]>([]);
   const [currentData, setCurrentData] = useState<{ dept: string; students: number; percent: number; id: string | number }[]>([]);
   const [trendData, setTrendData] = useState<Record<string, string | number>[]>([]);
-  const [totalStudents, setTotalStudents] = useState(0);
-  const [topDept, setTopDept] = useState<{ dept: string; students: number; percent: number } | null>(null);
   const [surveyInfo, setSurveyInfo] = useState<{ round_number: number; title: string; status: string; end_date: string | null } | null>(null);
   const [availableRounds, setAvailableRounds] = useState<{ round_number: number; title: string }[]>([]);
   const [currentDataByRound, setCurrentDataByRound] = useState<Record<string, { dept: string; students: number; percent: number; id: string | number }[]>>({});
@@ -74,11 +72,6 @@ export default function DashboardView() {
           id: d.id
         }));
         setCurrentData(formattedCurrent);
-
-        // Set statistics
-        const total = formattedCurrent.reduce((sum, d) => sum + d.students, 0);
-        setTotalStudents(total);
-        setTopDept(formattedCurrent[0] || null);
 
         // Convert trend data to format expected by chart
         // 모든 학과를 0으로 초기화 후 실제 데이터로 덮어써서 0인 학과도 표시
@@ -142,16 +135,81 @@ export default function DashboardView() {
     .filter(d => checkedColleges.has(String(d.college)))
     .map(d => String(d.id));
 
-  // 선택된 회차 데이터 ('all' 이거나 해당 회차 데이터 없으면 currentData fallback)
-  const activeRoundData = (selectedSurvey !== 'all' && currentDataByRound[selectedSurvey]) || currentData;
+  // 선택된 회차 데이터 (선택 회차가 'all' 이면 모든 회차의 데이터를 합산하여 집계)
+  const activeRoundData = (() => {
+    if (selectedSurvey === 'all') {
+      if (!currentDataByRound || Object.keys(currentDataByRound).length === 0) {
+        return currentData;
+      }
+      const aggMap = new Map<string | number, { dept: string; students: number; id: string | number }>();
+      let total = 0;
+      Object.values(currentDataByRound).forEach(roundData => {
+        roundData.forEach(d => {
+          total += d.students;
+          const existing = aggMap.get(d.id);
+          if (existing) {
+            existing.students += d.students;
+          } else {
+            aggMap.set(d.id, { dept: d.dept, students: d.students, id: d.id });
+          }
+        });
+      });
+      
+      return Array.from(aggMap.values()).map(d => ({
+        ...d,
+        percent: total > 0 ? Number((d.students / total * 100).toFixed(1)) : 0
+      })).sort((a, b) => b.students - a.students);
+    } else {
+      return currentDataByRound[selectedSurvey] || currentData;
+    }
+  })();
+
+  // 선택된 단과대학 기준으로 필터링된 현재 데이터 (통계 카드용 - 슬라이싱 전)
+  const activeRoundDataFiltered = activeRoundData.filter((d) => {
+    const dept = departments.find((dep) => dep.id === d.id);
+    return selectedCollege === 'all' || dept?.college === selectedCollege;
+  });
 
   // 현재 데이터 필터링 (상위 12개로 제한)
-  const filteredCurrentData = activeRoundData
-    .filter((d) => {
-      const dept = departments.find((dep) => dep.id === d.id);
-      return selectedCollege === 'all' || dept?.college === selectedCollege;
-    })
-    .slice(0, 12);
+  const filteredCurrentData = activeRoundDataFiltered.slice(0, 12);
+
+  // 통계 수치 동적 계산
+  const totalStudents = activeRoundDataFiltered.reduce((sum, d) => sum + d.students, 0);
+  const topDept = activeRoundDataFiltered[0] || null;
+
+  // 전체 응답 학생 기준 라벨 동적 계산
+  const getSurveyStandardLabel = () => {
+    if (selectedSurvey === 'all') {
+      return surveyInfo ? '누적 조사 기준' : '전체 기준';
+    }
+    const round = availableRounds.find(r => String(r.round_number) === selectedSurvey);
+    return round ? `${round.title} 기준` : `${selectedSurvey}차 조사 기준`;
+  };
+
+  // 조사 진행률 상태 및 일자 라벨 동적 계산
+  const getProgressInfo = () => {
+    if (selectedSurvey === 'all') {
+      return {
+        label: surveyInfo?.end_date ? `${surveyInfo.end_date} 기준` : '',
+        value: surveyInfo ? `${surveyInfo.round_number}차 조사 완료` : '-'
+      };
+    }
+    
+    if (surveyInfo && String(surveyInfo.round_number) === selectedSurvey) {
+      return {
+        label: surveyInfo.end_date ? `${surveyInfo.end_date} 기준` : '',
+        value: `${surveyInfo.round_number}차 조사 완료`
+      };
+    }
+    
+    const round = availableRounds.find(r => String(r.round_number) === selectedSurvey);
+    return {
+      label: '',
+      value: round ? `${round.title} 완료` : `${selectedSurvey}차 조사 완료`
+    };
+  };
+
+  const progressInfo = getProgressInfo();
 
   const downloadData = () => {
     const csv = [
@@ -193,7 +251,7 @@ export default function DashboardView() {
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
             <div className="flex items-center gap-2 mb-1 md:mb-2">
               <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">전체 응답 학생</p>
-              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{surveyInfo ? `${surveyInfo.round_number}차 조사 기준` : ''}</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{getSurveyStandardLabel()}</p>
             </div>
             <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{totalStudents}명</p>
           </div>
@@ -201,7 +259,7 @@ export default function DashboardView() {
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5">
             <div className="flex items-center gap-2 mb-1 md:mb-2">
               <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">최다 희망 학과</p>
-              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{topDept?.students}명 ({topDept?.percent}%)</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{topDept ? `${topDept.students}명 (${topDept.percent}%)` : '-명 (0%)'}</p>
             </div>
             <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{topDept?.dept || '-'}</p>
           </div>
@@ -209,9 +267,9 @@ export default function DashboardView() {
           <div className="bg-white rounded-xl border border-black/10 p-3 md:p-4 lg:p-5 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2 mb-1 md:mb-2">
               <p className="text-[#6a7282] text-xs md:text-sm lg:text-base font-medium">조사 진행률</p>
-              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{surveyInfo?.end_date ? `${surveyInfo.end_date} 기준` : ''}</p>
+              <p className="text-[#9ca3af] text-[10px] md:text-xs font-medium">{progressInfo.label}</p>
             </div>
-            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{surveyInfo ? `${surveyInfo.round_number}차 조사 완료` : '-'}</p>
+            <p className="text-[#101828] text-lg md:text-xl lg:text-2xl font-bold">{progressInfo.value}</p>
           </div>
         </div>
 

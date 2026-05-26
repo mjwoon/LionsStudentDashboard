@@ -7,7 +7,7 @@ Docker: docker run -d --name neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j
 """
 
 from course_similarity_graph import CourseGraphBuilder
-from course_graph_analysis import CourseGraphAnalyzer
+from course_graph_analysis import run_validation_report
 
 import os
 
@@ -74,84 +74,17 @@ def quick_start_example():
     finally:
         builder.close()
     
-    # === 2단계: 그래프 분석 ===
-    print("\n[2단계] 그래프 분석 예제")
+    # === 2단계: 그래프 검증 및 분석 ===
+    print("\n[2단계] 그래프 분석 검증 리포트 생성")
     print("-" * 80)
     
-    analyzer = CourseGraphAnalyzer(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    
     try:
-        # 예제 1: 연결 중심성 분석
-        print("\n[예제 1] 가장 많은 교과목과 연결된 교과목 Top 5")
-        central = analyzer.get_course_degree_centrality(top_k=5)
-        for i, course in enumerate(central, 1):
-            print(f"  {i}. {course['name']} - {course['connections']}개 연결")
-        
-        # 예제 2: 유사 교과목 추천
-        print("\n[예제 2] 첫 번째 교과목과 유사한 교과목")
-        first_course = df.iloc[0]['교과목 이름']
-        print(f"기준 교과목: {first_course}")
-        similar = analyzer.recommend_by_similarity(first_course, top_k=5)
-        for i, course in enumerate(similar, 1):
-            dept_info = f" ({course.get('department', 'N/A')})" if course.get('department') else ""
-            print(f"  {i}. {course['name']}{dept_info} - 유사도: {course['similarity']:.4f}")
-        
-        # 예제 3: 키워드 검색
-        print("\n[예제 3] '프로그래밍' 키워드 검색")
-        results = analyzer.search_courses('프로그래밍')
-        for i, course in enumerate(results[:5], 1):
-            dept_info = f" - {course.get('department', 'N/A')}" if course.get('department') else ""
-            print(f"  {i}. {course['name']} ({course['code']}){dept_info}")
-        
-        # 예제 4: 교과과정 구조 분석
-        print("\n[예제 4] 전체 교과과정 구조")
-        structure = analyzer.analyze_curriculum_structure()
-        print(f"총 교과목 수: {structure['total_courses']}")
-        print(f"이수구분별 통계 (상위 5개):")
-        for cat in structure['categories'][:5]:
-            print(f"  - {cat['category']}: {cat['course_count']}과목")
-        
-        # 예제 5: 동일 학수번호 과목 분석 (새로운 기능)
-        print("\n[예제 5] 동일 학수번호/다른 학과 과목 분석")
-        shared_ids = analyzer.get_shared_course_ids(top_k=5)
-        if shared_ids:
-            print("여러 학과에서 공유하는 학수번호 Top 5:")
-            for i, item in enumerate(shared_ids, 1):
-                print(f"  {i}. {item['course_code']} - {item['dept_count']}개 학과: {', '.join(item['departments'][:3])}...")
-        else:
-            print("동일 학수번호/다른 학과 과목이 없습니다.")
-        
-        # 예제 6: 특정 과목의 동일 학수번호 과목 찾기
-        if len(identical_edges) > 0:
-            print("\n[예제 6] 특정 과목의 동일 학수번호 과목")
-            sample_idx = identical_edges[0][0]
-            sample_course = df.iloc[sample_idx]['교과목 이름']
-            sample_dept = df.iloc[sample_idx]['설강학과']
-            print(f"기준 과목: {sample_course} ({sample_dept})")
-            
-            identical_courses = analyzer.find_identical_id_courses(sample_course)
-            if identical_courses:
-                # 학과별로 그룹핑하여 중복 제거
-                unique_depts = {}
-                for course in identical_courses:
-                    dept = course['department']
-                    if dept not in unique_depts:
-                        unique_depts[dept] = course
-                
-                print(f"동일 학수번호 과목 ({len(unique_depts)}개 학과):")
-                for i, (dept, course) in enumerate(list(unique_depts.items())[:5], 1):
-                    print(f"  {i}. {course['name']} - {dept} (학수번호: {course['code']})")
-                
-                if len(unique_depts) > 5:
-                    print(f"  ... 외 {len(unique_depts) - 5}개 학과")
-            else:
-                print("동일 학수번호를 가진 다른 학과 과목이 없습니다.")
-        
-    finally:
-        analyzer.close()
+        run_validation_report(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    except Exception as e:
+        print(f"검증 리포트 생성 실패: {e}")
     
     print("\n" + "=" * 80)
-    print("완료! Neo4j Browser (http://localhost:7474)에서 그래프를 확인하세요.")
+    print("완료! Neo4j Aura 데이터베이스가 구축되었습니다.")
     print("=" * 80)
     
     # Cypher 쿼리 예제 출력
