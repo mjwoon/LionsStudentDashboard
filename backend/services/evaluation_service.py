@@ -485,7 +485,7 @@ class EvaluationService:
         from services.graph_service import is_graph_available
         available = is_graph_available()
         if not available:
-            logger.info("Neo4j 미연결 - 과목명 기반 폴백 모듄로 동작")
+            logger.debug("Neo4j 미연결 - 과목명 기반 폴백 모듈로 동작")
         return available
     
     def _get_similarity_from_graph(
