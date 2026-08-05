@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 def evaluate_student_for_department(
     student_id: int,
     department_id: int,
-    admission_year: int = 2026,
+    admission_year: Optional[int] = None,
     force_recalculate: bool = False,
     db: Session = Depends(get_db)
 ):
@@ -68,12 +68,17 @@ def evaluate_student_for_department(
                 "curriculum_details": curriculum_details
             }
     
-    # 새로 계산
+    # 새로 계산 (admission_year 미지정 시 학번에서 도출)
     evaluator = EvaluationService(db)
-    
+    effective_admission_year = (
+        admission_year
+        if admission_year is not None
+        else EvaluationService.get_admission_year_from_student_id(str(student.student_id))
+    )
+
     try:
         result = evaluator.evaluate_student(
-            student.student_id, department_id, admission_year, save_to_db=True
+            student.student_id, department_id, effective_admission_year, save_to_db=True
         )
         result["cached"] = False
         
@@ -92,7 +97,7 @@ def evaluate_student_for_department(
 @router.get("/student/{student_id}/all-departments")
 def evaluate_student_for_all_departments(
     student_id: int,
-    admission_year: int = 2025,
+    admission_year: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -106,12 +111,17 @@ def evaluate_student_for_all_departments(
     departments = db.query(Department).filter(Department.id > 100).all()
     
     evaluator = EvaluationService(db)
+    effective_admission_year = (
+        admission_year
+        if admission_year is not None
+        else EvaluationService.get_admission_year_from_student_id(str(student.student_id))
+    )
     results = []
-    
+
     for dept in departments:
         try:
             result = evaluator.evaluate_student(
-                student.student_id, dept.id, admission_year, save_to_db=True
+                student.student_id, dept.id, effective_admission_year, save_to_db=True
             )
             results.append(result)
         except Exception as e:
@@ -132,7 +142,7 @@ def evaluate_student_for_all_departments(
 def batch_evaluate_department(
     department_id: int,
     student_ids: Optional[List[int]] = None,
-    admission_year: int = 2025,
+    admission_year: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """
