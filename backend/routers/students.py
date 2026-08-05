@@ -10,6 +10,7 @@ from models.schemas import (
     SurveyChoiceBase
 )
 from services.student_service import calculate_entry_requirement_completion
+from repositories import StudentRepository, DepartmentRepository
 
 router = APIRouter(prefix="/api", tags=["students"])
 
@@ -186,10 +187,10 @@ def get_student_detail(student_id: int, db: Session = Depends(get_db)):
 def get_student_courses(student_id: int, db: Session = Depends(get_db)):
     """학생 수강 이력 조회"""
     
-    student = db.query(Student).filter(Student.student_id == student_id).first()
+    student = StudentRepository(db).get(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
-    
+
     enrollments = db.query(StudentCourse).filter(
         StudentCourse.student_id == student.student_id
     ).order_by(
@@ -225,10 +226,10 @@ def get_student_courses(student_id: int, db: Session = Depends(get_db)):
 def get_student_surveys(student_id: int, db: Session = Depends(get_db)):
     """학생의 전공 희망 조사 이력 조회"""
     
-    student = db.query(Student).filter(Student.student_id == student_id).first()
+    student = StudentRepository(db).get(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="학생을 찾을 수 없습니다.")
-    
+
     surveys = db.query(MajorSurvey).options(
         joinedload(MajorSurvey.survey_round),
         joinedload(MajorSurvey.first_choice),
@@ -262,24 +263,18 @@ def get_student_surveys(student_id: int, db: Session = Depends(get_db)):
 def create_student(student_data: StudentCreate, db: Session = Depends(get_db)):
     """신규 학생 등록"""
     
+    student_repo = StudentRepository(db)
+
     # Check if student already exists
-    existing_student = db.query(Student).filter(
-        Student.student_id == student_data.student_id
-    ).first()
-    if existing_student:
+    if student_repo.get(student_data.student_id):
         raise HTTPException(status_code=400, detail="이미 등록된 학번입니다.")
-    
+
     # Check if email already exists
-    existing_email = db.query(Student).filter(
-        Student.email == student_data.email
-    ).first()
-    if existing_email:
+    if student_repo.get_by_email(student_data.email):
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
-    
+
     # Verify department exists
-    department = db.query(Department).filter(
-        Department.id == student_data.department_id
-    ).first()
+    department = DepartmentRepository(db).get(student_data.department_id)
     if not department:
         raise HTTPException(status_code=404, detail="학과를 찾을 수 없습니다.")
     
