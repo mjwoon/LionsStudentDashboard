@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from database import get_db
 from services.evaluation_service import EvaluationService
-from models.models import StudentRequirementStatus, Student, Department
+from repositories import (
+    StudentRepository,
+    DepartmentRepository,
+    EvaluationCacheRepository,
+)
 
 router = APIRouter(prefix="/api/evaluation", tags=["evaluation"])
 
@@ -24,16 +28,13 @@ def evaluate_student_for_department(
     특정 학생의 특정 학과에 대한 진입 적합도 평가 (3개 메트릭)
     """
     # 학생 조회 (student_id is now PK)
-    student = db.query(Student).filter(Student.student_id == student_id).first()
+    student = StudentRepository(db).get(student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"학번 {student_id}를 찾을 수 없습니다.")
-    
+
     # 강제 재계산이 아니면 캐시된 결과 먼저 확인
     if not force_recalculate:
-        cached_result = db.query(StudentRequirementStatus).filter(
-            StudentRequirementStatus.student_id == student.student_id,
-            StudentRequirementStatus.department_id == department_id
-        ).first()
+        cached_result = EvaluationCacheRepository(db).get(student.student_id, department_id)
         
         if cached_result and cached_result.overall_score is not None:
             # 체계도 상세 정보 추가
@@ -103,12 +104,12 @@ def evaluate_student_for_all_departments(
     """
     특정 학생의 모든 학과에 대한 적합도 평가
     """
-    student = db.query(Student).filter(Student.student_id == student_id).first()
+    student = StudentRepository(db).get(student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"학번 {student_id}를 찾을 수 없습니다.")
-    
+
     # 모든 학과 조회 (라이언스 칼리지 제외)
-    departments = db.query(Department).filter(Department.id > 100).all()
+    departments = DepartmentRepository(db).list_evaluation_targets()
     
     evaluator = EvaluationService(db)
     effective_admission_year = (
@@ -149,15 +150,16 @@ def batch_evaluate_department(
     특정 학과에 대해 여러 학생을 일괄 평가
     """
     # 학과 확인
-    department = db.query(Department).filter(Department.id == department_id).first()
+    department = DepartmentRepository(db).get(department_id)
     if not department:
         raise HTTPException(status_code=404, detail=f"학과 ID {department_id}를 찾을 수 없습니다.")
-    
+
     # 학생 목록 조회
+    student_repo = StudentRepository(db)
     if student_ids:
-        students = db.query(Student).filter(Student.student_id.in_(student_ids)).all()
+        students = student_repo.get_many(student_ids)
     else:
-        students = db.query(Student).filter(Student.department_id == 100).all()  # 라이언스 칼리지 학생들
+        students = student_repo.list_in_lions_college()  # 라이언스 칼리지 학생들
     
     if not students:
         raise HTTPException(status_code=404, detail="평가할 학생이 없습니다.")
