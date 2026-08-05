@@ -5,11 +5,8 @@
 리포지토리로 감싸 ORM 접근을 격리한다. 단순 1회성 조회는 서비스/라우터에 남겨둔다.
 """
 
-from repositories.evaluation_repository import (
-    DepartmentRepository,
-    EvaluationCacheRepository,
-    StudentRepository,
-)
+from repositories.entities import DepartmentRepository, StudentRepository
+from repositories.evaluation_repository import EvaluationCacheRepository
 
 __all__ = [
     "StudentRepository",
