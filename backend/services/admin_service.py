@@ -690,9 +690,11 @@ class AdminService:
             # 각 학생-학과 조합에 대해 진단 수행
             for student in students:
                 # 학생의 입학년도 계산 (학번 앞 4자리)
+                # student_id는 Integer이므로 문자열 변환 후 슬라이스해야 함
+                # (기존 int(student.student_id[:4])는 항상 TypeError→2025로 폴백되던 버그)
                 try:
-                    admission_year = int(student.student_id[:4])
-                except:
+                    admission_year = int(str(student.student_id)[:4])
+                except (ValueError, TypeError):
                     admission_year = 2025  # 기본값
                 
                 for department in departments:
