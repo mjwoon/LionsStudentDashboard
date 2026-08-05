@@ -12,6 +12,7 @@ os.getenv 호출을 한 곳으로 모은다. 현재 동작을 보존하기 위�
 
 from functools import cached_property
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +23,12 @@ class Settings(BaseSettings):
 
     # --- Neo4j Graph DB ---
     neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
+    # NEO4J_USER 우선, 없으면 NEO4J_USERNAME 폴백(.env는 후자를 씀). graphDB/backend/.env
+    # 간 사용자명 키 불일치로 로컬 연결이 기본값으로 떨어지던 문제를 해소.
+    neo4j_user: str = Field(
+        default="neo4j",
+        validation_alias=AliasChoices("NEO4J_USER", "NEO4J_USERNAME"),
+    )
     neo4j_password: str = "password123"  # dev-only; 운영은 env로 override (위 주의 참조)
 
     # --- Redis / Celery broker ---
