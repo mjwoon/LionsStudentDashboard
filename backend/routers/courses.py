@@ -8,6 +8,7 @@ from models.schemas import (
     EntryRequirementsResponse, EntryRequirementCourse,
     DepartmentListResponse, DepartmentDetail, DepartmentCurriculum
 )
+from repositories import DepartmentRepository
 
 router = APIRouter(prefix="/api", tags=["courses"])
 
@@ -31,7 +32,7 @@ def get_courses(
     if course_type:
         query = query.filter(Course.course_type == course_type)
     if department_id:
-        dept = db.query(Department).filter(Department.id == department_id).first()
+        dept = DepartmentRepository(db).get(department_id)
         if dept:
             query = query.filter(Course.course_department == dept.name)
         else:
@@ -166,7 +167,7 @@ def get_department_courses(
     """특정 학과 관장 과목 조회"""
     
     # Verify department exists
-    department = db.query(Department).filter(Department.id == department_id).first()
+    department = DepartmentRepository(db).get(department_id)
     if not department:
         raise HTTPException(status_code=404, detail="학과를 찾을 수 없습니다.")
     
@@ -214,7 +215,7 @@ def get_department_courses(
 def get_department_curriculum(department_id: int, db: Session = Depends(get_db)):
     """특정 학과의 교육과정 정보 조회"""
     
-    department = db.query(Department).filter(Department.id == department_id).first()
+    department = DepartmentRepository(db).get(department_id)
     if not department:
         raise HTTPException(status_code=404, detail="학과를 찾을 수 없습니다.")
     
@@ -235,7 +236,7 @@ def get_full_curriculum(
     
     from models.models import Curriculum, CourseRecommendation, DepartmentEntryRequirement, RequirementCourse
     
-    dept = db.query(Department).filter(Department.id == department_id).first()
+    dept = DepartmentRepository(db).get(department_id)
     if not dept:
         return {"curriculum": {}, "total_courses": 0}
         
