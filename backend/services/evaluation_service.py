@@ -754,15 +754,20 @@ class EvaluationService:
         self,
         student_ids: List[str],
         department_id: int,
-        admission_year: int = 2026
+        admission_year: Optional[int] = None
     ) -> List[Dict]:
-        """여러 학생을 한 번에 평가"""
+        """여러 학생을 한 번에 평가 (admission_year 미지정 시 학번에서 학생별로 도출)"""
         results = []
-        
+
         for student_id in student_ids:
             try:
+                effective_admission_year = (
+                    admission_year
+                    if admission_year is not None
+                    else self.get_admission_year_from_student_id(str(student_id))
+                )
                 result = self.evaluate_student(
-                    student_id, department_id, admission_year, save_to_db=True
+                    student_id, department_id, effective_admission_year, save_to_db=True
                 )
                 results.append(result)
             except Exception as e:
