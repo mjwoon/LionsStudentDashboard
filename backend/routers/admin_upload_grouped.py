@@ -46,7 +46,7 @@ def _make_sub_result(label: str, resp: DataUploadResponse) -> dict:
         "uploaded_count": resp.uploaded_count,
         "updated_count": resp.updated_count,
         "errors": resp.errors,
-        "detailed_errors": [e.dict() for e in resp.detailed_errors] if resp.detailed_errors else None,
+        "detailed_errors": [e.model_dump() for e in resp.detailed_errors] if resp.detailed_errors else None,
     }
 
 

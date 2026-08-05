@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, AliasChoices
+from pydantic import BaseModel, EmailStr, Field, AliasChoices, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -15,8 +15,7 @@ class CollegeBase(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DepartmentBase(BaseModel):
@@ -30,8 +29,7 @@ class DepartmentBase(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DepartmentDetail(BaseModel):
@@ -53,8 +51,7 @@ class DepartmentDetail(BaseModel):
     min_credits: int
     is_evaluation_available: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AcademicInfo(BaseModel):
@@ -78,9 +75,7 @@ class AcademicInfo(BaseModel):
     status: str = "재학"
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 # Student Models
@@ -135,8 +130,7 @@ class StudentInList(StudentBase):
     completion_status: Optional[str] = None  # 이수현황 (예: "15/20")
     course_suitability: Optional[str] = None  # 수강과목 적합성 (예: "양호")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentDetail(StudentBase):
@@ -150,8 +144,7 @@ class StudentDetail(StudentBase):
     department: DepartmentBase
     academic_info: AcademicInfo
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentListResponse(BaseModel):
@@ -224,8 +217,7 @@ class CourseInList(CourseBase):
     flags: CourseFlags
     description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseListResponse(BaseModel):
@@ -271,8 +263,7 @@ class CourseEnrollmentDetail(BaseModel):
     grade: Optional[str] = None
     numeric_grade: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentCoursesResponse(BaseModel):
@@ -312,8 +303,7 @@ class EntryRequirementCourse(BaseModel):
     department_name: str
     is_recommended: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EntryRequirementsResponse(BaseModel):
@@ -389,8 +379,7 @@ class SurveyHistoryItem(BaseModel):
     second_choice: Optional[SurveyChoiceBase] = None
     decision_scale: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentSurveysResponse(BaseModel):
@@ -524,8 +513,7 @@ class SurveySubmissionItem(BaseModel):
     decision_scale: int
     submitted_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoundInfo(BaseModel):
@@ -578,8 +566,7 @@ class DepartmentWithStats(BaseModel):
     students: int
     percent: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TrendDataPoint(BaseModel):
@@ -593,8 +580,7 @@ class TrendDataPoint(BaseModel):
     period: str
     data: dict  # department_id: count
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SurveyRoundInfo(BaseModel):
@@ -646,8 +632,7 @@ class DashboardStatsResponse(BaseModel):
     survey_rounds: Optional[List[SurveyRoundSummary]] = None
     current_data_by_round: Optional[Dict[int, List[DepartmentWithStats]]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SurveyRoundResponse(BaseModel):
@@ -678,8 +663,7 @@ class RequirementCourseDetail(BaseModel):
     course_name: str
     credits: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DepartmentEntryRequirementDetail(BaseModel):
@@ -709,8 +693,7 @@ class DepartmentEntryRequirementDetail(BaseModel):
     is_alert_required: bool
     courses: List[RequirementCourseDetail]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Student Requirement Status Models
@@ -737,8 +720,7 @@ class StudentRequirementStatusDetail(BaseModel):
     ai_summary: Optional[str] = None
     calculated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentRequirementStatusResponse(BaseModel):
@@ -806,12 +788,10 @@ class RequiredCoursesResult(BaseModel):
     total_requirements: int
     satisfied_requirements: int
     details: List[dict]
-    pass_: bool = None
+    pass_: bool = Field(default=None, alias='pass')
     message: str
 
-    class Config:
-        populate_by_name = True
-        fields = {'pass_': 'pass'}
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class RecommendedCoursesResult(BaseModel):
@@ -885,8 +865,7 @@ class EvaluationResultResponse(BaseModel):
     summary_message: str
     evaluated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BatchEvaluationRequest(BaseModel):

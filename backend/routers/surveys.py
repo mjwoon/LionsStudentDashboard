@@ -14,7 +14,7 @@ from models.schemas import (
     SurveyChoiceBase, DashboardStatsResponse, DepartmentWithStats, 
     TrendDataPoint, CollegeBase
 )
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 
 router = APIRouter(prefix="/api", tags=["surveys"])
@@ -143,7 +143,7 @@ def create_survey(survey_data: SurveyCreate, db: Session = Depends(get_db)):
         first_choice_id=survey_data.first_choice_dept_id,
         second_choice_id=survey_data.second_choice_dept_id or survey_data.first_choice_dept_id,
         decision_scale=survey_data.decision_scale,
-        survey_date=datetime.utcnow()
+        survey_date=datetime.now(timezone.utc)
     )
     
     db.add(new_survey)
