@@ -1,25 +1,35 @@
-import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from config import settings
 from database import init_db
 from routers import students, courses, surveys, evaluation, admin, dashboard
 from routers import graph, admin_upload_grouped
 from services.graph_service import Neo4jConnection
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    init_db()
+    yield
+    # shutdown
+    Neo4jConnection.close()
+
+
 app = FastAPI(
     title="Lions Student Dashboard API",
     description="한양대학교 LIONS 학생 대시보드 백엔드 API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware
 # CORS_ORIGINS: 쉼표로 구분된 허용 오리진 목록 (예: https://lions-frontend.onrender.com,http://localhost:5173)
-_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
-cors_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,18 +44,6 @@ app.include_router(admin.router)
 app.include_router(admin_upload_grouped.router)
 app.include_router(dashboard.router)
 app.include_router(graph.router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    init_db()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    Neo4jConnection.close()
 
 
 @app.get("/")

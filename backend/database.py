@@ -1,15 +1,16 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
-import os
 
-# Database URL - PostgreSQL
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://user:password@localhost:5432/my_db")
+from config import settings
+
+# Database URL - PostgreSQL (postgres:// / postgresql:// 는 psycopg3용으로 정규화됨)
+DATABASE_URL = settings.normalized_database_url
 
 # Create engine
 engine = create_engine(
     DATABASE_URL,
-    echo=True  # Set to False in production
+    echo=settings.db_echo  # DB_ECHO 환경변수로 제어 (기본 False)
 )
 
 # Create SessionLocal class

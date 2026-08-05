@@ -3,7 +3,6 @@ Neo4j 그래프 데이터베이스 서비스
 교과목 유사도 기반 그래프 분석 및 추천 기능 제공
 """
 
-import os
 import time
 import logging
 from functools import lru_cache
@@ -29,10 +28,10 @@ class Neo4jConnection:
     def get_driver(cls):
         """싱글톤 드라이버 인스턴스 반환"""
         if cls._driver is None:
-            uri = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-            user = os.getenv('NEO4J_USER', 'neo4j')
-            password = os.getenv('NEO4J_PASSWORD', 'password123')
-            cls._driver = GraphDatabase.driver(uri, auth=(user, password))
+            from config import settings
+            cls._driver = GraphDatabase.driver(
+                settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password)
+            )
         return cls._driver
     
     @classmethod
