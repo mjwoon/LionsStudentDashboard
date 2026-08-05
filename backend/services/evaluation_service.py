@@ -10,7 +10,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Dict, Tuple, Set, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -277,7 +277,7 @@ class EvaluationService:
             'grade': grade,
             'analysis_json': analysis_json,
             'ai_summary': None,
-            'evaluated_at': datetime.utcnow()
+            'evaluated_at': datetime.now(timezone.utc)
         }
         
         # AI 총평은 AI Worker (Celery)가 별도로 처리
