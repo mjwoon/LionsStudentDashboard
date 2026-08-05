@@ -25,6 +25,9 @@ class StudentRepository:
             .first()
         )
 
+    def get_by_email(self, email: str) -> Optional[Student]:
+        return self.db.query(Student).filter(Student.email == email).first()
+
     def get_many(self, student_ids: List[int]) -> List[Student]:
         return (
             self.db.query(Student)
