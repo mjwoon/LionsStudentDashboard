@@ -4,6 +4,7 @@ from typing import Dict, List, Any
 from models.models import Student, Department, College, MajorSurvey, StudentCourse, Course, SurveyRound
 from database import get_db
 from sqlalchemy import func, desc, case
+from repositories import DepartmentRepository
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
@@ -105,7 +106,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         for survey in round_surveys:
             if survey.first_choice_id:
                 dept_id = survey.first_choice_id
-                dept = db.query(Department).filter(Department.id == dept_id).first()
+                dept = DepartmentRepository(db).get(dept_id)
                 if dept:
                     dept_name = dept.name
                     round_dept_count[dept_name] = round_dept_count.get(dept_name, 0) + 1
