@@ -78,3 +78,15 @@ class EvaluationCacheRepository:
             )
             .first()
         )
+
+    def get_or_create(
+        self, student_id: int, department_id: int
+    ) -> StudentRequirementStatus:
+        """기존 캐시 레코드를 찾고, 없으면 새로 만들어 세션에 추가한다(commit은 호출자 책임)."""
+        status = self.get(student_id, department_id)
+        if status is None:
+            status = StudentRequirementStatus(
+                student_id=student_id, department_id=department_id
+            )
+            self.db.add(status)
+        return status

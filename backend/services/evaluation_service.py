@@ -21,6 +21,7 @@ from models.models import (
     StudentRequirementStatus, GradeLevelEnum,
     Curriculum, CourseRecommendation
 )
+from repositories import EvaluationCacheRepository
 from constants import (
     GRADE_TO_NUMERIC,
     GRADE_THRESHOLDS,
@@ -592,20 +593,11 @@ class EvaluationService:
         result: Dict
     ):
         """평가 결과를 StudentRequirementStatus 테이블에 저장"""
-        # 기존 레코드 찾기
-        status = self.db.query(StudentRequirementStatus).filter(
-            StudentRequirementStatus.student_id == student_id,
-            StudentRequirementStatus.department_id == department_id
-        ).first()
-        
-        if not status:
-            # 새로 생성
-            status = StudentRequirementStatus(
-                student_id=student_id,
-                department_id=department_id
-            )
-            self.db.add(status)
-        
+        # 기존 레코드 조회 또는 신규 생성 (캐시 접근은 리포지토리가 담당)
+        status = EvaluationCacheRepository(self.db).get_or_create(
+            student_id, department_id
+        )
+
         # 점수 업데이트 (새로운 3-메트릭 체계)
         # 기존 필드에 매핑 (curriculum_completion_score -> curriculum_similar_rate로 사용)
         status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
