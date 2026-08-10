@@ -44,18 +44,32 @@ class EvaluationCacheRepository:
         return status
 
     def save_result(
-        self, student_id: int, department_id: int, result: Dict
+        self,
+        student_id: int,
+        department_id: int,
+        result: Dict,
+        ai_summary: Optional[str] = None,
     ) -> StudentRequirementStatus:
         """평가 결과(result)를 캐시 레코드에 매핑해 기록한다(신규/갱신). commit은 호출자 책임.
 
         StudentRequirementStatus 쓰기의 단일 진실 원천(SSOT). 서비스/워커가 각자
         필드 매핑을 복제하지 않고 이 메서드를 재사용하도록 한다.
+
+        ai_summary가 주어지면 컬럼과 analysis_json['ai_summary']에 함께 기록한다
+        (AI 워커 경로 호환).
         """
         status = self.get_or_create(student_id, department_id)
+
+        analysis_json = result.get('analysis_json')
+        if ai_summary is not None:
+            analysis_json = dict(analysis_json or {})
+            analysis_json['ai_summary'] = ai_summary
+            status.ai_summary = ai_summary
+
         status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
         status.related_courses_score = result.get('recommended_similar_rate', 0)
         status.overall_score = result['overall_score']
-        status.analysis_json = result.get('analysis_json')
+        status.analysis_json = analysis_json
         status.calculated_at = result['evaluated_at']
         status.is_satisfied = result['overall_score'] >= MIN_SATISFACTION_SCORE
         return status

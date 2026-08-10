@@ -81,3 +81,23 @@ def test_save_result_updates_existing_row(db):
     row = db.query(StudentRequirementStatus).first()
     assert float(row.overall_score) == 50.0
     assert row.is_satisfied is False  # 50 < 70
+
+
+def test_save_result_with_ai_summary(db):
+    _seed(db)
+    repo = EvaluationCacheRepository(db)
+
+    result = {
+        "curriculum_similar_rate": 0,
+        "recommended_similar_rate": 0,
+        "overall_score": 90.0,
+        "analysis_json": {"entry_requirement": {"score": 100}},
+        "evaluated_at": datetime.now(timezone.utc),
+    }
+    status = repo.save_result(202400001, 101, result, ai_summary="양호합니다")
+    db.commit()
+
+    assert status.ai_summary == "양호합니다"
+    # analysis_json에도 주입 + 기존 키 보존
+    assert status.analysis_json["ai_summary"] == "양호합니다"
+    assert status.analysis_json["entry_requirement"] == {"score": 100}

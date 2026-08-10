@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
@@ -17,8 +18,18 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# Dependency to get DB session
+# Dependency to get DB session (FastAPI)
 def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Context manager for standalone (non-FastAPI) usage, e.g. Celery worker
+@contextmanager
+def get_db_session() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
