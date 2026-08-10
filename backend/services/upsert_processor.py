@@ -30,8 +30,13 @@ def run_upsert(
     item_id_accessor: Callable[[Any], str],
     success_message: str,
     batch_key: Optional[Callable[[Any], Any]] = None,
+    commit: bool = True,
 ) -> DataUploadResponse:
-    """행 목록을 순회하며 조회→수정/생성 후 일괄 커밋한다."""
+    """행 목록을 순회하며 조회→수정/생성한다.
+
+    commit=True(기본): 여기서 db.commit()까지 수행(단독 업로드).
+    commit=False: 커밋하지 않고 세션에만 반영(상위 unit_of_work가 일괄 커밋; 원자적 그룹 업로드).
+    """
     uploaded_count = 0
     updated_count = 0
     detailed_errors: List[ErrorDetail] = []
@@ -68,6 +73,18 @@ def run_upsert(
                 ErrorDetail(row=row_index, item_id=item_id, reason=str(e))
             )
         row_index += 1
+
+    # 명시적 commit=False 이거나, 상위 unit_of_work 안이면 개별 커밋을 건너뛴다.
+    should_commit = commit and not db.info.get("in_unit_of_work", False)
+    if not should_commit:
+        # 커밋은 상위 unit_of_work가 담당. 여기서는 세션 반영 결과(카운트)만 돌려준다.
+        return DataUploadResponse(
+            success=True,
+            message=success_message,
+            uploaded_count=uploaded_count,
+            updated_count=updated_count,
+            detailed_errors=detailed_errors if detailed_errors else None,
+        )
 
     try:
         db.commit()
