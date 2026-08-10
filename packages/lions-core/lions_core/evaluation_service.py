@@ -21,13 +21,19 @@ from lions_core.models import (
     StudentRequirementStatus, GradeLevelEnum,
     Curriculum, CourseRecommendation
 )
-from lions_core.repositories import EvaluationCacheRepository
+from lions_core.repositories import (
+    EvaluationCacheRepository,
+    StudentRepository,
+    DepartmentRepository,
+)
+from lions_core.evaluation_presenter import EvaluationResponseBuilder
+from lions_core import scoring
 from lions_core.constants import (
-    GRADE_TO_NUMERIC,
     classify_grade,
-    MAX_GPA,
     FIRST_YEAR,
     FAILING_GRADE,
+    EVALUATION_WEIGHTS,
+    SIMILARITY_THRESHOLD,
 )
 
 
@@ -36,11 +42,12 @@ class EvaluationService:
     
     def __init__(self, db: Session):
         self.db = db
-        self._necessary_data = None
-        self._recommended_data = None
+        # 반복되는 엔티티 단건 조회는 기존 리포지토리로 일원화(자기 리포지토리 무시 해소).
+        self._students = StudentRepository(db)
+        self._departments = DepartmentRepository(db)
         self._curriculum_data_cache = {}  # 학과별 교육과정 데이터 캐시
         self._similarity_cache = {}       # Neo4j 유사도 캐시 {(code1, code2): float}
-        self._similarity_threshold = 0.7  # 유사과목 인정 최소 유사도
+        self._similarity_threshold = SIMILARITY_THRESHOLD  # 유사과목 인정 최소 유사도(SSOT)
         # 주의: _graph_available은 제거됨.
         #   연결 상태는 graph_service.is_graph_available()의
         #   30초 TTL 모듈 레벨 캐시를 사용합니다.
@@ -52,7 +59,7 @@ class EvaluationService:
         
         curriculums = self.db.query(Curriculum).all()
         for cur in curriculums:
-            dept = self.db.query(Department).filter(Department.id == cur.department_id).first()
+            dept = self._departments.get(cur.department_id)
             if dept:
                 if dept.name not in self._curriculum_data_cache:
                     self._curriculum_data_cache[dept.name] = []
@@ -89,7 +96,7 @@ class EvaluationService:
     
     def _get_department_courses(self, department_id: int) -> Dict:
         """학과의 필수/권장 과목 정보 DB에서 조회"""
-        department = self.db.query(Department).filter(Department.id == department_id).first()
+        department = self._departments.get(department_id)
         if not department:
             return {"necessary_courses": [], "recommended_courses": []}
         
@@ -127,7 +134,7 @@ class EvaluationService:
         Returns:
             [{"course_code": "XXX", "course_name": "YYY"}, ...] 형태의 리스트
         """
-        department = self.db.query(Department).filter(Department.id == department_id).first()
+        department = self._departments.get(department_id)
         if not department:
             return []
         
@@ -181,12 +188,12 @@ class EvaluationService:
             평가 결과 딕셔너리
         """
         # 학생 정보 조회
-        student = self.db.query(Student).filter(Student.student_id == student_id).first()
+        student = self._students.get(student_id)
         if not student:
             raise ValueError(f"학생 ID {student_id}를 찾을 수 없습니다.")
         
         # 학과 정보 조회
-        department = self.db.query(Department).filter(Department.id == department_id).first()
+        department = self._departments.get(department_id)
         if not department:
             raise ValueError(f"학과 ID {department_id}를 찾을 수 없습니다.")
         
@@ -215,11 +222,11 @@ class EvaluationService:
             student_completed_courses, department_id
         )
         
-        # 4. 종합 점수 계산 (진입요건 40% + 권장과목유사 30% + 교육과정유사 30%)
+        # 4. 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
         overall_score = (
-            entry_requirement_score * 0.4 +
-            recommended_similar_rate * 0.3 +
-            curriculum_similar_rate * 0.3
+            entry_requirement_score * EVALUATION_WEIGHTS["entry_requirement"] +
+            recommended_similar_rate * EVALUATION_WEIGHTS["recommended_courses"] +
+            curriculum_similar_rate * EVALUATION_WEIGHTS["curriculum_completion"]
         )
         
         # 5. 상세 분석 JSON 생성
@@ -229,7 +236,6 @@ class EvaluationService:
         first_year_courses = self._get_department_first_year_curriculum(department.id)
         course_name_to_codes = self._get_all_course_codes_by_name()
         
-        from services.evaluation_presenter import EvaluationResponseBuilder
         analysis_json = EvaluationResponseBuilder.build_analysis_json(
             student=student,
             department=department,
@@ -343,27 +349,7 @@ class EvaluationService:
         """
         dept_courses = self._get_department_courses(department_id)
         necessary_courses = dept_courses.get("necessary_courses", [])
-        
-        # 진입요건이 없으면 100%
-        if not necessary_courses:
-            return 100.0
-        
-        completed_codes = student_completed_courses["codes"]
-        completed_names = student_completed_courses["names"]
-        
-        # 이수한 필수과목 수 계산
-        completed_count = 0
-        for necessary in necessary_courses:
-            course_code = necessary.get("course_code", "")
-            course_name = necessary.get("course_name", "")
-            
-            # 학수코드 또는 과목명이 일치하면 이수로 인정
-            if course_code in completed_codes or course_name in completed_names:
-                completed_count += 1
-        
-        # 비율 계산
-        score = (completed_count / len(necessary_courses)) * 100
-        return round(min(100.0, score), 2)
+        return scoring.entry_requirement_score(necessary_courses, student_completed_courses)
     
     def _calculate_recommended_courses_score(
         self,
@@ -380,41 +366,18 @@ class EvaluationService:
         """
         dept_courses = self._get_department_courses(department_id)
         recommended_course_names = dept_courses.get("recommended_courses", [])  # 과목명 리스트
-        
+
+        # 권장과목이 없으면 비싼 과목-코드 매핑 조회를 건너뛴다(동작·성능 보존).
         if not recommended_course_names:
-            return 100.0, 100.0  # 권장과목이 없으면 100%
-        
-        completed_codes = student_completed_courses["codes"]
-        completed_names = student_completed_courses["names"]
-        
-        # 교과목 DB에서 권장과목명에 해당하는 학수코드 찾기
+            return 100.0, 100.0
+
         course_name_to_codes = self._get_all_course_codes_by_name()
-        
-        # 동일과목 카운트 (해당 학과의 설강 과목만)
-        exact_match_count = 0
-        # 유사과목 카운트 (Neo4j 유사도 또는 과목명 일치)
-        similar_match_count = 0
-        
-        for rec_name in recommended_course_names:
-            # 동일과목 체크: 과목명이 동일한 과목을 이수 + 학수코드도 일치
-            if rec_name in completed_names:
-                expected_codes = course_name_to_codes.get(rec_name, set())
-                if expected_codes & completed_codes:
-                    exact_match_count += 1
-            
-            # 유사과목 체크: Neo4j 유사도 기반 또는 과목명 폴백
-            target_codes = course_name_to_codes.get(rec_name, set())
-            is_similar, _, _ = self._find_best_similar_course(
-                target_codes, rec_name, student_completed_courses
-            )
-            if is_similar:
-                similar_match_count += 1
-        
-        total = len(recommended_course_names)
-        exact_rate = (exact_match_count / total) * 100
-        similar_rate = (similar_match_count / total) * 100
-        
-        return round(exact_rate, 2), round(similar_rate, 2)
+        return scoring.recommended_courses_score(
+            recommended_course_names,
+            student_completed_courses,
+            course_name_to_codes,
+            self._find_best_similar_course,
+        )
     
     def _calculate_curriculum_completion_score(
         self,
@@ -429,40 +392,12 @@ class EvaluationService:
             - 동일과목: 정확히 같은 설강학과+학수코드
             - 유사과목: Neo4j 유사도 >= threshold이면 인정 (폴백: 과목명 일치)
         """
-        # 해당 학과의 1학년 교육과정 과목
         first_year_courses = self._get_department_first_year_curriculum(department_id)
-        
-        if not first_year_courses:
-            return 100.0, 100.0  # 1학년 과목이 없으면 100%
-        
-        completed_codes = student_completed_courses["codes"]
-        
-        # 동일과목 카운트 (학수코드 일치)
-        exact_match_count = 0
-        # 유사과목 카운트 (Neo4j 유사도 또는 과목명 일치)
-        similar_match_count = 0
-        
-        for course in first_year_courses:
-            course_code = course.get("course_code", "")
-            course_name = course.get("course_name", "")
-            
-            # 동일과목: 학수코드가 일치
-            if course_code in completed_codes:
-                exact_match_count += 1
-            
-            # 유사과목: Neo4j 유사도 기반 또는 과목명 폴백
-            target_codes = {course_code} if course_code else set()
-            is_similar, _, _ = self._find_best_similar_course(
-                target_codes, course_name, student_completed_courses
-            )
-            if is_similar:
-                similar_match_count += 1
-        
-        total = len(first_year_courses)
-        exact_rate = (exact_match_count / total) * 100
-        similar_rate = (similar_match_count / total) * 100
-        
-        return round(exact_rate, 2), round(similar_rate, 2)
+        return scoring.curriculum_completion_score(
+            first_year_courses,
+            student_completed_courses,
+            self._find_best_similar_course,
+        )
     
     # ==================== Neo4j 유사도 통합 ====================
 
@@ -473,7 +408,7 @@ class EvaluationService:
         graph_service 모듈의 30초 TTL 캐시(is_graph_available)를 사용합니다.
         인스턴스 레벨 캐싱 제거 → 요청 간 공유, Neo4j 복구 시 TTL 내 자동 정상화.
         """
-        from lions_core.graph_service import is_graph_available
+        from lions_core.graph_connection import is_graph_available
         available = is_graph_available()
         if not available:
             logger.debug("Neo4j 미연결 - 과목명 기반 폴백 모듈로 동작")
@@ -497,7 +432,7 @@ class EvaluationService:
         if not self._is_graph_available():
             return 0.0
         try:
-            from lions_core.graph_service import CourseGraphService
+            from lions_core.course_graph_service import CourseGraphService
             return CourseGraphService.get_similarity_between(
                 source_course_code, target_course_code
             )
@@ -535,45 +470,16 @@ class EvaluationService:
         Returns:
             (인정여부, 최고유사도, 매칭된 과목 dict or None)
         """
-        completed_codes = student_completed_courses["codes"]
-        completed_names = student_completed_courses["names"]
-        completed_details = student_completed_courses["details"]
-
-        # ── 1단계: 동일 학수코드 (항상 최우선) ──────────────────────────
-        for target_code in target_course_codes:
-            if target_code in completed_codes:
-                for detail in completed_details:
-                    if detail["course_code"] == target_code:
-                        return (True, 1.0, detail)
-
-        # ── 2단계: 과목명 직접 일치 (Neo4j 연결 여부와 무관) ────────────
-        # 학수코드가 다른 타 학과 개설 과목이라도 이름이 같으면 인정
-        if target_course_name in completed_names:
-            for detail in completed_details:
-                if detail["course_name"] == target_course_name:
-                    return (True, 1.0, detail)
-
-        # ── 3단계: Neo4j 유사도 매칭 (1·2단계에서 미인정된 경우만) ───────
-        if self._is_graph_available():
-            best_similarity = 0.0
-            best_match = None
-
-            for detail in completed_details:
-                for target_code in target_course_codes:
-                    sim = self._get_similarity_from_graph(
-                        detail["course_code"],
-                        target_code
-                    )
-                    if sim > best_similarity:
-                        best_similarity = sim
-                        best_match = detail
-
-            if best_similarity >= self._similarity_threshold:
-                return (True, best_similarity, best_match)
-
-            return (False, best_similarity, None)
-
-        return (False, 0.0, None)
+        # 순수 판정 로직은 scoring 모듈에 위임한다. 그래프 가용성/유사도 조회는
+        # 콜러블로 주입되어 지연 평가·대체(fake)가 가능하다(의존성 역전).
+        return scoring.find_best_similar_course(
+            target_course_codes,
+            target_course_name,
+            student_completed_courses,
+            is_graph_available=self._is_graph_available,
+            get_similarity=self._get_similarity_from_graph,
+            threshold=self._similarity_threshold,
+        )
     
     def _save_evaluation_result(
         self,
@@ -599,7 +505,7 @@ class EvaluationService:
             학년별 체계도 과목 딕셔너리 {1: [...], 2: [...], 3: [...], 4: [...]}
         """
         # 학과명 조회
-        department = self.db.query(Department).filter(Department.id == department_id).first()
+        department = self._departments.get(department_id)
         if not department:
             return {}
         
