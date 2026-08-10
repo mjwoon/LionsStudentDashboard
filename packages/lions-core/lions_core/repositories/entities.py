@@ -10,8 +10,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from constants import LIONS_COLLEGE_ID
-from models.models import Department, Student
+from lions_core.constants import LIONS_COLLEGE_ID
+from lions_core.models import Department, Student
 
 
 class StudentRepository:
