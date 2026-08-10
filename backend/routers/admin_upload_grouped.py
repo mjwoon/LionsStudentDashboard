@@ -20,7 +20,7 @@ from models.schemas import (
     EnrollmentDataUpload,
     DataUploadResponse,
 )
-from services.admin_service import AdminService
+from services.upload_service import UploadService
 from routers.admin import parse_upload_file
 from typing import List, Optional
 import logging
@@ -89,7 +89,7 @@ async def upload_org(
                     college_map[key] = CollegeDataUpload(id=c_id, name=c_name)
 
         if college_map:
-            colleges_resp = AdminService.upload_colleges(db, list(college_map.values()))
+            colleges_resp = UploadService.upload_colleges(db, list(college_map.values()))
             sub_results.append(_make_sub_result("대학", colleges_resp))
             total_uploaded += colleges_resp.uploaded_count
             total_updated += colleges_resp.updated_count
@@ -112,7 +112,7 @@ async def upload_org(
                 ))
 
         if dept_list:
-            depts_resp = AdminService.upload_departments(db, dept_list)
+            depts_resp = UploadService.upload_departments(db, dept_list)
             sub_results.append(_make_sub_result("학과", depts_resp))
             total_uploaded += depts_resp.uploaded_count
             total_updated += depts_resp.updated_count
@@ -171,7 +171,7 @@ async def upload_students_grouped(
                 students_list.append(StudentDataUpload(**row))
 
         if students_list:
-            students_resp = AdminService.upload_students(db, students_list)
+            students_resp = UploadService.upload_students(db, students_list)
             sub_results.append(_make_sub_result("학생", students_resp))
             total_uploaded += students_resp.uploaded_count
             total_updated += students_resp.updated_count
@@ -187,7 +187,7 @@ async def upload_students_grouped(
                 surveys_list.append(MajorSurveyDataUpload(**row))
 
         if surveys_list:
-            surveys_resp = AdminService.upload_major_surveys(db, surveys_list)
+            surveys_resp = UploadService.upload_major_surveys(db, surveys_list)
             sub_results.append(_make_sub_result("희망전공조사", surveys_resp))
             total_uploaded += surveys_resp.uploaded_count
             total_updated += surveys_resp.updated_count
@@ -241,7 +241,7 @@ async def upload_courses_grouped(
                 courses_list.append(CourseDataUpload(**row))
 
         if courses_list:
-            courses_resp = AdminService.upload_courses(db, courses_list)
+            courses_resp = UploadService.upload_courses(db, courses_list)
             sub_results.append(_make_sub_result("과목", courses_resp))
             total_uploaded += courses_resp.uploaded_count
             total_updated += courses_resp.updated_count
@@ -293,7 +293,7 @@ async def upload_curriculum_grouped(
             curr_list.append(CurriculumDataUpload(**row))
 
         if curr_list:
-            curr_resp = AdminService.upload_curriculums(db, curr_list)
+            curr_resp = UploadService.upload_curriculums(db, curr_list)
             sub_results.append(_make_sub_result("교육과정", curr_resp))
             total_uploaded += curr_resp.uploaded_count
             total_updated += curr_resp.updated_count
@@ -353,7 +353,7 @@ async def upload_requirements_grouped(
                     reqs_list.append(RequirementDataUpload(**row))
 
         if reqs_list:
-            reqs_resp = AdminService.upload_requirements(db, reqs_list)
+            reqs_resp = UploadService.upload_requirements(db, reqs_list)
             sub_results.append(_make_sub_result("진입요건", reqs_resp))
             total_uploaded += reqs_resp.uploaded_count
             total_updated += reqs_resp.updated_count
@@ -398,7 +398,7 @@ async def upload_requirements_grouped(
                 ))
 
         if req_courses_list:
-            rc_resp = AdminService.upload_requirement_courses(db, req_courses_list)
+            rc_resp = UploadService.upload_requirement_courses(db, req_courses_list)
             sub_results.append(_make_sub_result("요건 과목 매핑", rc_resp))
             total_uploaded += rc_resp.uploaded_count
             total_updated += rc_resp.updated_count
@@ -418,7 +418,7 @@ async def upload_requirements_grouped(
                 ))
 
         if recs_list:
-            recs_resp = AdminService.upload_recommendations(db, recs_list)
+            recs_resp = UploadService.upload_recommendations(db, recs_list)
             sub_results.append(_make_sub_result("권장과목", recs_resp))
             total_uploaded += recs_resp.uploaded_count
             total_updated += recs_resp.updated_count
@@ -461,7 +461,7 @@ async def upload_enrollments_grouped(
             raise ValueError("파일에 데이터가 없습니다.")
 
         enrollments_list = [EnrollmentDataUpload(**row) for row in data]
-        enr_resp = AdminService.upload_enrollments(db, enrollments_list)
+        enr_resp = UploadService.upload_enrollments(db, enrollments_list)
 
         return GroupedUploadResponse(
             success=enr_resp.success,
