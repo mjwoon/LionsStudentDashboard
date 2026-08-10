@@ -6,7 +6,7 @@ _generic_upload upsert 엔진과 엔티티별 upload_* 메서드를 담는다.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, List
 
 from sqlalchemy.orm import Session
@@ -322,7 +322,7 @@ class UploadService:
             existing.pride = data.pride
             existing.class_number = data.class_number
             existing.track = data.track
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
 
         return UploadService._generic_upload(
             db=db,
