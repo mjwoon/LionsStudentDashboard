@@ -26,6 +26,8 @@ from models.models import (
 )
 from models.schemas import CollegeDataUpload, CourseDataUpload, BulkEvaluationRequest
 from services.admin_service import AdminService
+from services.upload_service import UploadService
+from services.evaluation_admin_service import EvaluationAdminService
 import services.evaluation_service as eval_mod
 
 
@@ -67,7 +69,7 @@ def _seed_student(db, student_id, department_id):
 
 
 def test_upload_colleges_insert_then_update(db):
-    resp = AdminService.upload_colleges(
+    resp = UploadService.upload_colleges(
         db, [CollegeDataUpload(name="A"), CollegeDataUpload(name="B")]
     )
     assert resp.success
@@ -75,7 +77,7 @@ def test_upload_colleges_insert_then_update(db):
     assert resp.updated_count == 0
 
     # 재업로드: 기존 이름(A)은 update 경로, 신규(C)는 insert
-    resp2 = AdminService.upload_colleges(
+    resp2 = UploadService.upload_colleges(
         db, [CollegeDataUpload(name="A"), CollegeDataUpload(name="C")]
     )
     assert resp2.uploaded_count == 1
@@ -89,7 +91,7 @@ def test_upload_courses_insert_and_intra_batch_dedup(db):
         CourseDataUpload(course_code="CSE101", course_name="개론(중복)", credits=3, course_year=1),
         CourseDataUpload(course_code="CSE102", course_name="프로그래밍", credits=3, course_year=1),
     ]
-    resp = AdminService.upload_courses(db, rows)
+    resp = UploadService.upload_courses(db, rows)
     assert resp.success
     assert resp.uploaded_count == 2  # CSE101, CSE102
     assert resp.updated_count == 1   # 배치 내 두 번째 CSE101
@@ -113,7 +115,7 @@ def test_upload_courses_updates_existing_and_counts_batch_dupes(db):
         CourseDataUpload(course_code="CSE101", course_name="new1", credits=3, course_year=1),
         CourseDataUpload(course_code="CSE101", course_name="new2", credits=3, course_year=1),
     ]
-    resp = AdminService.upload_courses(db, rows)
+    resp = UploadService.upload_courses(db, rows)
     assert resp.uploaded_count == 0
     assert resp.updated_count == 2
     assert db.query(Course).count() == 1
@@ -139,7 +141,7 @@ def test_bulk_evaluate_derives_admission_year_and_counts(db, monkeypatch):
 
     monkeypatch.setattr(eval_mod.EvaluationService, "evaluate_student", fake_eval)
 
-    resp = AdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=True))
+    resp = EvaluationAdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=True))
 
     assert resp.success
     assert resp.total_students == 2
@@ -170,7 +172,7 @@ def test_bulk_evaluate_uses_cache_when_not_forced(db, monkeypatch):
         lambda self, **k: calls.append(k) or {"overall_score": 1.0},
     )
 
-    resp = AdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=False))
+    resp = EvaluationAdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=False))
 
     assert resp.success
     assert resp.success_count == 1
@@ -196,7 +198,7 @@ def test_cached_evaluation_stats(db):
     )
     db.commit()
 
-    stats = AdminService.get_cached_evaluation_stats(db)
+    stats = EvaluationAdminService.get_cached_evaluation_stats(db)
     assert stats.total_cached == 1
     assert stats.cached_by_department.get("D1") == 1
 
@@ -211,7 +213,7 @@ def test_clear_and_delete_all(db):
     )
     db.commit()
 
-    cleared = AdminService.clear_cached_evaluations(db)
+    cleared = EvaluationAdminService.clear_cached_evaluations(db)
     assert cleared["success"]
     assert cleared["deleted_count"] == 1
     assert db.query(StudentRequirementStatus).count() == 0
@@ -245,8 +247,6 @@ def test_bulk_evaluate_instantiates_evaluation_service_once(db, monkeypatch):
         "evaluate_student",
         lambda self, **k: {"overall_score": 1.0},
     )
-
-    from services.evaluation_admin_service import EvaluationAdminService
 
     EvaluationAdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=True))
 

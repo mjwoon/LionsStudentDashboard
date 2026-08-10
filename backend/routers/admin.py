@@ -14,6 +14,8 @@ from models.schemas import (
     CachedEvaluationStats
 )
 from services.admin_service import AdminService
+from services.upload_service import UploadService
+from services.evaluation_admin_service import EvaluationAdminService
 from typing import List, Optional
 import json
 import logging
@@ -138,7 +140,7 @@ async def upload_colleges_file(
     try:
         data = await parse_upload_file(file)
         colleges_data = [CollegeDataUpload(**item) for item in data]
-        return AdminService.upload_colleges(db, colleges_data)
+        return UploadService.upload_colleges(db, colleges_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -157,7 +159,7 @@ async def upload_advisors_file(
     try:
         data = await parse_upload_file(file)
         advisors_data = [AdvisorDataUpload(**item) for item in data]
-        return AdminService.upload_advisors(db, advisors_data)
+        return UploadService.upload_advisors(db, advisors_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -176,7 +178,7 @@ async def upload_departments_file(
     try:
         data = await parse_upload_file(file)
         departments_data = [DepartmentDataUpload(**item) for item in data]
-        return AdminService.upload_departments(db, departments_data)
+        return UploadService.upload_departments(db, departments_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -195,7 +197,7 @@ async def upload_courses_file(
     try:
         data = await parse_upload_file(file)
         courses_data = [CourseDataUpload(**item) for item in data]
-        return AdminService.upload_courses(db, courses_data)
+        return UploadService.upload_courses(db, courses_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -215,7 +217,7 @@ async def upload_major_surveys_file(
     try:
         data = await parse_upload_file(file)
         surveys_data = [MajorSurveyDataUpload(**item) for item in data]
-        return AdminService.upload_major_surveys(db, surveys_data)
+        return UploadService.upload_major_surveys(db, surveys_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -236,7 +238,7 @@ async def upload_students(
     - 기존 학번이 있으면 업데이트
     - 없으면 새로 생성
     """
-    return AdminService.upload_students(db, students_data)
+    return UploadService.upload_students(db, students_data)
 
 
 @router.post("/upload/students/file", response_model=DataUploadResponse)
@@ -266,7 +268,7 @@ async def upload_students_file(
     try:
         data = await parse_upload_file(file)
         students_data = [StudentDataUpload(**item) for item in data]
-        return AdminService.upload_students(db, students_data)
+        return UploadService.upload_students(db, students_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -287,7 +289,7 @@ async def upload_enrollments(
     - 동일한 학생-과목-학년-학기 조합이 있으면 업데이트
     - 없으면 새로 생성
     """
-    return AdminService.upload_enrollments(db, enrollments_data)
+    return UploadService.upload_enrollments(db, enrollments_data)
 
 
 @router.post("/upload/enrollments/file", response_model=DataUploadResponse)
@@ -316,7 +318,7 @@ async def upload_enrollments_file(
     try:
         data = await parse_upload_file(file)
         enrollments_data = [EnrollmentDataUpload(**item) for item in data]
-        return AdminService.upload_enrollments(db, enrollments_data)
+        return UploadService.upload_enrollments(db, enrollments_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -334,7 +336,7 @@ async def upload_curriculums_file(
     try:
         data = await parse_upload_file(file)
         curriculums_data = [CurriculumDataUpload(**item) for item in data]
-        return AdminService.upload_curriculums(db, curriculums_data)
+        return UploadService.upload_curriculums(db, curriculums_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -352,7 +354,7 @@ async def upload_recommendations_file(
     try:
         data = await parse_upload_file(file)
         recs_data = [RecommendationDataUpload(**item) for item in data]
-        return AdminService.upload_recommendations(db, recs_data)
+        return UploadService.upload_recommendations(db, recs_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -370,7 +372,7 @@ async def upload_requirements_file(
     try:
         data = await parse_upload_file(file)
         reqs_data = [RequirementDataUpload(**item) for item in data]
-        return AdminService.upload_requirements(db, reqs_data)
+        return UploadService.upload_requirements(db, reqs_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -387,7 +389,7 @@ async def upload_requirement_courses_file(
     try:
         data = await parse_upload_file(file)
         req_courses_data = [RequirementCourseDataUpload(**item) for item in data]
-        return AdminService.upload_requirement_courses(db, req_courses_data)
+        return UploadService.upload_requirement_courses(db, req_courses_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except ValueError as e:
@@ -429,7 +431,7 @@ async def bulk_evaluate(
     except ImportError:
         # Celery 미설치 시 기존 동기 방식 폴백
         logger.warning("Celery 미설치 - 동기 방식으로 실행")
-        return AdminService.bulk_evaluate(db, request)
+        return EvaluationAdminService.bulk_evaluate(db, request)
     except Exception as e:
         logger.error(f"태스크 큐잉 실패: {e}")
         raise HTTPException(status_code=500, detail=f"태스크 큐잉 실패: {str(e)}")
@@ -521,7 +523,7 @@ async def trigger_rebuild_graph():
 @router.get("/evaluate/stats", response_model=CachedEvaluationStats)
 async def get_cached_evaluation_stats(db: Session = Depends(get_db)):
     """캐시된 진단 결과 통계 조회"""
-    return AdminService.get_cached_evaluation_stats(db)
+    return EvaluationAdminService.get_cached_evaluation_stats(db)
 
 
 @router.delete("/evaluate/cache")
@@ -530,7 +532,7 @@ async def clear_cached_evaluations(
     db: Session = Depends(get_db)
 ):
     """캐시된 진단 결과 삭제"""
-    return AdminService.clear_cached_evaluations(db, department_id)
+    return EvaluationAdminService.clear_cached_evaluations(db, department_id)
 
 
 @router.delete("/data/all")
