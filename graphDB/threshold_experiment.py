@@ -14,7 +14,6 @@
 
 import argparse
 import os
-import re
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -24,19 +23,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-
-STOPWORDS = {
-    '대한', '통해', '여러', '다양한', '되는', '이해하고', '있는', '한다',
-    '등을', '개념을', '위한', '능력을', '있도록', '이를', '있다', '위해',
-    '이해를', '배우고', '학습한다', '익힌다', '다룬다', '강의한다',
-    '수업은', '과목은', '본', '및', '등', '수', '것', '더', '또한',
-    '대해', '관한', '하는', '되어', '같은', '따른', '따라', '관련',
-    '기반으로', '목표로', '중심으로', '통하여', '바탕으로',
-    '이', '그', '저', '것', '수', '등', '및', '또', '더', '매우',
-}
+from text_features import (
+    PRODUCTION_MODEL_NAME,
+    build_name_char_tfidf,
+    build_outline_tfidf,
+    filter_stopwords_many,
+    is_sequential_course,
+)
 
 
 class ThresholdExperiment:
@@ -45,7 +40,7 @@ class ThresholdExperiment:
     def __init__(
         self,
         csv_path: str,
-        model_name: str = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+        model_name: str = PRODUCTION_MODEL_NAME,
     ):
         self.csv_path = csv_path
         self.model_name = model_name
@@ -70,10 +65,7 @@ class ThresholdExperiment:
     # ─────────────────────────────────────────────────────────────
 
     def _filter_stopwords(self, texts: list[str]) -> list[str]:
-        return [
-            ' '.join(w for w in t.split() if w not in STOPWORDS and len(w) > 1)
-            for t in texts
-        ]
+        return filter_stopwords_many(texts)
 
     def _load_model(self) -> None:
         if self.model is None:
@@ -107,10 +99,7 @@ class ThresholdExperiment:
             return self._tfidf_outline_vecs
 
         texts = self.df['교과목개요'].fillna('').tolist()
-        tfidf = TfidfVectorizer(
-            max_features=3000, min_df=2, max_df=0.7,
-            sublinear_tf=True, ngram_range=(1, 2),
-        )
+        tfidf = build_outline_tfidf()
         mat = tfidf.fit_transform(texts).toarray()
         mat = mat / (np.linalg.norm(mat, axis=1, keepdims=True) + 1e-8)
         self._tfidf_outline_vecs = mat
@@ -120,9 +109,7 @@ class ThresholdExperiment:
     def _fit_tfidf_name(self) -> np.ndarray:
         """교과목 이름 char n-gram TF-IDF (실험 2, 3 GT용 — 개요와 독립적)"""
         names = self.df['교과목 이름'].fillna('').tolist()
-        tfidf = TfidfVectorizer(
-            analyzer='char_wb', ngram_range=(2, 4), min_df=1,
-        )
+        tfidf = build_name_char_tfidf()
         mat = tfidf.fit_transform(names).toarray()
         mat = mat / (np.linalg.norm(mat, axis=1, keepdims=True) + 1e-8)
         print(f"교과목 이름 TF-IDF(char n-gram) 완료: 어휘 크기 {len(tfidf.get_feature_names_out())}")
@@ -131,25 +118,6 @@ class ThresholdExperiment:
     # ─────────────────────────────────────────────────────────────
     # 연계과목 / 유효 쌍
     # ─────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _is_sequential_course(name1: str, name2: str) -> bool:
-        def get_base(name: str) -> str:
-            base = re.sub(r'[0-9IⅠⅡ]+$', '', name.strip())
-            base = re.sub(r'\([^)]*\)$', '', base.strip())
-            return base.strip()
-
-        def get_seq(name: str) -> str | None:
-            m = re.search(r'([0-9IⅠⅡ]+)$', name.strip())
-            if m:
-                return (m.group(1)
-                        .replace('Ⅰ', '1').replace('Ⅱ', '2')
-                        .replace('I', '1').replace('II', '2'))
-            return None
-
-        b1, b2 = get_base(name1), get_base(name2)
-        s1, s2 = get_seq(name1), get_seq(name2)
-        return bool(b1 == b2 and s1 and s2 and s1 != s2)
 
     def _get_valid_pairs(self) -> list[tuple[int, int]]:
         """같은 학수번호 / 연계과목 제외한 유효 쌍 (캐시)"""
@@ -167,7 +135,7 @@ class ThresholdExperiment:
                 if codes[i] == codes[j]:
                     skipped_code += 1
                     continue
-                if self._is_sequential_course(names[i], names[j]):
+                if is_sequential_course(names[i], names[j]):
                     skipped_seq += 1
                     continue
                 pairs.append((i, j))

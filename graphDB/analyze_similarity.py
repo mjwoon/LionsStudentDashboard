@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
-import re
+
+from text_features import STOPWORDS, build_outline_tfidf, filter_stopwords
 
 # 데이터 로드
 df = pd.read_csv('course_all_aggregated.csv', encoding='utf-8-sig')
@@ -45,29 +45,10 @@ print('\n' + '='*60)
 print('방법 2: 상투적 표현 제거 후 임베딩')
 print('='*60)
 
-# 상투적 표현 리스트 (TF-IDF로 식별된 고빈도 단어들)
-stopwords = {
-    # 교과목개요에서 자주 등장하는 상투적 표현
-    '대한', '통해', '여러', '다양한', '되는', '이해하고', '있는', '한다',
-    '등을', '개념을', '위한', '능력을', '있도록', '이를', '있다', '위해',
-    '이해를', '배우고', '학습한다', '익힌다', '다룬다', '강의한다',
-    '수업은', '과목은', '본', '및', '등', '수', '것', '더', '또한',
-    '대해', '관한', '하는', '되어', '같은', '따른', '따라', '관련',
-    '기반으로', '목표로', '중심으로', '통하여', '바탕으로',
-    # 일반적인 불용어
-    '이', '그', '저', '것', '수', '등', '및', '또', '더', '매우',
-}
+# 상투적 표현 제거된 텍스트 (graphDB 공유 STOPWORDS 사용)
+texts_filtered = [filter_stopwords(t) for t in texts_original]
 
-def remove_stopwords(text, stopwords):
-    """텍스트에서 상투적 표현 제거"""
-    words = text.split()
-    filtered = [w for w in words if w not in stopwords and len(w) > 1]
-    return ' '.join(filtered)
-
-# 상투적 표현 제거된 텍스트
-texts_filtered = [remove_stopwords(t, stopwords) for t in texts_original]
-
-print(f'\n상투적 표현 {len(stopwords)}개 제거')
+print(f'\n상투적 표현 {len(STOPWORDS)}개 제거')
 print(f'예시 (원본): {texts_original[0][:100]}...')
 print(f'예시 (제거후): {texts_filtered[0][:100]}...')
 
@@ -90,14 +71,8 @@ print('\n' + '='*60)
 print('방법 3: TF-IDF 유사도 (임베딩 대신 TF-IDF 벡터 직접 사용)')
 print('='*60)
 
-# TF-IDF 벡터 기반 유사도
-tfidf = TfidfVectorizer(
-    max_features=3000,
-    min_df=2,
-    max_df=0.7,  # 70% 이상 문서에 등장하면 제외
-    sublinear_tf=True,
-    ngram_range=(1, 2),  # 단어 + 바이그램
-)
+# TF-IDF 벡터 기반 유사도 (graphDB 공유 설정 사용)
+tfidf = build_outline_tfidf()
 tfidf_matrix = tfidf.fit_transform(texts_original)
 sim_tfidf = cosine_similarity(tfidf_matrix)
 upper_tfidf = sim_tfidf[np.triu_indices(sample_size, k=1)]
