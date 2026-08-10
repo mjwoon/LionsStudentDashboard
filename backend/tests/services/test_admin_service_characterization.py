@@ -196,3 +196,34 @@ def test_clear_and_delete_all(db):
     assert deleted["success"]
     assert db.query(Student).count() == 0
     assert db.query(Department).count() == 0
+
+
+def test_bulk_evaluate_instantiates_evaluation_service_once(db, monkeypatch):
+    """[벤치마크 B] EvaluationService는 배치 루프 밖에서 1회만 생성돼야 한다.
+
+    이전에는 학생×학과마다 재생성되어(2×2=4회) 인스턴스 캐시가 매번 폐기됐다.
+    """
+    _seed_department(db, 101, "C1", "D1")
+    _seed_department(db, 102, "C2", "D2")
+    _seed_student(db, 202400001, 101)
+    _seed_student(db, 202400002, 101)
+
+    init_count = {"n": 0}
+    orig_init = eval_mod.EvaluationService.__init__
+
+    def counting_init(self, session):
+        init_count["n"] += 1
+        orig_init(self, session)
+
+    monkeypatch.setattr(eval_mod.EvaluationService, "__init__", counting_init)
+    monkeypatch.setattr(
+        eval_mod.EvaluationService,
+        "evaluate_student",
+        lambda self, **k: {"overall_score": 1.0},
+    )
+
+    from services.evaluation_admin_service import EvaluationAdminService
+
+    EvaluationAdminService.bulk_evaluate(db, BulkEvaluationRequest(force_recalculate=True))
+
+    assert init_count["n"] == 1  # 4회가 아니라 1회
