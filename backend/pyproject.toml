@@ -19,6 +19,7 @@ dependencies = [
     # CSV/Excel 업로드 처리를 위한 pandas
     "pandas>=2.1.0",
     "openpyxl>=3.1.0",
+    "alembic>=1.19.1",
 ]
 
 [dependency-groups]

@@ -28,5 +28,10 @@ def get_db() -> Generator[Session, None, None]:
 
 # Function to initialize database
 def init_db():
+    """개발 편의용 스키마 생성.
+
+    운영에서는 create_all 대신 Alembic 마이그레이션(`alembic upgrade head`)을 사용한다.
+    두 경로 모두 동일한 Base.metadata에서 파생되므로 스키마는 일치한다.
+    """
     from models.models import Base
     Base.metadata.create_all(bind=engine)
