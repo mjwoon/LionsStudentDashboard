@@ -12,11 +12,17 @@ os.getenv 호출을 한 곳으로 모은다. 현재 동작을 보존하기 위�
 
 from functools import cached_property
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 개발 편의용 기본값이자 '운영에 있으면 안 되는' 값들의 목록
+_INSECURE_NEO4J_PASSWORD = "password123"
 
 
 class Settings(BaseSettings):
+    # 실행 환경: development | production (운영에서 개발용 시크릿 사용을 차단)
+    app_env: str = "development"
+
     # --- Database (PostgreSQL) ---
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/my_db"
     db_echo: bool = False  # 기존 database.py는 echo=True 상시 활성이었음(운영 소음) → env로 제어
@@ -38,6 +44,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
+
+    @model_validator(mode="after")
+    def _forbid_dev_secrets_in_production(self):
+        if self.app_env.lower() == "production" and self.neo4j_password == _INSECURE_NEO4J_PASSWORD:
+            raise ValueError(
+                "APP_ENV=production인데 개발용 기본 NEO4J_PASSWORD가 사용되고 있습니다. "
+                "NEO4J_PASSWORD 환경변수를 실제 값으로 설정하세요."
+            )
+        return self
 
     @cached_property
     def cors_origin_list(self) -> list[str]:
