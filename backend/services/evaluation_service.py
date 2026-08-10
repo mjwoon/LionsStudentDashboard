@@ -24,7 +24,7 @@ from models.models import (
 from repositories import EvaluationCacheRepository
 from constants import (
     GRADE_TO_NUMERIC,
-    GRADE_THRESHOLDS,
+    classify_grade,
     MAX_GPA,
     FIRST_YEAR,
     FAILING_GRADE,
@@ -250,16 +250,7 @@ class EvaluationService:
         )
         
         # 6. 등급 판정
-        if overall_score >= GRADE_THRESHOLDS['A']:
-            grade = 'A'
-        elif overall_score >= GRADE_THRESHOLDS['B']:
-            grade = 'B'
-        elif overall_score >= GRADE_THRESHOLDS['C']:
-            grade = 'C'
-        elif overall_score >= GRADE_THRESHOLDS['D']:
-            grade = 'D'
-        else:
-            grade = 'F'
+        grade = classify_grade(overall_score)
         
         result = {
             'student_id': student_id,

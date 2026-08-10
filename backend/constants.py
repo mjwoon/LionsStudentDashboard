@@ -49,6 +49,14 @@ GRADE_THRESHOLDS = {
     'F': 0.0
 }
 
+
+def classify_grade(score) -> str:
+    """종합 점수를 등급(A~F)으로 판정. GRADE_THRESHOLDS가 유일한 기준(SSOT)."""
+    for grade in ('A', 'B', 'C', 'D'):
+        if score >= GRADE_THRESHOLDS[grade]:
+            return grade
+    return 'F'
+
 # Minimum score to satisfy entry requirements
 MIN_SATISFACTION_SCORE = 70.0
 
