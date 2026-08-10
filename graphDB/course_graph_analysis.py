@@ -22,9 +22,11 @@ CourseGraphService와 거의 동일한 Cypher 쿼리를 중복 구현하고 있�
   - 연결 컴포넌트 분석
 """
 
-from neo4j import GraphDatabase
 from typing import List, Dict, Optional
-import pandas as pd
+
+from neo4j import Driver
+
+from neo4j_client import create_driver
 
 
 class CourseGraphValidator:
@@ -37,8 +39,10 @@ class CourseGraphValidator:
 
     def __init__(self, uri: str = "bolt://localhost:7687",
                  user: str = "neo4j",
-                 password: str = "password"):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+                 password: str = "password",
+                 *, driver: Optional[Driver] = None):
+        # 드라이버 주입 가능(테스트/재사용). 없으면 uri/user/password 로 생성.
+        self.driver = driver or create_driver(uri, user, password)
 
     def close(self):
         self.driver.close()
@@ -300,83 +304,109 @@ class CourseGraphValidator:
 # 실행 예제 (standalone 검증용)
 # ───────────────────────────────────────────────────────────────
 
+def collect_validation_report(validator: "CourseGraphValidator", unmapped_limit: int = 10) -> Dict:
+    """
+    검증에 필요한 모든 지표를 한 번에 수집한 구조화된 리포트(dict) 반환.
+    출력/포매팅은 하지 않는다(=DB 조회 책임만).
+    """
+    return {
+        "summary": validator.get_build_summary(),
+        "threshold_sensitivity": validator.analyze_threshold_sensitivity(),
+        "requires_quality": validator.get_requires_mapping_quality(),
+        "unmapped_sample": validator.get_unmapped_prerequisites(limit=unmapped_limit),
+        "isolated": validator.get_isolated_courses(),
+    }
+
+
+def format_validation_report(report: Dict) -> str:
+    """
+    구조화된 리포트(dict)를 사람이 읽는 텍스트로 변환하는 순수 함수.
+    DB 연결이 필요 없어 단독으로 테스트할 수 있다.
+    """
+    summary = report["summary"]
+    quality = report["requires_quality"]
+    isolated = report["isolated"]
+    lines: List[str] = []
+
+    lines.append("=" * 70)
+    lines.append("교과목 그래프 구축 결과 검증 리포트")
+    lines.append("=" * 70)
+
+    # [1] 기본 통계
+    lines.append("\n[1] 그래프 구축 요약")
+    lines.append(f"  교과목(노드) 수:         {summary['node']['num_courses']}")
+    lines.append(f"  SIMILAR_TO 엣지 수:     {summary['similar_to']['num_edges']}")
+    lines.append(f"  IDENTICAL_ID 엣지 수:   {summary['identical_id']['num_edges']}")
+    lines.append(f"  REQUIRES 엣지 수:       {summary['requires']['num_edges']}")
+    lines.append(f"  평균 유사도:             {summary['similar_to']['avg_similarity']}")
+    lines.append(f"  선수강 미매핑 과목 수:   {summary['unmapped_prerequisites']['courses_count']}")
+
+    # [2] 임계값 민감도
+    lines.append("\n[2] 유사도 임계값별 엣지 수 분포")
+    for row in report["threshold_sensitivity"]:
+        bar = "█" * int(row["coverage_rate"] / 5)
+        lines.append(f"  threshold={row['threshold']:.2f}: {row['num_edges']:6d}개 "
+                     f"({row['coverage_rate']:5.1f}%) {bar}")
+
+    # [3] REQUIRES 매핑 품질
+    lines.append("\n[3] 선수강 매핑 품질")
+    if quality.get("total", 0) > 0:
+        lines.append(f"  전체: {quality['total']} 엣지")
+        lines.append(f"  - Exact match:        {quality['exact_match']['count']} ({quality['exact_match']['rate']}%)")
+        lines.append(f"  - High confidence:    {quality['high_confidence']['count']} ({quality['high_confidence']['rate']}%)")
+        lines.append(f"  - Medium confidence:  {quality['medium_confidence']['count']} ({quality['medium_confidence']['rate']}%)")
+        lines.append(f"  - Low confidence:     {quality['low_confidence']['count']} ({quality['low_confidence']['rate']}%)")
+    else:
+        lines.append("  REQUIRES 엣지가 없습니다.")
+
+    # [4] 미매핑 선수강 샘플
+    lines.append("\n[4] 매핑 실패 선수강 과목 샘플 (최대 10개)")
+    if report["unmapped_sample"]:
+        for item in report["unmapped_sample"]:
+            lines.append(f"  [{item['course_name']}] → {item['unmapped_text']}")
+    else:
+        lines.append("  미매핑 과목이 없습니다.")
+
+    # [5] 고립 노드
+    lines.append("\n[5] 고립 노드 (SIMILAR_TO 관계 없는 과목)")
+    lines.append(f"  총 {len(isolated)}개")
+    for course in isolated[:5]:
+        lines.append(f"  - {course['name']} ({course['code']}) / {course['department']}")
+    if len(isolated) > 5:
+        lines.append(f"  ... 외 {len(isolated) - 5}개")
+
+    lines.append("\n" + "=" * 70)
+    lines.append("검증 완료")
+    lines.append("=" * 70)
+    return "\n".join(lines)
+
+
 def run_validation_report(
-    uri: str = "bolt://localhost:7687",
-    user: str = "neo4j",
-    password: str = "your_password",
+    uri: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
 ):
     """
-    그래프 구축 결과 전체 검증 리포트 출력
+    그래프 구축 결과 전체 검증 리포트 출력.
 
-    course_similarity_graph.py 실행 후 이 함수를 호출하여
-    그래프 품질을 확인합니다.
+    course_similarity_graph.py 실행 후 이 함수를 호출하여 그래프 품질을 확인한다.
+    인자를 생략하면 Settings(env)에서 자격증명을 읽는다.
+    수집(collect)·포매팅(format)·출력을 각각 분리한 얇은 오케스트레이션이다.
     """
-    validator = CourseGraphValidator(uri, user, password)
+    from config import Settings
 
+    settings = Settings.from_env()
+    validator = CourseGraphValidator(
+        uri or settings.neo4j_uri,
+        user or settings.neo4j_user,
+        password or settings.neo4j_password,
+    )
     try:
-        print("=" * 70)
-        print("교과목 그래프 구축 결과 검증 리포트")
-        print("=" * 70)
-
-        # 1. 기본 통계
-        print("\n[1] 그래프 구축 요약")
-        summary = validator.get_build_summary()
-        print(f"  교과목(노드) 수:         {summary['node']['num_courses']}")
-        print(f"  SIMILAR_TO 엣지 수:     {summary['similar_to']['num_edges']}")
-        print(f"  IDENTICAL_ID 엣지 수:   {summary['identical_id']['num_edges']}")
-        print(f"  REQUIRES 엣지 수:       {summary['requires']['num_edges']}")
-        print(f"  평균 유사도:             {summary['similar_to']['avg_similarity']}")
-        print(f"  선수강 미매핑 과목 수:   {summary['unmapped_prerequisites']['courses_count']}")
-
-        # 2. 임계값 민감도
-        print("\n[2] 유사도 임계값별 엣지 수 분포")
-        sensitivity = validator.analyze_threshold_sensitivity()
-        for row in sensitivity:
-            bar = "█" * int(row["coverage_rate"] / 5)
-            print(f"  threshold={row['threshold']:.2f}: {row['num_edges']:6d}개 "
-                  f"({row['coverage_rate']:5.1f}%) {bar}")
-
-        # 3. REQUIRES 매핑 품질
-        print("\n[3] 선수강 매핑 품질")
-        quality = validator.get_requires_mapping_quality()
-        if quality.get("total", 0) > 0:
-            print(f"  전체: {quality['total']} 엣지")
-            print(f"  - Exact match:        {quality['exact_match']['count']} ({quality['exact_match']['rate']}%)")
-            print(f"  - High confidence:    {quality['high_confidence']['count']} ({quality['high_confidence']['rate']}%)")
-            print(f"  - Medium confidence:  {quality['medium_confidence']['count']} ({quality['medium_confidence']['rate']}%)")
-            print(f"  - Low confidence:     {quality['low_confidence']['count']} ({quality['low_confidence']['rate']}%)")
-        else:
-            print("  REQUIRES 엣지가 없습니다.")
-
-        # 4. 미매핑 선수강 샘플
-        print("\n[4] 매핑 실패 선수강 과목 샘플 (최대 10개)")
-        unmapped = validator.get_unmapped_prerequisites(limit=10)
-        if unmapped:
-            for item in unmapped:
-                print(f"  [{item['course_name']}] → {item['unmapped_text']}")
-        else:
-            print("  미매핑 과목이 없습니다.")
-
-        # 5. 고립 노드
-        print("\n[5] 고립 노드 (SIMILAR_TO 관계 없는 과목)")
-        isolated = validator.get_isolated_courses()
-        print(f"  총 {len(isolated)}개")
-        for course in isolated[:5]:
-            print(f"  - {course['name']} ({course['code']}) / {course['department']}")
-        if len(isolated) > 5:
-            print(f"  ... 외 {len(isolated) - 5}개")
-
-        print("\n" + "=" * 70)
-        print("검증 완료")
-        print("=" * 70)
-
+        report = collect_validation_report(validator)
+        print(format_validation_report(report))
     finally:
         validator.close()
 
 
 if __name__ == "__main__":
-    run_validation_report(
-        uri="bolt://localhost:7687",
-        user="neo4j",
-        password="your_password",  # 실제 비밀번호로 변경
-    )
+    run_validation_report()
