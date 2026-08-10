@@ -22,6 +22,7 @@ from models.schemas import (
     MajorSurveyDataUpload, RecommendationDataUpload, RequirementCourseDataUpload,
     RequirementDataUpload, StudentDataUpload,
 )
+from services.upsert_processor import run_upsert
 
 logger = logging.getLogger(__name__)
 
@@ -39,51 +40,16 @@ class UploadService:
         item_id_accessor: Callable[[Any], str],
         success_message: str
     ) -> DataUploadResponse:
-        """
-        제네릭 업로드 헬퍼
-        """
-        uploaded_count = 0
-        updated_count = 0
-        detailed_errors = []
-        
-        row_index = 2
-        for data in data_list:
-            try:
-                existing = find_existing_callback(db, data)
-                
-                if existing:
-                    update_existing_callback(db, existing, data)
-                    updated_count += 1
-                else:
-                    new_item = create_new_callback(db, data)
-                    if new_item:
-                        db.add(new_item)
-                        uploaded_count += 1
-            except Exception as e:
-                item_id = ""
-                try:
-                    item_id = str(item_id_accessor(data))
-                except:
-                    pass
-                detailed_errors.append(ErrorDetail(row=row_index, item_id=item_id, reason=str(e)))
-            row_index += 1
-            
-        try:
-            db.commit()
-            return DataUploadResponse(
-                success=True,
-                message=success_message,
-                uploaded_count=uploaded_count,
-                updated_count=updated_count,
-                detailed_errors=detailed_errors if detailed_errors else None
-            )
-        except Exception as e:
-            db.rollback()
-            logger.error(f"{success_message.split(' ')[0]} 업로드 커밋 오류: {str(e)}")
-            return DataUploadResponse(
-                success=False, message=f"{success_message.split(' ')[0]} 실패: {str(e)}",
-                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
-            )
+        """제네릭 업로드 헬퍼 (공통 엔진 run_upsert로 위임)."""
+        return run_upsert(
+            db,
+            data_list,
+            find_existing=find_existing_callback,
+            create_new=create_new_callback,
+            update_existing=update_existing_callback,
+            item_id_accessor=item_id_accessor,
+            success_message=success_message,
+        )
 
     @staticmethod
     def upload_colleges(db: Session, colleges_data: List[CollegeDataUpload]) -> DataUploadResponse:
@@ -257,8 +223,7 @@ class UploadService:
     
     @staticmethod
     def upload_courses(db: Session, courses_data: List[CourseDataUpload]) -> DataUploadResponse:
-        """과목 데이터 일괄 업로드/업데이트"""
-        processed_courses = {}
+        """과목 데이터 일괄 업로드/업데이트 (배치 내 동일 학수번호 중복 처리 포함)."""
 
         def _get_department(db: Session, data: CourseDataUpload):
             dept_identifier = data.department_name or data.department_code
@@ -268,78 +233,49 @@ class UploadService:
                 ).first()
             return None
 
-        # Re-implementing correctly due to processed_courses dict requiring access across items
-        uploaded_count = 0
-        updated_count = 0
-        detailed_errors = []
-        
-        row_index = 2
-        for course_data in courses_data:
-            try:
-                department = _get_department(db, course_data)
-                
-                if course_data.course_code in processed_courses:
-                    existing_course = processed_courses[course_data.course_code]
-                    updated_count += 1
-                else:
-                    existing_course = db.query(Course).filter(
-                        Course.course_code == course_data.course_code
-                    ).first()
+        def find_existing(db: Session, data: CourseDataUpload):
+            return db.query(Course).filter(Course.course_code == data.course_code).first()
 
-                if existing_course:
-                    existing_course.course_name = course_data.course_name
-                    if course_data.course_type:
-                        existing_course.course_type = course_data.course_type
-                    if department:
-                        existing_course.course_department = department.name
-                    if course_data.course_year is not None:
-                        existing_course.course_year = course_data.course_year
-                    if course_data.credits is not None:
-                        existing_course.credits = course_data.credits
-                    if getattr(course_data, 'semester', None) is not None:
-                        existing_course.semester = course_data.semester
-                    if course_data.description is not None:
-                        existing_course.description = course_data.description
-                    
-                    if course_data.course_code not in processed_courses:
-                        updated_count += 1
-                        processed_courses[course_data.course_code] = existing_course
-                else:
-                    new_course = Course(
-                        course_code=course_data.course_code,
-                        course_name=course_data.course_name,
-                        credits=course_data.credits or 3,
-                        course_type=course_data.course_type,
-                        course_department=department.name if department else None,
-                        course_year=course_data.course_year or 1,
-                        semester=getattr(course_data, 'semester', None) or 1,
-                        description=course_data.description
-                    )
-                    db.add(new_course)
-                    
-                    if course_data.course_code not in processed_courses:
-                        uploaded_count += 1
-                        processed_courses[course_data.course_code] = new_course
-            except Exception as e:
-                detailed_errors.append(ErrorDetail(row=row_index, item_id=course_data.course_code, reason=str(e)))
-            row_index += 1
-            
-        try:
-            db.commit()
-            return DataUploadResponse(
-                success=True,
-                message="과목 데이터 업로드 완료",
-                uploaded_count=uploaded_count,
-                updated_count=updated_count,
-                detailed_errors=detailed_errors if detailed_errors else None
+        def create_new(db: Session, data: CourseDataUpload):
+            department = _get_department(db, data)
+            return Course(
+                course_code=data.course_code,
+                course_name=data.course_name,
+                credits=data.credits or 3,
+                course_type=data.course_type,
+                course_department=department.name if department else None,
+                course_year=data.course_year or 1,
+                semester=getattr(data, 'semester', None) or 1,
+                description=data.description,
             )
-        except Exception as e:
-            db.rollback()
-            logger.error(f"과목 업로드 커밋 오류: {str(e)}")
-            return DataUploadResponse(
-                success=False, message=f"과목 데이터 업로드 실패: {str(e)}",
-                uploaded_count=0, updated_count=0, errors=[str(e)], detailed_errors=detailed_errors if detailed_errors else None
-            )
+
+        def update_existing(db: Session, existing: Course, data: CourseDataUpload):
+            department = _get_department(db, data)
+            existing.course_name = data.course_name
+            if data.course_type:
+                existing.course_type = data.course_type
+            if department:
+                existing.course_department = department.name
+            if data.course_year is not None:
+                existing.course_year = data.course_year
+            if data.credits is not None:
+                existing.credits = data.credits
+            if getattr(data, 'semester', None) is not None:
+                existing.semester = data.semester
+            if data.description is not None:
+                existing.description = data.description
+
+        # batch_key로 배치 내 동일 학수번호를 이미 처리한 과목으로 취급(커밋 전 중복 방지)
+        return run_upsert(
+            db,
+            courses_data,
+            find_existing=find_existing,
+            create_new=create_new,
+            update_existing=update_existing,
+            item_id_accessor=lambda d: d.course_code,
+            success_message="과목 데이터 업로드 완료",
+            batch_key=lambda d: d.course_code,
+        )
 
     @staticmethod
     def upload_students(db: Session, students_data: List[StudentDataUpload]) -> DataUploadResponse:

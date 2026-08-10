@@ -96,6 +96,30 @@ def test_upload_courses_insert_and_intra_batch_dedup(db):
     assert db.query(Course).count() == 2
 
 
+def test_upload_courses_updates_existing_and_counts_batch_dupes(db):
+    """이미 존재하는 과목을 배치에서 두 번 갱신 — 첫 등장 + 배치 중복 모두 update로 카운트."""
+    db.add(
+        Course(
+            course_code="CSE101",
+            course_name="old",
+            credits=3,
+            course_year=1,
+            semester=1,
+        )
+    )
+    db.commit()
+
+    rows = [
+        CourseDataUpload(course_code="CSE101", course_name="new1", credits=3, course_year=1),
+        CourseDataUpload(course_code="CSE101", course_name="new2", credits=3, course_year=1),
+    ]
+    resp = AdminService.upload_courses(db, rows)
+    assert resp.uploaded_count == 0
+    assert resp.updated_count == 2
+    assert db.query(Course).count() == 1
+    assert db.query(Course).filter(Course.course_code == "CSE101").first().course_name == "new2"
+
+
 # ---------------------------------------------------------------------------
 # 대량평가 오케스트레이션 책임
 # ---------------------------------------------------------------------------
