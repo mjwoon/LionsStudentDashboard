@@ -4,20 +4,14 @@ Backend의 EvaluationService 로직을 Worker에서 비동기로 실행합니다
 """
 
 import logging
-import sys
 import os
 
 logger = logging.getLogger(__name__)
 
-# Backend 모듈 import를 위해 path를 먼저 추가(아래 backend import들보다 앞서야 함)
-BACKEND_PATH = os.getenv("BACKEND_PATH", "/backend")
-if BACKEND_PATH not in sys.path:
-    sys.path.insert(0, BACKEND_PATH)
-
 from celery_app import celery_app                        # ai
 from ai_services.ai_service import AIService             # ai
-from database import get_db_session                      # backend/database.py (통합)
-from repositories import EvaluationCacheRepository        # backend: 캐시 쓰기 SSOT
+from lions_core.db import get_db_session                 # 공유 코어
+from lions_core.repositories import EvaluationCacheRepository  # 공유 코어: 캐시 쓰기 SSOT
 
 @celery_app.task(bind=True, name="rebuild_graph")
 def rebuild_graph_task(self):
@@ -77,8 +71,8 @@ def bulk_evaluate_task(
         student_ids: 특정 학생만 평가 (None이면 전체)
         department_ids: 특정 학과만 평가 (None이면 전체)
     """
-    from models.models import Student, Department, StudentRequirementStatus
-    from services.evaluation_service import EvaluationService
+    from lions_core.models import Student, Department, StudentRequirementStatus
+    from lions_core.evaluation_service import EvaluationService
     
     ai_service = AIService()
     success_count = 0
