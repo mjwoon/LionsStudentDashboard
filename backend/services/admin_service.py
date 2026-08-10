@@ -5,7 +5,6 @@
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from models.models import (
     Student, Course, Department, StudentCourse,
     StudentRequirementStatus, College, Advisor,
@@ -19,7 +18,7 @@ from models.schemas import (
     DataUploadResponse, ErrorDetail, BulkEvaluationRequest, BulkEvaluationResponse,
     CachedEvaluationStats
 )
-from services.evaluation_service import EvaluationService
+from services.evaluation_admin_service import EvaluationAdminService
 from typing import List, Optional, Dict, Callable, Any
 from datetime import datetime
 import logging
@@ -667,155 +666,18 @@ class AdminService:
 
     @staticmethod
     def bulk_evaluate(db: Session, request: BulkEvaluationRequest) -> BulkEvaluationResponse:
-        """대량 진단 실행 및 결과 캐싱"""
-        success_count = 0
-        error_count = 0
-        errors = []
-        
-        try:
-            # 학생 목록 가져오기
-            students_query = db.query(Student)
-            if request.student_ids:
-                students_query = students_query.filter(Student.student_id.in_(request.student_ids))
-            students = students_query.all()
-            
-            # 학과 목록 가져오기
-            departments_query = db.query(Department)
-            if request.department_ids:
-                departments_query = departments_query.filter(Department.id.in_(request.department_ids))
-            departments = departments_query.all()
-            
-            total_evaluations = len(students) * len(departments)
-            
-            # 각 학생-학과 조합에 대해 진단 수행
-            for student in students:
-                # 학생의 입학년도 계산 (학번 앞 4자리)
-                # student_id는 Integer이므로 문자열 변환 후 슬라이스해야 함
-                # (기존 int(student.student_id[:4])는 항상 TypeError→2025로 폴백되던 버그)
-                try:
-                    admission_year = int(str(student.student_id)[:4])
-                except (ValueError, TypeError):
-                    admission_year = 2025  # 기본값
-                
-                for department in departments:
-                    try:
-                        # 기존 캐시 확인
-                        existing_cache = db.query(StudentRequirementStatus).filter(
-                            StudentRequirementStatus.student_id == student.student_id,
-                            StudentRequirementStatus.department_id == department.id
-                        ).first()
-                        
-                        # force_recalculate가 True이거나 캐시가 없으면 계산
-                        if request.force_recalculate or not existing_cache:
-                            # 진단 수행
-                            evaluation_result = EvaluationService(db).evaluate_student(
-                                student_id=student.student_id,
-                                department_id=department.id,
-                                admission_year=admission_year,
-                                save_to_db=True
-                            )
-                            
-                            success_count += 1
-                        else:
-                            # 캐시 사용
-                            success_count += 1
-                    
-                    except Exception as e:
-                        error_count += 1
-                        errors.append(f"학생 {student.student_id} - 학과 {department.name}: {str(e)}")
-                        logger.error(f"진단 오류 - 학생: {student.student_id}, 학과: {department.name}, 오류: {str(e)}")
-            
-            db.commit()
-            
-            return BulkEvaluationResponse(
-                success=True,
-                message=f"대량 진단 완료",
-                total_students=len(students),
-                total_departments=len(departments),
-                total_evaluations=total_evaluations,
-                success_count=success_count,
-                error_count=error_count,
-                errors=errors if errors else None
-            )
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"대량 진단 오류: {str(e)}")
-            return BulkEvaluationResponse(
-                success=False,
-                message=f"대량 진단 실패: {str(e)}",
-                total_students=0,
-                total_departments=0,
-                total_evaluations=0,
-                success_count=0,
-                error_count=0,
-                errors=[str(e)]
-            )
-    
+        """대량 진단 실행 및 결과 캐싱 (EvaluationAdminService로 위임)."""
+        return EvaluationAdminService.bulk_evaluate(db, request)
+
     @staticmethod
     def get_cached_evaluation_stats(db: Session) -> CachedEvaluationStats:
-        """캐시된 진단 결과 통계 조회"""
-        try:
-            # 전체 캐시 수
-            total_cached = db.query(StudentRequirementStatus).count()
-            
-            # 학과별 캐시 수
-            cached_by_department_query = db.query(
-                Department.name,
-                func.count(StudentRequirementStatus.id).label('count')
-            ).join(
-                StudentRequirementStatus,
-                Department.id == StudentRequirementStatus.department_id
-            ).group_by(Department.name).all()
-            
-            cached_by_department = {
-                dept_name: count for dept_name, count in cached_by_department_query
-            }
-            
-            # 마지막 업데이트 시간
-            last_update_result = db.query(
-                func.max(StudentRequirementStatus.calculated_at)
-            ).scalar()
-            
-            return CachedEvaluationStats(
-                total_cached=total_cached,
-                cached_by_department=cached_by_department,
-                last_update=last_update_result
-            )
-        
-        except Exception as e:
-            logger.error(f"통계 조회 오류: {str(e)}")
-            return CachedEvaluationStats(
-                total_cached=0,
-                cached_by_department={},
-                last_update=None
-            )
-    
+        """캐시된 진단 결과 통계 조회 (EvaluationAdminService로 위임)."""
+        return EvaluationAdminService.get_cached_evaluation_stats(db)
+
     @staticmethod
     def clear_cached_evaluations(db: Session, department_id: Optional[int] = None) -> Dict:
-        """캐시된 진단 결과 삭제"""
-        try:
-            query = db.query(StudentRequirementStatus)
-            if department_id:
-                query = query.filter(StudentRequirementStatus.department_id == department_id)
-            
-            deleted_count = query.delete()
-            db.commit()
-            
-            return {
-                "success": True,
-                "message": f"{deleted_count}개의 캐시된 진단 결과를 삭제했습니다.",
-                "deleted_count": deleted_count
-            }
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"캐시 삭제 오류: {str(e)}")
-            return {
-                "success": False,
-                "message": f"캐시 삭제 실패: {str(e)}",
-                "deleted_count": 0
-            }
+        """캐시된 진단 결과 삭제 (EvaluationAdminService로 위임)."""
+        return EvaluationAdminService.clear_cached_evaluations(db, department_id)
 
     @staticmethod
     def delete_all_data(db: Session) -> dict:
