@@ -28,7 +28,6 @@ from constants import (
     MAX_GPA,
     FIRST_YEAR,
     FAILING_GRADE,
-    MIN_SATISFACTION_SCORE
 )
 
 
@@ -583,23 +582,8 @@ class EvaluationService:
         admission_year: int,
         result: Dict
     ):
-        """평가 결과를 StudentRequirementStatus 테이블에 저장"""
-        # 기존 레코드 조회 또는 신규 생성 (캐시 접근은 리포지토리가 담당)
-        status = EvaluationCacheRepository(self.db).get_or_create(
-            student_id, department_id
-        )
-
-        # 점수 업데이트 (새로운 3-메트릭 체계)
-        # 기존 필드에 매핑 (curriculum_completion_score -> curriculum_similar_rate로 사용)
-        status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
-        status.related_courses_score = result.get('recommended_similar_rate', 0)
-        status.overall_score = result['overall_score']
-        status.analysis_json = result.get('analysis_json')
-        status.calculated_at = result['evaluated_at']
-        
-        # 충족 여부 판정 (overall_score가 MIN_SATISFACTION_SCORE 이상)
-        status.is_satisfied = result['overall_score'] >= MIN_SATISFACTION_SCORE
-        
+        """평가 결과를 StudentRequirementStatus 테이블에 저장 (쓰기 매핑은 리포지토리가 담당)."""
+        EvaluationCacheRepository(self.db).save_result(student_id, department_id, result)
         self.db.commit()
     
     def get_curriculum_details(self, student_id: int, department_id: int) -> Dict[int, List[Dict]]:

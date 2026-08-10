@@ -5,10 +5,11 @@
 현재 서비스/일괄 워커에도 중복되어 있으며, 향후 SSOT로 수렴할 지점이다.
 """
 
-from typing import Optional
+from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from constants import MIN_SATISFACTION_SCORE
 from models.models import StudentRequirementStatus
 
 
@@ -40,4 +41,21 @@ class EvaluationCacheRepository:
                 student_id=student_id, department_id=department_id
             )
             self.db.add(status)
+        return status
+
+    def save_result(
+        self, student_id: int, department_id: int, result: Dict
+    ) -> StudentRequirementStatus:
+        """평가 결과(result)를 캐시 레코드에 매핑해 기록한다(신규/갱신). commit은 호출자 책임.
+
+        StudentRequirementStatus 쓰기의 단일 진실 원천(SSOT). 서비스/워커가 각자
+        필드 매핑을 복제하지 않고 이 메서드를 재사용하도록 한다.
+        """
+        status = self.get_or_create(student_id, department_id)
+        status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
+        status.related_courses_score = result.get('recommended_similar_rate', 0)
+        status.overall_score = result['overall_score']
+        status.analysis_json = result.get('analysis_json')
+        status.calculated_at = result['evaluated_at']
+        status.is_satisfied = result['overall_score'] >= MIN_SATISFACTION_SCORE
         return status
