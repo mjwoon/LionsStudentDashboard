@@ -1,6 +1,11 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, Enum, JSON, UniqueConstraint, Numeric
 from sqlalchemy.orm import declarative_base, relationship
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    """timezone-aware UTC now (naive datetime.utcnow 폐기 대체)."""
+    return datetime.now(timezone.utc)
 import enum
 
 Base = declarative_base()
@@ -133,7 +138,7 @@ class Student(Base):
     current_gpa = Column(Numeric(3, 2), nullable=True)  # 현재 평점 (4.5 만점)
     total_credits = Column(Integer, default=0)  # 총 이수 학점
     
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
     
     department = relationship("Department", back_populates="students")
     advisor = relationship("Advisor", back_populates="students")
@@ -170,7 +175,7 @@ class Course(Base):
     course_department = Column(String(20), ForeignKey("departments.name"))  # 관장학과
     course_year = Column(Integer, nullable=False)  # 권장 학년
     semester = Column(Integer, nullable=False)  # 권장 학기
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
     
     # 기존 유지 필드
     is_retake_only = Column(Boolean, default=False)
@@ -218,7 +223,7 @@ class StudentCourse(Base):
     completion_type = Column(String(20), nullable=False)  # 이수구분 (수강생 기준)
     is_retake = Column(Boolean, default=False)  # 재수강 여부
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
     
     student = relationship("Student", back_populates="course_enrollments")
 
@@ -243,8 +248,8 @@ class SurveyRound(Base):
     round_number = Column(Integer, nullable=False)
     title = Column(String(100), nullable=False)
     status = Column(String(20), default="OPEN")  # OPEN, CLOSED 등
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
+    start_date = Column(DateTime(timezone=True))
+    end_date = Column(DateTime(timezone=True))
     
     surveys = relationship("MajorSurvey", back_populates="survey_round")
 
@@ -299,7 +304,7 @@ class MajorSurvey(Base):
     decision_status_id = Column(Integer, ForeignKey("decision_statuses.id"), nullable=True)
     decision_scale = Column(Integer)  # 리커트 척도 (1~5)
     
-    survey_date = Column(DateTime, default=datetime.utcnow)  # renamed from submitted_at
+    survey_date = Column(DateTime(timezone=True), default=_utcnow)  # renamed from submitted_at
     
     student = relationship("Student", back_populates="surveys")
     survey_round = relationship("SurveyRound", back_populates="surveys")
@@ -407,7 +412,7 @@ class StudentRequirementStatus(Base):
     overall_score = Column(Numeric(5, 2), nullable=True)
     
     ai_summary = Column(Text, nullable=True)  # LLM이 생성한 맞춤형 커멘트
-    calculated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    calculated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
     
     student = relationship("Student")
     department = relationship("Department")
