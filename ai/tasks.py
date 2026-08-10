@@ -6,17 +6,18 @@ Backend의 EvaluationService 로직을 Worker에서 비동기로 실행합니다
 import logging
 import sys
 import os
-from datetime import datetime
-from celery_app import celery_app
-from database import get_db_session
-from ai_services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
 
-# Backend의 서비스 모듈을 import하기 위해 path 추가
+# Backend 모듈 import를 위해 path를 먼저 추가(아래 backend import들보다 앞서야 함)
 BACKEND_PATH = os.getenv("BACKEND_PATH", "/backend")
 if BACKEND_PATH not in sys.path:
     sys.path.insert(0, BACKEND_PATH)
+
+from celery_app import celery_app                        # ai
+from ai_services.ai_service import AIService             # ai
+from database import get_db_session                      # backend/database.py (통합)
+from repositories import EvaluationCacheRepository        # backend: 캐시 쓰기 SSOT
 
 @celery_app.task(bind=True, name="rebuild_graph")
 def rebuild_graph_task(self):
@@ -158,30 +159,15 @@ def bulk_evaluate_task(
                         
                         # AI 총평 생성
                         ai_summary = ai_service.generate_evaluation_summary(result)
-                        
-                        # analysis_json에 ai_summary 포함
-                        analysis_json = result.get("analysis_json", {})
-                        if ai_summary:
-                            analysis_json["ai_summary"] = ai_summary
-                        
-                        # DB 저장/업데이트
-                        if existing:
-                            existing.is_satisfied = result.get("overall_score", 0) >= 70
-                            existing.overall_score = result.get("overall_score", 0)
-                            existing.analysis_json = analysis_json
-                            existing.ai_summary = ai_summary
-                            existing.calculated_at = datetime.utcnow()
-                        else:
-                            new_record = StudentRequirementStatus(
-                                student_id=student.student_id,
-                                department_id=department.id,
-                                is_satisfied=result.get("overall_score", 0) >= 70,
-                                overall_score=result.get("overall_score", 0),
-                                analysis_json=analysis_json,
-                                ai_summary=ai_summary,
-                            )
-                            db.add(new_record)
-                        
+
+                        # DB 저장/업데이트 (쓰기 매핑은 backend의 SSOT 재사용)
+                        EvaluationCacheRepository(db).save_result(
+                            student.student_id,
+                            department.id,
+                            result,
+                            ai_summary=ai_summary,
+                        )
+
                         success_count += 1
                 
                 except Exception as e:
