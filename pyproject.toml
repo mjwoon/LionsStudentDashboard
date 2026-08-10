@@ -1,0 +1,5 @@
+# uv workspace 루트 (가상 루트 — 자체 패키지 아님)
+# 공용 코어 lions-core 를 backend·ai 가 공유한다. graphDB는 초대형 의존성(torch 등)
+# 때문에 workspace 밖의 독립 패키지로 둔다.
+[tool.uv.workspace]
+members = ["packages/lions-core", "backend", "ai"]
