@@ -173,7 +173,10 @@ def test_student_not_found_returns_404():
 
 
 def test_expected_routes_are_registered():
-    paths = {route.path for route in app.routes}
+    # FastAPI 0.14x는 include_router 결과를 지연(_IncludedRouter)으로 담아
+    # app.routes 순회로는 중첩 라우트가 보이지 않는다. 등록 여부는 버전 안정적인
+    # OpenAPI 스키마의 paths로 검증한다(동작 검증 의도는 동일).
+    paths = set(app.openapi()["paths"].keys())
     expected = {
         "/",
         "/health",

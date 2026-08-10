@@ -31,14 +31,20 @@ GRADE_LEVEL_MINIMUM = {
 }
 
 # ============================================================================
-# Evaluation System Weights
+# Evaluation System Weights (SSOT)
 # ============================================================================
 
-# Weight for Curriculum Completion (1학년 전공체계도 완성도)
-WEIGHT_CURRICULUM_COMPLETION = 0.7
+# 종합 점수 가중치의 단일 진실 원천(SSOT).
+# analysis_json의 overall.weights로도 노출되는 API 계약값이므로 키 이름까지 고정한다.
+# (동작 보존: 현재 실제 사용 중인 가중치 그대로. 값 자체의 조정 여부는 별도 트랙에서 결정.)
+EVALUATION_WEIGHTS = {
+    "entry_requirement": 0.4,      # 진입요건 충족
+    "recommended_courses": 0.3,    # 권장과목 유사 이수
+    "curriculum_completion": 0.3,  # 교육과정(1학년) 유사 이수
+}
 
-# Weight for Related Courses (유사과목 점수)
-WEIGHT_RELATED_COURSES = 0.3
+# 유사과목 인정 최소 유사도 (Neo4j SIMILAR_TO). 평가 서비스 전용 임계값.
+SIMILARITY_THRESHOLD = 0.7
 
 # Overall score thresholds for grading
 GRADE_THRESHOLDS = {

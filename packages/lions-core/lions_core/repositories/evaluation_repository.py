@@ -66,6 +66,10 @@ class EvaluationCacheRepository:
             analysis_json['ai_summary'] = ai_summary
             status.ai_summary = ai_summary
 
+        # 레거시 컬럼명 ↔ 실제 저장값 매핑(경계에서 명시적으로 고정).
+        # 컬럼명은 마이그레이션 비용 때문에 유지하되, 실제로 담기는 값은 '유사 이수율'이다:
+        #   curriculum_completion_score  ← curriculum_similar_rate   (교육과정 유사 이수율)
+        #   related_courses_score        ← recommended_similar_rate  (권장과목 유사 이수율)
         status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
         status.related_courses_score = result.get('recommended_similar_rate', 0)
         status.overall_score = result['overall_score']
