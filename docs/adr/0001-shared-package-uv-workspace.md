@@ -82,11 +82,85 @@
 - Phase 1~4·6: `uv sync` → `python -c import` smoke → `pytest`(현재 33개) 그린 유지.
 - Phase 5: **로컬 불가.** 최소 `docker compose build && up`으로 컨테이너 기동 확인, 이후 render preview로 워커 태스크 1건 실행 검증.
 
-## 8. 열린 질문 (착수 전 결정)
-1. 패키지 이름: `lions-core` vs `lions_shared`.
-2. `graphDB` 빌드 스크립트를 workspace 멤버로 넣을지, 연결부만 `lions_core.graph` 공유하고 스크립트는 독립 유지할지.
-3. `AdminService` 파사드 유지 여부(별도 A 항목과 연동).
-4. Phase 5 배포 전환 시 staging 환경 가용 여부.
+## 8. 열린 질문 (결정됨)
+1. 패키지 이름 → **`lions-core`** 로 확정.
+2. `graphDB` → **workspace 밖 독립 유지**(초대형 의존성 torch 등). 연결부 공유는 저가치 후속.
+3. `AdminService` 파사드 → **제거됨**(A 항목에서 완료, `delete_all_data`만 잔존).
+4. Phase 5 staging 가용 여부 → 미정(배포 담당 확인 필요).
 
 ## 9. 권장
 Phase 1→4, 6은 **하나의 후속 PR**(순수 코드, 로컬 검증)로, **Phase 5(배포)는 staging 검증을 낀 별도 PR**로 분리한다. 이렇게 하면 "코드 수렴"의 이점을 먼저 안전하게 얻고, 되돌리기 어려운 배포 전환만 게이트할 수 있다.
+
+## 진행 현황 (2026-08)
+- **Phase 1~3·6: 완료** — `packages/lions-core`로 config/constants/models/db + repositories/evaluation_service/graph_service 이관, backend는 shim, **ai의 `sys.path.insert(BACKEND_PATH)` 훅 제거**. backend pytest 그린 + ai import 검증. → PR #2 (`refactor/uv-workspace`).
+- **Phase 4(graphDB 편입): 보류**(위 결정 2).
+- **Phase 5(배포): 미착수** — 아래 §10 참조.
+
+## 10. 배포 전환 상세 계획 (Phase 5)
+
+> 목표: 이미지 빌드를 **워크스페이스 기반**으로 바꿔, `PYTHONPATH=/app:/backend` 훅과
+> `COPY backend/ /backend`(ai 이미지에 backend 통째 복사)를 제거하고 ai가 `lions-core`를
+> 설치된 패키지로 쓰게 한다. **로컬에서 완전 검증 불가** → 단계적 + staging 게이트.
+
+### 10.1 현재(전환 전) 메커니즘
+- `backend/Dockerfile`: context `./backend`, `COPY pyproject.toml uv.lock`, `uv sync --frozen`, `PYTHONPATH=/app`. 기동 시 `create_all`로 스키마 생성.
+- `ai/Dockerfile.prod`: context 루트, `PYTHONPATH=/app:/backend`, ai 소스 복사 후 **`COPY backend/ /backend`, `COPY graphDB/ /graphDB`** 로 backend를 이미지에 넣어 경로 import.
+- `docker-compose.yml`: backend `build: ./backend` + 볼륨 `./backend:/app`; ai-worker `PYTHONPATH: /app:/backend`.
+- `render.yaml`: ai-worker `dockerfilePath ./ai/Dockerfile.prod`, `dockerContext .`, env `PYTHONPATH=/app:/backend`, `BACKEND_PATH=/backend`.
+
+### 10.2 목표 구조
+- **루트 단일 `uv.lock`**(workspace 전체). 각 멤버 이미지는 루트 컨텍스트에서 `uv sync --package <멤버>`로 해당 멤버 + `lions-core`만 설치.
+- ai 이미지에서 **backend 복사·`PYTHONPATH` 훅·`BACKEND_PATH` 제거**.
+- 스키마는 `create_all` 대신 **`alembic upgrade head`**(release 단계).
+
+### 10.3 단계 (각각 독립 커밋, staging 게이트)
+
+**5.0 루트 락파일**
+- 루트에서 `uv lock` → 루트 `uv.lock` 생성. `backend/uv.lock`·`ai/uv.lock` 제거(워크스페이스는 단일 락).
+
+**5.1 `backend/Dockerfile` (루트 컨텍스트)**
+```dockerfile
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 UV_HTTP_TIMEOUT=600
+# 캐시용: 워크스페이스 메타 + 멤버 매니페스트 먼저
+COPY pyproject.toml uv.lock ./
+COPY packages/lions-core/pyproject.toml packages/lions-core/
+COPY backend/pyproject.toml backend/
+RUN uv sync --frozen --no-dev --package backend
+# 소스
+COPY packages/lions-core/ packages/lions-core/
+COPY backend/ backend/
+WORKDIR /app/backend
+CMD ["uv","run","--package","backend","uvicorn","main:app","--host","0.0.0.0","--port","8080"]
+```
+
+**5.2 `ai/Dockerfile.prod` (훅 제거)**
+- `PYTHONPATH=/app:/backend` 및 `COPY backend/ /backend` **삭제**.
+- 루트 컨텍스트에서 `uv sync --package ai-worker` + `COPY packages/lions-core/ ...` + `COPY ai/ ...`.
+- ⚠️ `rebuild_graph_task`가 서브프로세스로 graphDB 스크립트를 돌리면 `COPY graphDB/ /graphDB`는 **유지**(별도 관심사).
+
+**5.3 `docker-compose.yml`**
+- backend: `build: { context: ., dockerfile: backend/Dockerfile }`. dev 핫리로드 볼륨은 `./backend:/app/backend` + `./packages/lions-core:/app/packages/lions-core`(editable), `/app/.venv` 익명 볼륨 유지.
+- ai-worker: `PYTHONPATH`·`BACKEND_PATH` 환경변수 **제거**, 빌드 컨텍스트 루트.
+
+**5.4 `render.yaml`**
+- backend web: `dockerContext: .`, `dockerfilePath: backend/Dockerfile`.
+- ai-worker: `PYTHONPATH`·`BACKEND_PATH` env **제거**.
+- 공통: `APP_ENV=production` 추가(§C 시크릿 fail-loud 활성화).
+- backend에 **pre-deploy/release**: `uv run --package backend alembic upgrade head`.
+
+**5.5 `create_all` 제거**
+- `lions_core.db.init_db`(create_all) 호출을 운영에서 제거(개발 전용으로 게이트하거나 lifespan에서 제외). 운영 스키마는 5.4의 `alembic upgrade head`가 담당.
+
+### 10.4 검증
+- **로컬(가능한 범위)**: `docker compose build && docker compose up` → 컨테이너 기동, backend `/health` 200, worker가 broker/DB 연결 로그 확인. (배포 자체는 아니지만 Dockerfile/compose 회귀를 잡음.)
+- **staging(필수)**: render preview 배포 → `alembic upgrade head` 성공 확인 → `bulk_evaluate` 태스크 1건 실행 → worker가 `lions_core`로 동작(`BACKEND_PATH` 없이) 확인.
+
+### 10.5 안전 전환(무중단)·롤백
+- **2-스텝 전환**: (a) 워크스페이스 빌드로 바꾸되 ai 이미지의 `COPY backend/ /backend`·`PYTHONPATH`를 **당장 지우지 말고 병행 유지** → staging에서 `lions_core` 경로가 실제로 동작함을 확인 → (b) 그 후 훅 제거 커밋.
+- 각 단계가 배포 설정 커밋이라 **revert로 즉시 롤백**. 5.5(create_all 제거)는 5.4(alembic release)가 staging에서 검증된 뒤에만.
+
+### 10.6 선행 조건
+- PR #1·#2 머지(또는 스택 유지) + 루트 `uv.lock` 존재.
+- staging/preview 환경 가용(열린 질문 4).
