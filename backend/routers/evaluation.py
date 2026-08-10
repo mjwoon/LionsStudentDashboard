@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from database import get_db
+from constants import classify_grade
 from services.evaluation_service import EvaluationService
 from repositories import (
     StudentRepository,
@@ -60,7 +61,7 @@ def evaluate_student_for_department(
                 "curriculum_similar_rate": curriculum.get("similar_rate", 0),
                 # 종합
                 "overall_score": float(cached_result.overall_score or 0),
-                "grade": 'A' if cached_result.overall_score >= 90 else 'B' if cached_result.overall_score >= 80 else 'C' if cached_result.overall_score >= 70 else 'D' if cached_result.overall_score >= 60 else 'F',
+                "grade": classify_grade(cached_result.overall_score),
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
                 "cached": True,
