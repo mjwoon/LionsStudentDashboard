@@ -1,0 +1,20 @@
+[project]
+name = "lions-core"
+version = "0.1.0"
+description = "Lions Student Dashboard shared core (config, db, models, domain, graph)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy>=2.0.46",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "psycopg[binary]>=3.1.0",
+    "neo4j>=5.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lions_core"]

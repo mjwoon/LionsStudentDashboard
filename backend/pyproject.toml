@@ -5,6 +5,7 @@ description = "Lions Student Dashboard Backend API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "lions-core",
     "fastapi[standard]>=0.128.0",
     "sqlalchemy>=2.0.46",
     "pydantic>=2.0.0",
@@ -31,4 +32,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = [
   "."
-]   
+]
+
+[tool.uv.sources]
+lions-core = { workspace = true }
