@@ -57,8 +57,14 @@ def _upgrade_via_alembic() -> None:
 
 
 def init_schema() -> None:
-    """운영은 Alembic 마이그레이션, 개발/테스트는 create_all 로 스키마를 준비한다."""
-    if os.getenv("APP_ENV", "").lower() == "production":
+    """실 DB(PostgreSQL)는 Alembic 마이그레이션, 그 외(SQLite 등 개발/테스트)는 create_all.
+
+    APP_ENV 같은 환경변수가 (대시보드 관리형 서비스 등에서) 누락돼도 안전하도록
+    DB 방언을 기준으로 판단한다. Postgres = 실제 배포 DB = 마이그레이션 대상.
+    """
+    dialect = engine.dialect.name
+    logger.info("init_schema: dialect=%s APP_ENV=%s", dialect, os.getenv("APP_ENV") or "(unset)")
+    if dialect == "postgresql":
         _upgrade_via_alembic()
     else:
         init_db()
