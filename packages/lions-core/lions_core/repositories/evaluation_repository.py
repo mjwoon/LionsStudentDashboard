@@ -9,8 +9,8 @@ from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
-from constants import MIN_SATISFACTION_SCORE
-from models.models import StudentRequirementStatus
+from lions_core.constants import MIN_SATISFACTION_SCORE
+from lions_core.models import StudentRequirementStatus
 
 
 class EvaluationCacheRepository:

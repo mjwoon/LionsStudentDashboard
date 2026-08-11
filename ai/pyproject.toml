@@ -5,6 +5,7 @@ description = "AI Worker - 비동기 일괄 평가 및 AI 총평 생성"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "lions-core",
     "celery[redis]>=5.6.2",
     "openai>=2.21.0",
     "psycopg[binary]>=3.1.0",
@@ -12,3 +13,6 @@ dependencies = [
     "neo4j>=5.0.0",
     "pydantic-settings>=2.15.0",
 ]
+
+[tool.uv.sources]
+lions-core = { workspace = true }
