@@ -56,7 +56,12 @@ class Settings(BaseSettings):
 
     @cached_property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        # CORS_ORIGINS(env, 운영 프론트 주소) + 로컬 개발 오리진을 항상 병합 허용.
+        # 배포 백엔드에 로컬 프론트(localhost:5173/3000)가 붙어도 CORS 차단되지 않도록 함.
+        # (브라우저는 Origin을 위조할 수 없어 localhost 허용은 안전)
+        configured = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        dev_origins = ["http://localhost:5173", "http://localhost:3000"]
+        return list(dict.fromkeys(configured + dev_origins))  # 순서 유지 + 중복 제거
 
     @cached_property
     def normalized_database_url(self) -> str:

@@ -214,7 +214,7 @@ class StudentCourse(Base):
     course_name = Column(String(100), nullable=False)
     credits = Column(Integer, nullable=False, default=3)
     
-    grade = Column(String(5), nullable=False)  # A+, B0, F 등
+    grade = Column(String(5), nullable=True)  # A+, B0, F 등 (진행중 과목은 NULL)
     numeric_grade = Column(Numeric(3, 2))  # 4.5, 3.0 등 계산용 점수
     
     year = Column(Integer, nullable=False)  # 수강 연도
