@@ -5,6 +5,7 @@ Backend의 EvaluationService 로직을 Worker에서 비동기로 실행합니다
 
 import logging
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +79,14 @@ def bulk_evaluate_task(
     success_count = 0
     error_count = 0
     errors = []
-    
+
+    # ── [BENCHMARK] 구간별 계측 누적기 (time.perf_counter 기반) ──
+    _t_task_start = time.perf_counter()
+    timing = {"query_s": 0.0, "eval_s": 0.0, "ai_s": 0.0, "commit_s": 0.0}
+    counts = {"eval": 0, "ai": 0, "commit": 0}
+
     with get_db_session() as db:
+        _t = time.perf_counter()
         # 학생 목록
         students_query = db.query(Student)
         if student_ids:
@@ -93,7 +100,8 @@ def bulk_evaluate_task(
         else:
             departments_query = departments_query.filter(Department.id > 100)
         departments = departments_query.all()
-        
+        timing["query_s"] += time.perf_counter() - _t
+
         total = len(students) * len(departments)
         current = 0
         
@@ -144,15 +152,21 @@ def bulk_evaluate_task(
                     else:
                         # 평가 수행
                         evaluator = EvaluationService(db)
+                        _t = time.perf_counter()
                         result = evaluator.evaluate_student(
                             student.student_id,
                             department.id,
                             admission_year,
                             save_to_db=False  # Worker가 직접 저장
                         )
-                        
+                        timing["eval_s"] += time.perf_counter() - _t
+                        counts["eval"] += 1
+
                         # AI 총평 생성
+                        _t = time.perf_counter()
                         ai_summary = ai_service.generate_evaluation_summary(result)
+                        timing["ai_s"] += time.perf_counter() - _t
+                        counts["ai"] += 1
 
                         # DB 저장/업데이트 (쓰기 매핑은 backend의 SSOT 재사용)
                         EvaluationCacheRepository(db).save_result(
@@ -186,12 +200,34 @@ def bulk_evaluate_task(
                     )
             
             # 학생 단위로 커밋 (메모리 관리)
+            _t = time.perf_counter()
             try:
                 db.commit()
             except Exception as e:
                 db.rollback()
                 logger.error(f"커밋 실패 (학생 {student.student_id}): {e}")
-    
+            timing["commit_s"] += time.perf_counter() - _t
+            counts["commit"] += 1
+
+    # ── [BENCHMARK] 태스크 종료 시 구간별 누적 시간/호출 횟수 1회 출력 ──
+    total_s = time.perf_counter() - _t_task_start
+    accounted = timing["query_s"] + timing["eval_s"] + timing["ai_s"] + timing["commit_s"]
+    per_eval_ms = (total_s / total * 1000) if total else 0.0
+    bench_line = (
+        "[BENCHMARK] bulk_evaluate_task 완료 | "
+        f"total_evaluations={total} "
+        f"total_s={total_s:.3f} "
+        f"query_s={timing['query_s']:.3f}(x1) "
+        f"eval_s={timing['eval_s']:.3f}(x{counts['eval']}) "
+        f"ai_s={timing['ai_s']:.3f}(x{counts['ai']}) "
+        f"commit_s={timing['commit_s']:.3f}(x{counts['commit']}) "
+        f"accounted_s={accounted:.3f} "
+        f"other_s={total_s - accounted:.3f} "
+        f"per_eval_ms={per_eval_ms:.2f}"
+    )
+    logger.info(bench_line)
+    print(bench_line, flush=True)
+
     return {
         "success": True,
         "message": "대량 진단 완료",
@@ -200,5 +236,6 @@ def bulk_evaluate_task(
         "total_evaluations": total,
         "success_count": success_count,
         "error_count": error_count,
-        "errors": errors if errors else None
+        "errors": errors if errors else None,
+        "timing": {**timing, "total_s": total_s, "per_eval_ms": per_eval_ms, "counts": counts},
     }
