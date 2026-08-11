@@ -94,18 +94,25 @@ class EvaluationService:
         
         return course_name_to_codes
     
-    def _get_department_courses(self, department_id: int) -> Dict:
-        """학과의 필수/권장 과목 정보 DB에서 조회"""
+    def _get_department_courses(self, department_id: int, admission_year: Optional[int] = None) -> Dict:
+        """학과의 필수/권장 과목 정보 DB에서 조회.
+
+        admission_year가 주어지면 해당 입학년도의 진입요건만 조회한다(연도별 룰셋 분리).
+        None이면 학과의 모든 연도 요건을 합산한다(레거시 호환 경로).
+        """
         department = self._departments.get(department_id)
         if not department:
             return {"necessary_courses": [], "recommended_courses": []}
-        
-        # 필수 과목 조회 (RequirementCourse 활용)
-        # 만약 RequirementCourse 테이블이 비어있다면, Curriculum에서 전공필수(필요시)만 가져오거나 
-        # 임시로 빈 리스트 처리
-        req_courses = self.db.query(RequirementCourse).join(DepartmentEntryRequirement).filter(
+
+        # 필수 과목 조회 (RequirementCourse 활용). admission_year가 있으면 입학년도로 필터.
+        req_query = self.db.query(RequirementCourse).join(DepartmentEntryRequirement).filter(
             DepartmentEntryRequirement.department_id == department_id
-        ).all()
+        )
+        if admission_year is not None:
+            req_query = req_query.filter(
+                DepartmentEntryRequirement.admission_year == admission_year
+            )
+        req_courses = req_query.all()
         
         necessary_courses = []
         for r in req_courses:
@@ -207,9 +214,9 @@ class EvaluationService:
         # 학생이 이수한 과목 정보 수집 (과목코드, 과목명)
         student_completed_courses = self._get_student_completed_courses(enrollments)
         
-        # 1. 진입요건 충족 점수
+        # 1. 진입요건 충족 점수 (학생 입학년도 기준)
         entry_requirement_score = self._calculate_entry_requirement_score(
-            student_completed_courses, department_id
+            student_completed_courses, department_id, admission_year
         )
         
         # 2. 권장과목 이수 점수 (동일과목 비율, 유사과목 인정 비율)
@@ -230,7 +237,7 @@ class EvaluationService:
         )
         
         # 5. 상세 분석 JSON 생성
-        dept_courses_data = self._get_department_courses(department.id)
+        dept_courses_data = self._get_department_courses(department.id, admission_year)
         necessary_courses = dept_courses_data.get("necessary_courses", [])
         recommended_course_names = dept_courses_data.get("recommended_courses", [])
         first_year_courses = self._get_department_first_year_curriculum(department.id)
@@ -339,15 +346,16 @@ class EvaluationService:
     def _calculate_entry_requirement_score(
         self,
         student_completed_courses: Dict,
-        department_id: str
+        department_id: str,
+        admission_year: Optional[int] = None
     ) -> float:
         """
-        진입요건 충족 점수
-        
+        진입요건 충족 점수 (admission_year가 있으면 해당 입학년도 요건만 기준)
+
         - 진입요건이 있으면: 이수한 필수과목 비율 (%)
         - 진입요건이 없으면: 100%
         """
-        dept_courses = self._get_department_courses(department_id)
+        dept_courses = self._get_department_courses(department_id, admission_year)
         necessary_courses = dept_courses.get("necessary_courses", [])
         return scoring.entry_requirement_score(necessary_courses, student_completed_courses)
     
@@ -553,8 +561,9 @@ class EvaluationService:
         # 수강 이력을 course_code로 매핑
         enrollment_map = {e.course_code: e for e in enrollments}
         
-        # 해당 학과의 필수/권장 과목 리스트 가져오기
-        department_courses_data = self._get_department_courses(department_id)
+        # 해당 학과의 필수/권장 과목 리스트 가져오기 (학생 입학년도 요건과 일치시킴)
+        admission_year = self.get_admission_year_from_student_id(str(student_id))
+        department_courses_data = self._get_department_courses(department_id, admission_year)
         necessary_course_codes = set(
             c.get("course_code", "") for c in department_courses_data.get('necessary_courses', [])
         )
