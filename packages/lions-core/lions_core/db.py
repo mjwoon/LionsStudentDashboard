@@ -41,8 +41,12 @@ def get_db_session() -> Generator[Session, None, None]:
 def init_db():
     """개발 편의용 스키마 생성.
 
-    운영에서는 create_all 대신 Alembic 마이그레이션(`alembic upgrade head`)을 사용한다.
-    두 경로 모두 동일한 Base.metadata에서 파생되므로 스키마는 일치한다.
+    운영(APP_ENV=production)에서는 create_all을 건너뛴다 — 스키마는 Alembic
+    마이그레이션(release preDeploy의 `alembic upgrade head`)이 담당한다. 두 경로 모두
+    동일한 Base.metadata에서 파생되므로 스키마는 일치한다.
     """
+    import os
+    if os.getenv("APP_ENV", "").lower() == "production":
+        return
     from lions_core.models import Base
     Base.metadata.create_all(bind=engine)

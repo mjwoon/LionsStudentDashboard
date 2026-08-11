@@ -1,24 +1,25 @@
-# Render 배포용 AI Worker Dockerfile
-# 빌드 컨텍스트: 프로젝트 루트 (.)
-# Render render.yaml에서 dockerContext: . 로 설정 필요
-
+# AI Worker (Celery) — uv workspace 빌드
+# 빌드 컨텍스트: 저장소 루트 (.)  ← render.yaml에서 dockerContext: . 로 설정
+# 워크스페이스 이관으로 backend 통째 복사 및 PYTHONPATH 훅을 제거하고,
+# lions-core를 설치된 워크스페이스 멤버로 사용한다.
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_HTTP_TIMEOUT=600
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app:/backend
+# 워크스페이스 메타 + lions-core 전체 소스(editable 멤버라 빌드 시 README/소스 필요) + ai 매니페스트
+COPY pyproject.toml uv.lock ./
+COPY packages/lions-core/ packages/lions-core/
+COPY ai/pyproject.toml ai/
+RUN uv sync --frozen --no-dev --package ai-worker
 
-# 의존성 설치
-COPY ai/pyproject.toml ai/uv.lock* ./
-RUN uv sync --frozen --no-cache
+# ai 소스
+COPY ai/ ai/
 
-# AI worker 소스 코드
-COPY ai/ .
-
-# backend, graphDB 모듈 복사 (ai worker가 직접 import)
-COPY backend/ /backend
+# rebuild_graph_task가 서브프로세스로 graphDB 스크립트를 실행하므로 graphDB는 계속 복사(별도 관심사)
 COPY graphDB/ /graphDB
 
-CMD ["uv", "run", "celery", "-A", "celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+WORKDIR /app/ai
+CMD ["uv", "run", "--package", "ai-worker", "celery", "-A", "celery_app", "worker", "--loglevel=info", "--concurrency=2"]

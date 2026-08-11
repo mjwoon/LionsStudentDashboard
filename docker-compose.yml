@@ -22,14 +22,16 @@ services:
 
   # 3. Backend: FastAPI (uv 기반)
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: fastapi_backend
-    command: sh -c "uv run fastapi dev main.py --host 0.0.0.0 --port 8080"  # dev 모드 (hot-reload)
+    working_dir: /app/backend
+    command: sh -c "uv run --package backend fastapi dev main.py --host 0.0.0.0 --port 8080"  # dev 모드 (hot-reload)
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
+      - ./packages/lions-core:/app/packages/lions-core
       - /app/.venv
-      # AI 모델 공유 볼륨은 주석 처리 (backend의 models 패키지와 충돌)
-      # - ./models:/app/models
     ports:
       - "8080:8080"
     environment:
@@ -72,20 +74,20 @@ services:
 
   # 4. AI Worker: Celery 기반 비동기 평가 + AI 총평 생성
   ai-worker:
-    build: ./ai
+    build:
+      context: .
+      dockerfile: ai/Dockerfile.prod
     container_name: ai_worker
     volumes:
-      - ./ai:/app
-      - ./backend:/backend    # Backend 모델/서비스 접근용
-      - ./graphDB:/graphDB    # GraphDB 재구축 접근용
+      - ./ai:/app/ai
+      - ./packages/lions-core:/app/packages/lions-core
+      - ./graphDB:/graphDB    # GraphDB 재구축(서브프로세스) 접근용
       - /app/.venv
     environment:
       DATABASE_URL: postgresql://user:password@db:5432/my_db
       REDIS_URL: redis://redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      BACKEND_PATH: /backend
-      PYTHONPATH: /app:/backend
     depends_on:
       - redis
       - db
