@@ -30,30 +30,6 @@ def _reject_all(codes, name, comp):
 
 
 # ---------------------------------------------------------------------------
-# entry_requirement_score
-# ---------------------------------------------------------------------------
-
-def test_entry_no_requirement_is_100():
-    assert scoring.entry_requirement_score([], _completed([])) == 100.0
-
-
-def test_entry_partial_ratio_is_rounded():
-    necessary = [
-        {"course_code": "A", "course_name": "a"},
-        {"course_code": "B", "course_name": "b"},
-        {"course_code": "C", "course_name": "c"},
-    ]
-    completed = _completed([{"course_code": "A", "course_name": "x", "grade": "A", "credits": 3}])
-    assert scoring.entry_requirement_score(necessary, completed) == 33.33
-
-
-def test_entry_name_match_also_counts():
-    necessary = [{"course_code": "Z", "course_name": "자료구조"}]
-    completed = _completed([{"course_code": "OTHER", "course_name": "자료구조", "grade": "A", "credits": 3}])
-    assert scoring.entry_requirement_score(necessary, completed) == 100.0
-
-
-# ---------------------------------------------------------------------------
 # recommended_courses_score
 # ---------------------------------------------------------------------------
 

@@ -76,7 +76,7 @@ def test_entry_requirement_score_uses_admission_year(session):
     completed = {
         "codes": {"Y2024"},
         "names": {"2024전용과목"},
-        "details": [{"course_code": "Y2024", "course_name": "2024전용과목", "grade": "A", "credits": 3}],
+        "details": [{"course_code": "Y2024", "course_name": "2024전용과목", "grade": "A", "credits": 3, "numeric_grade": 4.0}],
     }
     # 2024 기준: 필수 1개(Y2024) 이수 → 100
     assert svc._calculate_entry_requirement_score(completed, 1, 2024) == 100.0
