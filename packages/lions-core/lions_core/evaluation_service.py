@@ -35,6 +35,7 @@ from lions_core.constants import (
     FAILING_GRADE,
     EVALUATION_WEIGHTS,
     SIMILARITY_THRESHOLD,
+    GRADE_LEVEL_MINIMUM,
 )
 
 
@@ -134,7 +135,33 @@ class EvaluationService:
             "necessary_courses": necessary_courses,
             "recommended_courses": recommended_courses
         }
-    
+
+    def _get_entry_requirement_groups(
+        self, department_id: int, admission_year: Optional[int] = None
+    ) -> List[Dict]:
+        """진입요건 그룹을 규칙 형태로 조회.
+
+        각 그룹: {group, target_min, required_count, candidate_codes}.
+        admission_year가 있으면 해당 입학년도 요건만(7a 연도 필터와 동일 규칙).
+        """
+        query = self.db.query(DepartmentEntryRequirement).filter(
+            DepartmentEntryRequirement.department_id == department_id
+        )
+        if admission_year is not None:
+            query = query.filter(
+                DepartmentEntryRequirement.admission_year == admission_year
+            )
+
+        groups = []
+        for req in query.all():
+            groups.append({
+                "group": req.requirement_group,
+                "target_min": GRADE_LEVEL_MINIMUM.get(req.target_grade_level.value, 0.0),
+                "required_count": req.required_count,
+                "candidate_codes": {rc.course_code for rc in req.requirement_courses},
+            })
+        return groups
+
     def _get_department_first_year_curriculum(self, department_id: int) -> List[Dict]:
         """
         해당 학과의 1학년 교육과정 과목 목록 조회
