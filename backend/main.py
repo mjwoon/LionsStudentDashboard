@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from database import init_db
+from db_migrations import init_schema
 from routers import students, courses, surveys, evaluation, admin, dashboard
 from routers import graph, admin_upload_grouped
 from services.graph_service import Neo4jConnection
@@ -11,8 +11,8 @@ from services.graph_service import Neo4jConnection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
-    init_db()
+    # startup: 운영은 Alembic upgrade, 개발/테스트는 create_all (db_migrations.init_schema)
+    init_schema()
     yield
     # shutdown
     Neo4jConnection.close()
