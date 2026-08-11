@@ -167,3 +167,38 @@ def curriculum_completion_score(
     exact_rate = (exact_match_count / total) * 100
     similar_rate = (similar_match_count / total) * 100
     return round(exact_rate, 2), round(similar_rate, 2)
+
+
+def entry_requirement_score_by_rules(
+    groups: List[Dict],
+    student_completed_courses: Dict,
+) -> float:
+    """진입요건 부분 점수 (0~100).
+
+    각 그룹: 후보과목 중 numeric_grade >= target_min 인 이수과목 수가
+    required_count 이상이면 100%, 아니면 min(자격수/required_count, 1)*100.
+    모든 그룹은 OR 관계이므로 그룹 진행률의 최댓값을 반환한다.
+    요건 그룹이 없으면 100.0.
+    """
+    if not groups:
+        return 100.0
+
+    completed_numeric = {
+        d["course_code"]: (d.get("numeric_grade") or 0.0)
+        for d in student_completed_courses["details"]
+    }
+
+    best = 0.0
+    for group in groups:
+        target_min = group["target_min"]
+        required = group["required_count"]
+        qualifying = sum(
+            1
+            for code in group["candidate_codes"]
+            if completed_numeric.get(code, 0.0) >= target_min
+        )
+        progress = 100.0 if required <= 0 else min(qualifying / required, 1.0) * 100
+        if progress > best:
+            best = progress
+
+    return round(best, 2)
