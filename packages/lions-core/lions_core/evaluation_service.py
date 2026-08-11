@@ -29,6 +29,7 @@ from lions_core.repositories import (
 from lions_core.evaluation_presenter import EvaluationResponseBuilder
 from lions_core import scoring
 from lions_core.constants import (
+    GRADE_TO_NUMERIC,
     classify_grade,
     FIRST_YEAR,
     FAILING_GRADE,
@@ -326,6 +327,15 @@ class EvaluationService:
 
         # grade 역참조 맵
         grade_map = {e.course_code: e.grade for e in valid_enrollments}
+        # numeric 성적 맵: StudentCourse.numeric_grade 우선, 없으면 GRADE_TO_NUMERIC 폴백
+        numeric_map = {
+            e.course_code: (
+                float(e.numeric_grade)
+                if e.numeric_grade is not None
+                else GRADE_TO_NUMERIC.get(e.grade, 0.0)
+            )
+            for e in valid_enrollments
+        }
 
         for code, course in course_map.items():
             completed_codes.add(course.course_code)
@@ -334,7 +344,8 @@ class EvaluationService:
                 "course_code": course.course_code,
                 "course_name": course.course_name,
                 "grade": grade_map.get(code, ""),
-                "credits": course.credits
+                "credits": course.credits,
+                "numeric_grade": numeric_map.get(code, 0.0),
             })
 
         return {
