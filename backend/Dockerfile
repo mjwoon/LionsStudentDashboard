@@ -1,26 +1,21 @@
-# 1. uv가 설치된 공식 이미지를 베이스로 사용 (빌드 속도가 매우 빠름)
+# Backend (FastAPI) — uv workspace 빌드
+# 빌드 컨텍스트: 저장소 루트 (.)  ← docker-compose / render.yaml에서 context: . 로 설정
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# 2. 작업 디렉토리 설정
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_HTTP_TIMEOUT=600
 
-# 3. 환경 변수 설정 (Python이 .pyc 파일을 생성하지 않도록 하고 버퍼링을 끎)
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-
-# 4. 의존성 파일 복사 (캐싱을 위해 먼저 복사)
-# 로컬에서 `uv init`을 실행해 생성된 파일들입니다.
+# 워크스페이스 메타 + lions-core 전체 소스(editable 멤버라 빌드 시 README/소스 필요) + backend 매니페스트
 COPY pyproject.toml uv.lock ./
+COPY packages/lions-core/ packages/lions-core/
+COPY backend/pyproject.toml backend/
+RUN uv sync --frozen --no-dev --package backend
 
-# 5. 의존성 설치 (가상환경 없이 시스템에 직접 설치하여 이미지 크기 최적화)
-# 네트워크 타임아웃을 600초로 증가 (ARM64용 대용량 패키지 대응)
-ENV UV_HTTP_TIMEOUT=600
-RUN uv sync --frozen --no-cache
+# backend 소스
+COPY backend/ backend/
 
-# 6. 소스 코드 복사
-COPY . .
-
-# 7. FastAPI 실행 (production)
-# DB 테이블은 main.py의 startup_event에서 Base.metadata.create_all로 자동 생성됨
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+WORKDIR /app/backend
+# 운영 스키마는 Alembic(release preDeploy)이 담당. create_all은 APP_ENV로 게이트됨.
+CMD ["uv", "run", "--package", "backend", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
