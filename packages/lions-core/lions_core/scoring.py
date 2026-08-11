@@ -81,28 +81,6 @@ def find_best_similar_course(
     return SimilarMatch(False, 0.0, None)
 
 
-def entry_requirement_score(
-    necessary_courses: List[Dict],
-    student_completed_courses: Dict,
-) -> float:
-    """진입요건 충족 점수. 요건이 없으면 100%, 있으면 이수한 필수과목 비율(%)."""
-    if not necessary_courses:
-        return 100.0
-
-    completed_codes = student_completed_courses["codes"]
-    completed_names = student_completed_courses["names"]
-
-    completed_count = 0
-    for necessary in necessary_courses:
-        course_code = necessary.get("course_code", "")
-        course_name = necessary.get("course_name", "")
-        # 학수코드 또는 과목명이 일치하면 이수로 인정
-        if course_code in completed_codes or course_name in completed_names:
-            completed_count += 1
-
-    score = (completed_count / len(necessary_courses)) * 100
-    return round(min(100.0, score), 2)
-
 
 def recommended_courses_score(
     recommended_course_names: List[str],

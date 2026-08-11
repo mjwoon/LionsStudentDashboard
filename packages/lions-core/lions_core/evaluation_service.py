@@ -388,14 +388,13 @@ class EvaluationService:
         admission_year: Optional[int] = None
     ) -> float:
         """
-        진입요건 충족 점수 (admission_year가 있으면 해당 입학년도 요건만 기준)
+        진입요건 충족 점수 (규칙 기반, 부분 점수 0~100).
 
-        - 진입요건이 있으면: 이수한 필수과목 비율 (%)
-        - 진입요건이 없으면: 100%
+        그룹별: 후보 중 성적 >= target_grade_level 인 이수과목이 required_count 이상이면 100%,
+        아니면 진행률. 모든 그룹 OR → 최댓값. 요건 없으면 100.
         """
-        dept_courses = self._get_department_courses(department_id, admission_year)
-        necessary_courses = dept_courses.get("necessary_courses", [])
-        return scoring.entry_requirement_score(necessary_courses, student_completed_courses)
+        groups = self._get_entry_requirement_groups(department_id, admission_year)
+        return scoring.entry_requirement_score_by_rules(groups, student_completed_courses)
     
     def _calculate_recommended_courses_score(
         self,
