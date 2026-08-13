@@ -157,8 +157,9 @@ class EvaluationService:
                 DepartmentEntryRequirement.admission_year == admission_year
             )
 
+        # 그룹 번호 순으로 고정 조회 → 동점(같은 진행률) 시 표시(required/qualifying)가 결정적.
         groups = []
-        for req in query.all():
+        for req in query.order_by(DepartmentEntryRequirement.requirement_group).all():
             groups.append({
                 "group": req.requirement_group,
                 "target_min": GRADE_LEVEL_MINIMUM.get(req.target_grade_level.value, 0.0),
@@ -404,7 +405,7 @@ class EvaluationService:
     def _calculate_entry_requirement_score(
         self,
         student_completed_courses: Dict,
-        department_id: str,
+        department_id: int,
         admission_year: Optional[int] = None
     ) -> float:
         """진입요건 충족 점수 (규칙 기반, 부분 점수 0~100). breakdown의 score."""
