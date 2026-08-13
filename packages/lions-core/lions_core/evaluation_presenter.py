@@ -11,7 +11,7 @@ class EvaluationResponseBuilder:
         department: Department,
         enrollments: List[StudentCourse],
         student_completed_courses: Dict,
-        entry_requirement_score: float,
+        entry_breakdown: Dict,
         recommended_exact_rate: float,
         recommended_similar_rate: float,
         curriculum_exact_rate: float,
@@ -142,19 +142,21 @@ class EvaluationResponseBuilder:
 
         # 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
         overall_score = (
-            entry_requirement_score * EVALUATION_WEIGHTS["entry_requirement"] +
+            entry_breakdown["score"] * EVALUATION_WEIGHTS["entry_requirement"] +
             recommended_similar_rate * EVALUATION_WEIGHTS["recommended_courses"] +
             curriculum_similar_rate * EVALUATION_WEIGHTS["curriculum_completion"]
         )
 
         return {
+            # 진입요건: 규칙 분해(최고 그룹 기준)로 점수·표시 일치. total/completed는
+            # 그 그룹의 required/qualifying이라 화면의 "X/Y 과목"이 score와 어긋나지 않는다.
             "entry_requirement": {
-                "score": entry_requirement_score,
-                "total_courses": len(necessary_courses),
-                "completed_courses": sum(1 for d in entry_requirement_details if d["is_completed"]),
-                "has_requirement": len(necessary_courses) > 0,
+                "score": entry_breakdown["score"],
+                "total_courses": entry_breakdown["required"],
+                "completed_courses": entry_breakdown["qualifying"],
+                "has_requirement": entry_breakdown["has_requirement"],
                 "details": entry_requirement_details,
-                "status": "충족" if entry_requirement_score >= 100 else "미충족"
+                "status": "충족" if entry_breakdown["satisfied"] else "미충족"
             },
             "recommended_courses": {
                 "exact_rate": recommended_exact_rate,

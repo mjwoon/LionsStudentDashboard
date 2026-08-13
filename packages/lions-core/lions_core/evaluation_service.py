@@ -116,10 +116,15 @@ class EvaluationService:
             )
         req_courses = req_query.all()
         
+        # 그룹이 후보과목을 공유하면 req_courses에 같은 code가 여러 번 온다 → 중복 제거.
         necessary_courses = []
+        seen_codes = set()
         for r in req_courses:
+            if r.course_code in seen_codes:
+                continue
             course = self.db.query(Course).filter(Course.course_code == r.course_code).first()
             if course:
+                seen_codes.add(course.course_code)
                 necessary_courses.append({
                     "course_code": course.course_code,
                     "course_name": course.course_name
@@ -152,8 +157,9 @@ class EvaluationService:
                 DepartmentEntryRequirement.admission_year == admission_year
             )
 
+        # 그룹 번호 순으로 고정 조회 → 동점(같은 진행률) 시 표시(required/qualifying)가 결정적.
         groups = []
-        for req in query.all():
+        for req in query.order_by(DepartmentEntryRequirement.requirement_group).all():
             groups.append({
                 "group": req.requirement_group,
                 "target_min": GRADE_LEVEL_MINIMUM.get(req.target_grade_level.value, 0.0),
@@ -242,10 +248,11 @@ class EvaluationService:
         # 학생이 이수한 과목 정보 수집 (과목코드, 과목명)
         student_completed_courses = self._get_student_completed_courses(enrollments)
         
-        # 1. 진입요건 충족 점수 (학생 입학년도 기준)
-        entry_requirement_score = self._calculate_entry_requirement_score(
+        # 1. 진입요건 충족 (규칙 기반 분해: 점수 + 표시용 최고그룹 required/qualifying)
+        entry_breakdown = self._get_entry_requirement_breakdown(
             student_completed_courses, department_id, admission_year
         )
+        entry_requirement_score = entry_breakdown["score"]
         
         # 2. 권장과목 이수 점수 (동일과목 비율, 유사과목 인정 비율)
         recommended_exact_rate, recommended_similar_rate = self._calculate_recommended_courses_score(
@@ -276,7 +283,7 @@ class EvaluationService:
             department=department,
             enrollments=enrollments,
             student_completed_courses=student_completed_courses,
-            entry_requirement_score=entry_requirement_score,
+            entry_breakdown=entry_breakdown,
             recommended_exact_rate=recommended_exact_rate,
             recommended_similar_rate=recommended_similar_rate,
             curriculum_exact_rate=curriculum_exact_rate,
@@ -381,20 +388,30 @@ class EvaluationService:
             "details": completed_details
         }
     
+    def _get_entry_requirement_breakdown(
+        self,
+        student_completed_courses: Dict,
+        department_id: int,
+        admission_year: Optional[int] = None
+    ) -> Dict:
+        """진입요건 규칙 분해 {score, required, qualifying, satisfied, has_requirement}.
+
+        점수와 표시(최고 그룹의 required/qualifying)를 한 곳에서 산출해
+        화면 표시와 등급 결정 점수가 어긋나지 않도록 한다(단일 진실).
+        """
+        groups = self._get_entry_requirement_groups(department_id, admission_year)
+        return scoring.entry_requirement_breakdown(groups, student_completed_courses)
+
     def _calculate_entry_requirement_score(
         self,
         student_completed_courses: Dict,
-        department_id: str,
+        department_id: int,
         admission_year: Optional[int] = None
     ) -> float:
-        """
-        진입요건 충족 점수 (규칙 기반, 부분 점수 0~100).
-
-        그룹별: 후보 중 성적 >= target_grade_level 인 이수과목이 required_count 이상이면 100%,
-        아니면 진행률. 모든 그룹 OR → 최댓값. 요건 없으면 100.
-        """
-        groups = self._get_entry_requirement_groups(department_id, admission_year)
-        return scoring.entry_requirement_score_by_rules(groups, student_completed_courses)
+        """진입요건 충족 점수 (규칙 기반, 부분 점수 0~100). breakdown의 score."""
+        return self._get_entry_requirement_breakdown(
+            student_completed_courses, department_id, admission_year
+        )["score"]
     
     def _calculate_recommended_courses_score(
         self,

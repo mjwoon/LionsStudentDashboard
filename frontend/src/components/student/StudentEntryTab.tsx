@@ -109,7 +109,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const reqTotal = entryReqData?.total_courses ?? 0;
   const reqCompleted = entryReqData?.completed_courses ?? 0;
   const entryRequirementScore = (evaluationData as any)?.entry_requirement_score ?? entryReqData?.score ?? 0;
-  const reqPercent = reqTotal > 0 ? Math.round((reqCompleted / reqTotal) * 100) : Math.round(entryRequirementScore);
+  // 진입요건 %는 등급을 결정하는 규칙 점수(entry_requirement_score)를 그대로 사용한다.
+  // reqCompleted/reqTotal은 백엔드가 최고 그룹의 qualifying/required로 채우므로 "X/Y 과목"이 %와 일치.
+  const reqPercent = Math.round(entryRequirementScore);
 
   // recommended_courses 구조에서 읽기 (total_courses, similar_completed, similar_rate)
   const recData = evaluationData?.analysis_json?.recommended_courses as any;

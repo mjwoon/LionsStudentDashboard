@@ -165,3 +165,46 @@ def test_rules_grade_below_target_excluded():
     groups = [{"group": 1, "target_min": 4.0, "required_count": 1, "candidate_codes": {"D1"}}]
     completed = _completed([_course_detail("D1", "x", 3.3)])  # B+ < 4.0
     assert scoring.entry_requirement_score_by_rules(groups, completed) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# entry_requirement_breakdown — 표시(required/qualifying)와 점수 일관
+# ---------------------------------------------------------------------------
+
+def test_breakdown_no_groups():
+    b = scoring.entry_requirement_breakdown([], _completed([]))
+    assert b == {"score": 100.0, "required": 0, "qualifying": 0, "satisfied": True, "has_requirement": False}
+
+
+def test_breakdown_reports_best_group_required_and_qualifying():
+    groups = [
+        {"group": 1, "target_min": 4.0, "required_count": 1, "candidate_codes": {"C1"}},        # 0/1 -> 0%
+        {"group": 2, "target_min": 3.0, "required_count": 2, "candidate_codes": {"C1", "C2"}},  # 1/2 -> 50%
+    ]
+    completed = _completed([_course_detail("C1", "x", 3.0)])
+    b = scoring.entry_requirement_breakdown(groups, completed)
+    assert b["score"] == 50.0          # best group progress
+    assert b["required"] == 2          # best group's required_count
+    assert b["qualifying"] == 1        # qualifying in the best group
+    assert b["satisfied"] is False
+    assert b["has_requirement"] is True
+
+
+def test_breakdown_qualifying_clamped_to_required_when_satisfied():
+    groups = [{"group": 1, "target_min": 3.0, "required_count": 2, "candidate_codes": {"B1", "B2", "B3"}}]
+    completed = _completed([_course_detail(c, "x", 3.0) for c in ("B1", "B2", "B3")])  # 3 qualify, need 2
+    b = scoring.entry_requirement_breakdown(groups, completed)
+    assert b["score"] == 100.0
+    assert b["required"] == 2
+    assert b["qualifying"] == 2        # clamped (not 3) so display "2 / 2" matches 100%
+    assert b["satisfied"] is True
+
+
+def test_score_by_rules_delegates_to_breakdown():
+    groups = [{"group": 1, "target_min": 3.0, "required_count": 2, "candidate_codes": {"B1", "B2"}}]
+    completed = _completed([_course_detail("B1", "x", 3.0)])
+    assert (
+        scoring.entry_requirement_score_by_rules(groups, completed)
+        == scoring.entry_requirement_breakdown(groups, completed)["score"]
+        == 50.0
+    )

@@ -21,7 +21,9 @@ def evaluation_service(mock_db_session):
     # DB 저장을 막기 위해 _save_evaluation_result 목 처리
     # (테스트에서 save_to_db 플래그도 끌 것이지만 보험용)
     service._save_evaluation_result = MagicMock()
-    service._calculate_entry_requirement_score = MagicMock(return_value=100.0)
+    service._get_entry_requirement_breakdown = MagicMock(
+        return_value={"score": 100.0, "required": 1, "qualifying": 1, "satisfied": True, "has_requirement": True}
+    )
     return service
 
 def test_evaluate_student_success(evaluation_service, mock_db_session):

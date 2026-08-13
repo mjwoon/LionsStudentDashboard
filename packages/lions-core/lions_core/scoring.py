@@ -147,36 +147,69 @@ def curriculum_completion_score(
     return round(exact_rate, 2), round(similar_rate, 2)
 
 
-def entry_requirement_score_by_rules(
+def entry_requirement_breakdown(
     groups: List[Dict],
     student_completed_courses: Dict,
-) -> float:
-    """진입요건 부분 점수 (0~100).
+) -> Dict:
+    """진입요건 규칙 분해 — 최고 진행 그룹 기준(표시와 점수 일관용).
 
     각 그룹: 후보과목 중 numeric_grade >= target_min 인 이수과목 수가
     required_count 이상이면 100%, 아니면 min(자격수/required_count, 1)*100.
-    모든 그룹은 OR 관계이므로 그룹 진행률의 최댓값을 반환한다.
-    요건 그룹이 없으면 100.0.
+    모든 그룹은 OR 관계이므로 진행률이 가장 높은 그룹을 대표로 삼는다.
+
+    Returns:
+        {
+          "score": 최고 그룹 진행률(0~100, round2),
+          "required": 그 그룹의 required_count,
+          "qualifying": 그 그룹의 자격 이수 과목수(required로 clamp, 표시용),
+          "satisfied": score >= 100,
+          "has_requirement": 그룹 존재 여부,
+        }
+        그룹이 없으면 score=100, has_requirement=False.
     """
     if not groups:
-        return 100.0
+        return {
+            "score": 100.0,
+            "required": 0,
+            "qualifying": 0,
+            "satisfied": True,
+            "has_requirement": False,
+        }
 
     completed_numeric = {
         d["course_code"]: (d.get("numeric_grade") or 0.0)
         for d in student_completed_courses["details"]
     }
 
-    best = 0.0
+    best_progress = -1.0
+    best_required = 0
+    best_qualifying = 0
     for group in groups:
-        target_min = group["target_min"]
         required = group["required_count"]
         qualifying = sum(
             1
             for code in group["candidate_codes"]
-            if completed_numeric.get(code, 0.0) >= target_min
+            if completed_numeric.get(code, 0.0) >= group["target_min"]
         )
         progress = 100.0 if required <= 0 else min(qualifying / required, 1.0) * 100
-        if progress > best:
-            best = progress
+        if progress > best_progress:
+            best_progress = progress
+            best_required = required
+            best_qualifying = min(qualifying, required) if required > 0 else qualifying
 
-    return round(best, 2)
+    score = round(best_progress, 2)
+    return {
+        "score": score,
+        "required": best_required,
+        "qualifying": best_qualifying,
+        "satisfied": score >= 100.0,
+        "has_requirement": True,
+    }
+
+
+def entry_requirement_score_by_rules(
+    groups: List[Dict],
+    student_completed_courses: Dict,
+) -> float:
+    """진입요건 부분 점수 (0~100). entry_requirement_breakdown의 score(단일 진실)."""
+    return entry_requirement_breakdown(groups, student_completed_courses)["score"]

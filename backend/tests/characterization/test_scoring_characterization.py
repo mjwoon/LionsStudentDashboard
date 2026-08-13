@@ -114,7 +114,7 @@ def test_analysis_json_overall_weights_and_score_contract():
         department=MagicMock(),
         enrollments=[],
         student_completed_courses=completed,
-        entry_requirement_score=100.0,
+        entry_breakdown={"score": 100.0, "required": 0, "qualifying": 0, "satisfied": True, "has_requirement": False},
         recommended_exact_rate=0.0,
         recommended_similar_rate=50.0,
         curriculum_exact_rate=0.0,
@@ -140,3 +140,35 @@ def test_analysis_json_overall_weights_and_score_contract():
     }
     # 100*0.4 + 50*0.3 + 50*0.3 = 70.0
     assert aj["overall"]["score"] == 70.0
+
+
+def test_analysis_json_entry_requirement_reflects_breakdown():
+    """entry_requirement 표시(total/completed/status)가 규칙 분해와 일치해야 한다."""
+    completed = {"codes": set(), "names": set(), "details": []}
+
+    def _no_similar(codes, name, comp):
+        return (False, 0.0, None)
+
+    aj = EvaluationResponseBuilder.build_analysis_json(
+        student=MagicMock(),
+        department=MagicMock(),
+        enrollments=[],
+        student_completed_courses=completed,
+        entry_breakdown={"score": 50.0, "required": 2, "qualifying": 1, "satisfied": False, "has_requirement": True},
+        recommended_exact_rate=0.0,
+        recommended_similar_rate=0.0,
+        curriculum_exact_rate=0.0,
+        curriculum_similar_rate=0.0,
+        necessary_courses=[],
+        recommended_course_names=[],
+        first_year_courses=[],
+        course_name_to_codes={},
+        is_graph_available=False,
+        find_best_similar_course_func=_no_similar,
+    )
+    er = aj["entry_requirement"]
+    assert er["score"] == 50.0
+    assert er["total_courses"] == 2       # best group required_count
+    assert er["completed_courses"] == 1   # best group qualifying
+    assert er["has_requirement"] is True
+    assert er["status"] == "미충족"
