@@ -28,7 +28,7 @@
   유사도는 `_get_similarity_from_graph`(Neo4j) + `_similarity_threshold`를 통해 주입식으로
   `scoring.find_best_similar_course`에 전달된다 → **주입 오버라이드로 Neo4j 없이 재현 가능**.
 - 데이터셋: `graphDB/course_all_aggregated.csv` (854 과목),
-  `sample_students_300.csv`(303 학생), `sample_enrollments_300.csv`, `group5_requirements_recs.csv`.
+  `sample_students_300.csv`(고유 학생 300명; 파일은 학생당 2행이라 600행이나 학번 기준 300명), `sample_enrollments_300.csv`, `group5_requirements_recs.csv`.
 - LLM 연동은 OpenAI (`ai/ai_services/ai_service.py`, `.env`의 `OPENAI_API_KEY`).
 
 ## 3. 공통 전제
@@ -80,13 +80,18 @@ LLM 골드 ↔ TF-IDF silver 간 **Cohen's κ**와 혼동표를 산출 →
 값싼 자동 GT가 LLM GT와 얼마나 일치하는지 정량화. `rq1/gt_agreement.json`.
 
 ### 4.7 임계값 스윕 (모집단 가중 보정)
-t = 0.30 ~ 1.00, 0.01 단위. 표본 지표를 층별 모집단 비중으로 가중 보정한다:
+t = 0.30 ~ 1.00, 0.01 단위. 0.01 해상도를 위해 구간 단위가 아니라 **표본 쌍 단위**로 가중한다.
+각 표본 쌍 i에 역표집확률 가중치 `w_i = N_k(i) / n_k(i)`를 부여(Horvitz–Thompson):
 
 ```
-TP(t) ≈ Σ_{구간 ≥ t} N_k · p_k      (p_k = 층 k 양성 비율)
-FP(t) ≈ Σ_{구간 ≥ t} N_k · (1 − p_k)
-FN(t) ≈ Σ_{구간 <  t} N_k · p_k
+w_i = N_k(i) / n_k(i)                          (층 k(i)의 표본 쌍 가중치)
+
+TP(t) = Σ_i w_i · [sim_i ≥ t] · [y_i = 1]
+FP(t) = Σ_i w_i · [sim_i ≥ t] · [y_i = 0]
+FN(t) = Σ_i w_i · [sim_i <  t] · [y_i = 1]
 ```
+
+t가 구간 경계일 때 `Σ_{구간 ≥ t} N_k · p_k`(p_k = 층 양성 비율)와 정확히 일치하는 일반화 형태.
 
 **두 GT(LLM 골드·TF-IDF) 각각**에 대해 P/R/F1을 산출. 부트스트랩 1,000회(층 내 재표집)로
 95% 신뢰구간. 산출물:
@@ -114,7 +119,7 @@ code→code 하이브리드 유사도 dict를 **1회** 계산(유사도 ≥ 0.6�
 Neo4j·그래프 가용성 검사를 우회 → 완전 재현 가능한 오프라인 재계산.
 
 ### 5.4 재계산
-임계값 **{0.6, 0.7, 0.8, t\*}** 각각에 대해 303 학생 × 40 학과 = 12,120건 재계산.
+임계값 **{0.6, 0.7, 0.8, t\*}** 각각에 대해 300 학생 × 40 학과 = 12,000건 재계산.
 결과를 long-format 테이블로 저장: `rq2/evaluations_{t}.csv`
 (student_id, department_id, overall_score, grade, entry/recommended/curriculum 하위 점수).
 
