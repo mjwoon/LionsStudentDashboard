@@ -1,7 +1,15 @@
-"""code→code 하이브리드 유사도 lookup (RQ2 오프라인 재계산용)."""
+"""code→code 하이브리드 유사도 lookup (RQ2 오프라인 재계산용).
+
+RQ2는 환경이 둘로 갈린다: 유사도 계산(sbert)은 graphDB 3.11 환경에서 수행해
+디스크로 덤프하고, 평가(backend)는 루트 3.12 환경에서 덤프를 로드한다.
+"""
 from __future__ import annotations
 
+import json
+
 import numpy as np
+
+_SEP = ""  # 학수번호에 나오지 않는 구분자
 
 
 def build_lookup(df, sim, min_keep: float = 0.6):
@@ -30,3 +38,16 @@ def make_similarity_fn(lut):
             return 1.0
         return lut.get((min(a, b), max(a, b)), 0.0)
     return fn
+
+
+def save_lookup(lut, path: str) -> None:
+    """튜플 키 → 'a\\x01b' 문자열 키 JSON 으로 저장(환경 간 이식)."""
+    obj = {f"{a}{_SEP}{b}": v for (a, b), v in lut.items()}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False)
+
+
+def load_lookup(path: str) -> dict:
+    with open(path, encoding="utf-8") as f:
+        obj = json.load(f)
+    return {tuple(k.split(_SEP)): float(v) for k, v in obj.items()}

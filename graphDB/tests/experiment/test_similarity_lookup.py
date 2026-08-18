@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
-from experiment.similarity_lookup import build_lookup, make_similarity_fn
+from experiment.similarity_lookup import (
+    build_lookup, make_similarity_fn, save_lookup, load_lookup,
+)
 
 
 def test_lookup_filters_and_is_symmetric():
@@ -12,3 +14,13 @@ def test_lookup_filters_and_is_symmetric():
     assert ("C1", "C3") not in lut  # 0.4 < 0.6 제외
     fn = make_similarity_fn(lut)
     assert fn("C2", "C1") == 0.9 and fn("C1", "C3") == 0.0
+
+
+def test_save_load_roundtrip(tmp_path):
+    lut = {("A", "B"): 0.9, ("B", "C"): 0.65}
+    p = tmp_path / "lut.json"
+    save_lookup(lut, str(p))
+    back = load_lookup(str(p))
+    assert back == lut
+    fn = make_similarity_fn(back)
+    assert fn("B", "A") == 0.9
