@@ -1,7 +1,13 @@
-"""pytest 부트스트랩: graphDB 디렉터리를 sys.path 최상단에 둬서
-`experiment.*`, `similarity_engine`, `text_features` 를 절대 임포트할 수 있게 한다.
+"""pytest 부트스트랩: 실험 코드가 두 환경(graphDB 3.11 / 루트 3.12)에서 균일하게
+임포트되도록 sys.path 를 구성한다.
+  - graphDB/      → `experiment.*`, `similarity_engine`, `text_features`
+  - ../backend/   → `services.*` (RQ2 주입 평가용, 루트 3.12 환경에서만 실제 사용)
 """
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_here = os.path.dirname(os.path.abspath(__file__))
+_backend = os.path.join(os.path.dirname(_here), "backend")
+for p in (_backend, _here):
+    if p not in sys.path:
+        sys.path.insert(0, p)
