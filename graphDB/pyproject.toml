@@ -20,3 +20,8 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: 실 CSV·DB·외부 자원을 쓰는 통합 테스트 (기본 유닛 실행에서 제외 가능)",
+]
