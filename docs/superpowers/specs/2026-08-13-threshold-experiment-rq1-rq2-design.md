@@ -27,7 +27,7 @@
 - 평가는 `EvaluationService.batch_evaluate_students`가 SQLAlchemy DB 기반으로 수행하며,
   유사도는 `_get_similarity_from_graph`(Neo4j) + `_similarity_threshold`를 통해 주입식으로
   `scoring.find_best_similar_course`에 전달된다 → **주입 오버라이드로 Neo4j 없이 재현 가능**.
-- 데이터셋: `graphDB/course_all_aggregated.csv` (854 과목),
+- 데이터셋: `graphDB/course_all_aggregated.csv` (1,493 과목; 프로덕션 그래프 정본),
   `sample_students_300.csv`(고유 학생 300명; 파일은 학생당 2행이라 600행이나 학번 기준 300명), `sample_enrollments_300.csv`, `group5_requirements_recs.csv`.
 - LLM 연동은 OpenAI (`ai/ai_services/ai_service.py`, `.env`의 `OPENAI_API_KEY`).
 
@@ -35,7 +35,7 @@
 
 - **유사도 정의**: 프로덕션 하이브리드 `0.7·SBERT + 0.3·TF-IDF`. RQ1 임계값은 이 하이브리드
   점수에 적용한다(순수 SBERT 아님) — 실제 `SIMILAR_TO` 엣지를 만드는 점수와 일치시킨다.
-- **유효 쌍**: 같은 학수번호·연계과목 제외 (≈364,231쌍).
+- **유효 쌍**: 같은 학수번호·연계과목 제외 (실측 1,113,585쌍).
 - **재현성**: 모든 무작위 과정(표본추출·부트스트랩·LLM 순서 섞기)에 시드 고정.
 - **산출 위치**: `graphDB/results/rq1/`, `graphDB/results/rq2/`.
 
@@ -47,14 +47,17 @@
 전 유효쌍의 하이브리드 유사도를 계산한다. 기존 `SimilarityEngine`/임베딩 캐시를 재사용해
 SBERT 임베딩·TF-IDF 벡터를 각 1회만 계산한다.
 
-### 4.2 층화표본 400쌍
-유사도 구간별 층화 추출(시드 고정). 층별 모집단 크기 `N_k`를 기록한다.
+### 4.2 층화표본 (상위 3구간 전수 + 하위 표본, ≈335쌍)
+유사도 구간별 층화(시드 고정). 층별 모집단 크기 `N_k`를 기록한다. 실측 결과 고유사도
+구간이 극히 희박(≥0.7이 총 115쌍)하므로, 하위 3구간은 표본추출하고 **상위 3구간(≥0.7)은
+전수 레이블링**한다(추정 오차 제거 + 레이블링 비용 절감).
 
 | 구간 | 0.0–0.5 | 0.5–0.6 | 0.6–0.7 | 0.7–0.8 | 0.8–0.9 | 0.9–1.0 |
 |---|---|---|---|---|---|---|
-| 표본 | 100 | 60 | 60 | 60 | 60 | 60 |
+| 모집단 `N_k` | 1,100,048 | 6,984 | 634 | 64 | 34 | 17 |
+| 표본 | 100 | 60 | 60 | 64 (전수) | 34 (전수) | 17 (전수) |
 
-일정 지연 시 층당 40개(총 260쌍)로 축소 가능(설계서 리스크 대응).
+구현: `per_bin = [100, 60, 60, ∞, ∞, ∞]`(상위 3구간은 큰 값 → `min(per_bin, N_k)`로 전수).
 
 ### 4.3 블라인드 채점표 산출
 `graphDB/results/rq1/labeling_sheet.csv` 생성:
@@ -72,7 +75,7 @@ SBERT 임베딩·TF-IDF 벡터를 각 1회만 계산한다.
 - 프롬프트·원 응답·파싱 결과를 `rq1/llm_labels_pass1.csv`, `pass2.csv`에 저장.
 
 ### 4.5 TF-IDF silver 레이블
-같은 400쌍에 대해 이름 char n-gram TF-IDF ≥ 0.30으로 이진 레이블
+같은 표본(≈335쌍)에 대해 이름 char n-gram TF-IDF ≥ 0.30으로 이진 레이블
 (`threshold_experiment._build_gt_name_tfidf`와 동일 규칙). `rq1/tfidf_labels.csv`에 저장.
 
 ### 4.6 GT 간 비교 (핵심)
