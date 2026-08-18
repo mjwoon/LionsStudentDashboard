@@ -333,6 +333,62 @@ python -c "from sentence_transformers import SentenceTransformer; SentenceTransf
 
 버그 리포트, 기능 제안, Pull Request 환영합니다!
 
+## 🧪 임계값 실험 (RQ1 / RQ2)
+
+KSC2026 논문용 유사도 임계값 실험 하니스. 코드는 `experiment/` 패키지 + 루트 스크립트.
+설계·계획: `docs/superpowers/{specs,plans}/2026-08-13-threshold-experiment-*`.
+
+### 환경 (중요 — 두 환경 분리)
+
+graphDB 는 uv workspace 밖의 독립 패키지(3.11)이고 backend/lions-core 는 3.12다.
+따라서 역할별로 인터프리터가 다르다.
+
+| 단계 | 환경 | 실행 |
+|---|---|---|
+| RQ1 전체, 유사도 lookup 덤프 | graphDB 3.11 | `uv run python ...` |
+| RQ2 재계산(시딩·평가) | 루트 3.12 | `../.venv/bin/python ...` |
+
+### RQ1 — 최적 임계값
+
+```bash
+# graphDB 디렉터리에서 (3.11 env)
+uv run python experiment_rq1.py --no-llm          # TF-IDF만: 비용 0, 파이프라인 검증
+uv run python experiment_rq1.py                    # LLM(gpt-4o) 포함: OPENAI_API_KEY 필요
+```
+
+- 표본: 하위 3구간 표본 + 상위 3구간(≥0.7) 전수(기본 `PER_BIN`).
+- 산출(`results/rq1/`): `strata.json`, `labeling_sheet.csv`(사람 교체용), `tfidf_labels.csv`,
+  `llm_labels_pass{1,2}.csv`, `sweep_metrics_{llm,tfidf}.csv`, `f1_threshold.png`,
+  `summary.{json,md}`(t\*·PR-AUC·κ). LLM 실행 후 `summary.json`의 `tstar_llm`을 RQ2에 전달.
+
+### RQ2 — 하위 시스템 영향
+
+```bash
+# 1) 유사도 lookup 덤프 (graphDB 3.11 env)
+uv run python build_similarity_lookup.py           # -> results/rq2/similarity_lookup.json
+
+# 2) 임계값별 12,000건 재계산 (루트 3.12 env)
+../.venv/bin/python experiment_rq2.py --tstar <RQ1_tstar>            # 전체
+../.venv/bin/python experiment_rq2.py --tstar 0.75 --max-students 15 # 스모크
+```
+
+- 임계값 {0.6, 0.7, 0.8, t\*}로 재계산. 기준선 = 0.8(현행 실효값).
+- 산출(`results/rq2/`): `evaluations_{t}.csv`, `ranking_stability.csv`(Spearman ρ·Top-1 변경률),
+  `grade_migration_{t}.csv`, `score_shift.png`(matplotlib 있을 때), `summary.json`(추가 인정 관계 수 등).
+
+### 테스트
+
+```bash
+uv run python -m pytest tests/experiment                 # RQ1+순수 (RQ2-backend 자동 skip)
+# 루트 env로 RQ2-backend 테스트:
+../.venv/bin/python -m pytest tests/experiment/test_injected_eval.py \
+  tests/experiment/test_seeding_integration.py \
+  tests/experiment/test_impact_metrics.py tests/experiment/test_similarity_lookup.py
+```
+
+> `results/` 는 `.gitignore` 대상(재생성 가능). 데이터 실측치:
+> 교과목 1,493개 · 유효 쌍 1,113,585 · ≥0.7 유사 쌍 115(≥0.6 코드쌍 lookup 52).
+
 ## 📝 라이선스
 
 MIT License
