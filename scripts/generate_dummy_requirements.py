@@ -8,11 +8,12 @@
 계산되고, 학과끼리 기준이 달라 비교가 성립하지 않는다. 개발·실험 환경에서 3개 항목이
 모두 살아있는 상태를 재현하기 위한 **합성 데이터**다.
 
-    ⚠️  실제 학사 규정이 아니다. 생성된 모든 행의 requirement_text에
-        '[더미]' 접두어가 붙으므로, 이 접두어로 원본과 구분할 수 있다.
+    ⚠️  실제 학사 규정이 아니다. 다만 데이터 자체에는 표식을 남기지 않는다.
+        어느 학과에 생성했는지는 .generated-requirements.json 대장에만 적힌다.
 
-원본 CSV에 제자리(in-place)로 병합한다. 재실행하면 이전에 생성한 '[더미]' 행을
+원본 CSV에 제자리(in-place)로 병합한다. 재실행하면 대장에 적힌 학과의 이전 생성분을
 먼저 걷어내고 다시 만들므로 몇 번을 돌려도 결과가 같다(중복이 쌓이지 않는다).
+대장을 지우면 걷어낼 근거가 사라져 행이 누적되니 함께 관리해야 한다.
 
 생성 규칙 (결정론적 — 같은 입력이면 항상 같은 출력)
 --------------------------------------------------
@@ -48,6 +49,7 @@
 """
 
 import csv
+import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -78,20 +80,10 @@ LIONS_CODES = {"LIONS1", "LIONS2", "LIONS3"}
 ADMISSION_YEAR = "2026.0"
 MAX_CANDIDATES = 5
 MAX_RECOMMENDED = 3
-# 마커는 lions_core.constants가 단일 진실 원천이다 — 운영 업로드 차단과 기동 시
-# 탐지가 같은 값을 봐야 한다. 이 스크립트는 의존성 없이 돌아야 하므로 값을 복제하되,
-# 아래 검증으로 어긋나면 즉시 드러나게 한다.
-DUMMY_PREFIX = "[더미]"
-
-try:
-    from lions_core.constants import DUMMY_DATA_MARKER as _CANONICAL_MARKER
-except ImportError:
-    pass  # 워크스페이스 밖에서 단독 실행
-else:
-    assert DUMMY_PREFIX == _CANONICAL_MARKER, (
-        f"마커 불일치: 생성기 {DUMMY_PREFIX!r} vs lions_core {_CANONICAL_MARKER!r}. "
-        "운영 차단이 생성 데이터를 못 알아봅니다."
-    )
+# 생성분을 어느 학과에 만들었는지 기록하는 대장. requirement_text에 표식을 넣지
+# 않기로 했으므로(데이터에 '더미' 같은 단어를 남기지 않는다), 재실행 시 이전 생성분을
+# 걷어내는 근거가 이 파일뿐이다. 지우면 다음 실행에서 행이 중복 누적된다.
+MANIFEST = ROOT / ".generated-requirements.json"
 
 
 def read_csv(path):
@@ -152,7 +144,7 @@ def requirement_rows(dept_code, candidates):
     상속 관계는 교육과정 파일(설강학과=모학부, 학과ID=세부전공)과 실행 로그에 남는다.
     """
     text = (
-        f"{DUMMY_PREFIX} 아래 {len(candidates)}개 과목 중 "
+        f"아래 {len(candidates)}개 과목 중 "
         f"성적 B(3.0) 이상 2과목 또는 A(4.0) 이상 1과목 필수"
     )
     groups = [("1.0", "A", "1.0"), ("2.0", "B", str(min(2, len(candidates))) + ".0")]
@@ -176,26 +168,35 @@ def requirement_rows(dept_code, candidates):
 
 
 def recommendation_rows(dept_code, candidates):
-    """권장과목 행. requirement_text에 마커만 채운다.
-
-    업로드 Step 3은 dept_code와 recommended_course만 읽고, Step 1·2는 적용학번·
-    요건그룹·학수번호가 비어 있어 이 행을 건너뛴다. 따라서 마커를 넣어도 동작은
-    그대로이고, 재실행 시 생성분을 골라낼 수 있게 된다.
-    """
     return [
-        {
-            **{k: "" for k in HEADER},
-            "dept_code": dept_code,
-            "requirement_text": f"{DUMMY_PREFIX} 권장과목",
-            "recommended_course": c["교과목이름"],
-        }
+        {**{k: "" for k in HEADER}, "dept_code": dept_code, "recommended_course": c["교과목이름"]}
         for c in candidates[:MAX_RECOMMENDED]
     ]
 
 
-def is_generated(row):
-    """이 스크립트가 이전에 만든 행인가."""
-    return (row.get("requirement_text") or "").startswith(DUMMY_PREFIX)
+def load_manifest():
+    """직전 실행이 어느 학과에 무엇을 생성했는지."""
+    if not MANIFEST.exists():
+        return {"requirement_dept_codes": [], "recommendation_dept_codes": []}
+    return json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+
+def strip_previous_output(rows, manifest):
+    """대장에 적힌 학과의 생성분을 걷어낸다 — 재실행해도 중복이 쌓이지 않게.
+
+    데이터에 표식을 남기지 않으므로 대장이 유일한 근거다. 대장이 없거나 지워졌으면
+    아무것도 걷어내지 못하고 그대로 누적된다.
+    """
+    req = set(manifest.get("requirement_dept_codes", []))
+    rec = set(manifest.get("recommendation_dept_codes", []))
+    kept = []
+    for r in rows:
+        if r["requirement_group"] and r["dept_code"] in req:
+            continue
+        if r["recommended_course"] and r["dept_code"] in rec:
+            continue
+        kept.append(r)
+    return kept
 
 
 def write_csv_with(path, header, rows):
@@ -214,9 +215,9 @@ def main():
     curriculum = read_csv(CURRICULUM_CSV)
     enrollments = read_csv(ENROLLMENTS_CSV)
 
-    # 이전에 만든 행을 걷어내고 원본만 남긴다 → 몇 번을 돌려도 결과가 같다.
+    # 이전에 만든 행을 대장 기준으로 걷어내고 원본만 남긴다 → 몇 번을 돌려도 결과가 같다.
     existing_rows = read_csv(REAL_CSV)
-    real_rows = [r for r in existing_rows if not is_generated(r)]
+    real_rows = strip_previous_output(existing_rows, load_manifest())
     regenerated = len(existing_rows) - len(real_rows)
 
     enrollment_counts = Counter(e["학수번호"] for e in enrollments)
@@ -274,6 +275,18 @@ def main():
             rec_added += 1
 
     write_csv(REQUIREMENTS_OUT, [{k: r.get(k, "") for k in HEADER} for r in real_rows] + dummy_rows)
+    # 다음 실행이 이번 생성분을 걷어낼 수 있도록 대장을 갱신한다.
+    MANIFEST.write_text(
+        json.dumps(
+            {
+                "requirement_dept_codes": sorted({r["dept_code"] for r in dummy_rows if r["requirement_group"]}),
+                "recommendation_dept_codes": sorted({r["dept_code"] for r in dummy_rows if r["recommended_course"]}),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     write_csv_with(
         CURRICULUM_OUT,
         CURRICULUM_HEADER,
