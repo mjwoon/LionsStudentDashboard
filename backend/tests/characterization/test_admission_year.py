@@ -49,6 +49,9 @@ def _run(student_id: int, query: str = ""):
             instance = EvalSvc.return_value
             instance.evaluate_student.return_value = {"overall_score": 50.0}
             instance.get_curriculum_details.return_value = {}
+            # 이 테스트는 admission_year 전달만 본다. 상대 적합도 등급의 모수를
+            # 비워 절대 경계 폴백으로 두고 등급 로직이 끼어들지 않게 한다.
+            instance.readiness_ranking.return_value = {}
             # get_admission_year_from_student_id 는 실제 로직을 그대로 사용
             EvalSvc.get_admission_year_from_student_id.side_effect = (
                 lambda s: int(str(s)[:4])

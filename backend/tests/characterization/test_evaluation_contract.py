@@ -96,6 +96,9 @@ def test_cached_evaluation_response_contract():
     try:
         with patch("routers.evaluation.EvaluationService") as EvalSvc:
             EvalSvc.return_value.get_curriculum_details.return_value = {}
+            # 상대 적합도 등급은 학생의 선택지 전체를 모수로 쓴다. 이 테스트는
+            # 단일 학과 응답 계약만 보므로 순위 맥락을 비워 절대 경계 폴백을 고정한다.
+            EvalSvc.return_value.readiness_ranking.return_value = {}
             resp = client.get(f"/api/evaluation/student/{student_id}/department/99")
     finally:
         app.dependency_overrides.clear()
@@ -145,6 +148,9 @@ def test_grade_thresholds(score, expected_grade):
     try:
         with patch("routers.evaluation.EvaluationService") as EvalSvc:
             EvalSvc.return_value.get_curriculum_details.return_value = {}
+            # 상대 적합도 등급은 학생의 선택지 전체를 모수로 쓴다. 이 테스트는
+            # 단일 학과 응답 계약만 보므로 순위 맥락을 비워 절대 경계 폴백을 고정한다.
+            EvalSvc.return_value.readiness_ranking.return_value = {}
             resp = client.get(f"/api/evaluation/student/{student_id}/department/99")
     finally:
         app.dependency_overrides.clear()
