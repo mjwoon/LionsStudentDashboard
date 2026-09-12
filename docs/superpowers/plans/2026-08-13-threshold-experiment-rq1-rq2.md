@@ -4,7 +4,7 @@
 
 **Goal:** 대체 인정 유사도 임계값의 최적값 `t*`를 실험적으로 산출(RQ1)하고, 임계값 변화가 12,000건(고유 학생 300 × 평가대상 학과 40) 평가의 점수·학과 순위에 미치는 영향을 측정(RQ2)하는 재현 가능한 실험 하니스를 만든다.
 
-**Architecture:** 순수 계산 유닛(표본추출·가중 지표·부트스트랩·κ·유사도 lookup·영향 지표)은 TDD로 개별 구현하고, LLM 레이블링·플롯·오케스트레이션은 그 위에서 조립한다. RQ1은 하이브리드 유사도(0.7·SBERT + 0.3·TF-IDF) 위에서 층화표본 400쌍을 LLM 골드·TF-IDF silver 두 GT로 채점해 가중 P/R/F1을 스윕한다. RQ2는 SQLite에 CSV를 시딩하고 `EvaluationService`에 유사도·가변 임계값을 주입(Neo4j 우회)해 임계값별 전면 재계산한다.
+**Architecture:** 순수 계산 유닛(표본추출·가중 지표·부트스트랩·κ·유사도 lookup·영향 지표)은 TDD로 개별 구현하고, LLM 레이블링·플롯·오케스트레이션은 그 위에서 조립한다. RQ1은 하이브리드 유사도(0.7·SBERT + 0.3·TF-IDF) 위에서 층화표본(상위 3구간 전수 + 하위 표본, ≈335쌍)을 LLM 골드·TF-IDF silver 두 GT로 채점해 가중 P/R/F1을 스윕한다. RQ2는 SQLite에 CSV를 시딩하고 `EvaluationService`에 유사도·가변 임계값을 주입(Neo4j 우회)해 임계값별 전면 재계산한다.
 
 **Tech Stack:** Python, numpy, pandas, scikit-learn, sentence-transformers, matplotlib, OpenAI SDK, SQLAlchemy, FastAPI TestClient, pytest.
 
@@ -14,10 +14,10 @@
 - 유효 쌍: 같은 학수번호 쌍·연계과목(1,2 시리즈) 쌍 제외 (`graphDB/text_features.is_sequential_course` 사용).
 - 재현성: 모든 무작위 과정(표본추출·부트스트랩·LLM 순서 섞기)에 시드 고정. 기본 시드 `42`.
 - LLM 레이블러: OpenAI `gpt-4o`, `.env`의 `OPENAI_API_KEY` 사용. 2회 독립 실행.
-- 데이터: `graphDB/course_all_aggregated.csv`(854과목), `sample_students_300.csv`, `sample_enrollments_300.csv`, `group1_colleges_depts_.csv`, `group3_courses.csv`, `group4_교육과정_전체.csv`, `group5_requirements_recs.csv`.
+- 데이터: `graphDB/course_all_aggregated.csv`(1,493과목; 프로덕션 그래프 정본), `sample_students_300.csv`, `sample_enrollments_300.csv`, `group1_colleges_depts_.csv`, `group3_courses.csv`, `group4_교육과정_전체.csv`, `group5_requirements_recs.csv`.
 - 산출 위치: `graphDB/results/rq1/`, `graphDB/results/rq2/`.
 - 임계값 스윕: t = 0.30 ~ 1.00, 0.01 단위. RQ2 재계산 임계값: {0.6, 0.7, 0.8, t*}.
-- 층화표본: 6구간 [0–0.5:100, 0.5–0.6:60, 0.6–0.7:60, 0.7–0.8:60, 0.8–0.9:60, 0.9–1.0:60], 층별 모집단 `N_k` 기록.
+- 층화표본: 하위 3구간 표본 [0–0.5:100, 0.5–0.6:60, 0.6–0.7:60], **상위 3구간(≥0.7) 전수**(실측 N_k=64/34/17). `per_bin=[100,60,60,∞,∞,∞]`, 층별 모집단 `N_k` 기록. 총 ≈335쌍.
 - 테스트: `pytest`. 실험 유닛 테스트는 `graphDB/tests/experiment/`.
 - 커밋: 태스크마다 빈번히. 실제 OpenAI 호출·SBERT 다운로드가 필요한 테스트는 유닛 테스트에서 제외(모킹/주입).
 
@@ -729,7 +729,8 @@ from experiment.kappa import cohen_kappa, confusion_2x2
 from experiment.metrics import sweep, best_threshold, pr_auc
 from experiment.bootstrap import bootstrap_curves
 
-PER_BIN = [100, 60, 60, 60, 60, 60]
+CENSUS = 10**9  # 상위 3구간(≥0.7)은 희박 → 전수 레이블링
+PER_BIN = [100, 60, 60, CENSUS, CENSUS, CENSUS]
 
 
 def _make_openai_client():
@@ -1325,7 +1326,7 @@ git commit -m "docs(experiment): RQ1/RQ2 usage and artifact guide"
 ## Self-Review
 
 **Spec coverage:**
-- RQ1 유사도=하이브리드 → Task 1. 층화표본 400쌍+N_k → Task 2. 블라인드 채점표 → Task 8. LLM 골드(2회+κ) → Task 7,8. TF-IDF silver → Task 6. GT 비교 κ → Task 5,8. 가중 P/R/F1 스윕+PR-AUC+t* → Task 3,8. 부트스트랩 CI → Task 4,8. ✅
+- RQ1 유사도=하이브리드 → Task 1. 층화표본(상위 전수+하위 표본 ≈335쌍)+N_k → Task 2. 블라인드 채점표 → Task 8. LLM 골드(2회+κ) → Task 7,8. TF-IDF silver → Task 6. GT 비교 κ → Task 5,8. 가중 P/R/F1 스윕+PR-AUC+t* → Task 3,8. 부트스트랩 CI → Task 4,8. ✅
 - RQ2 SQLite 시딩 → Task 12. 유사도 사전계산 → Task 9. 주입 재계산 → Task 10,13. {0.6,0.7,0.8,t*} → Task 13. Spearman ρ·Top-1·등급이동·점수분포·추가관계수 → Task 11,13. ✅
 - 방법론 한계 서술 → Task 14 README + 스펙 §7. ✅
 
