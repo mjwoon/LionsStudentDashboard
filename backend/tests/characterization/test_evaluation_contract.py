@@ -63,6 +63,8 @@ EXPECTED_KEYS = {
     "curriculum_similar_rate",
     "overall_score",
     "grade",
+    # 평가 근거가 0개인 학과를 '0점'이 아니라 '평가 불가'로 구분하기 위해 추가됨.
+    "is_evaluable",
     "summary_message",
     "evaluated_at",
     "cached",

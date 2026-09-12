@@ -62,6 +62,9 @@ def evaluate_student_for_department(
                 # 종합
                 "overall_score": float(cached_result.overall_score or 0),
                 "grade": classify_grade(cached_result.overall_score),
+                # 캐시는 overall_score가 not None일 때만 사용되므로 평가 가능한 건이지만,
+                # 응답 계약을 새 계산 경로와 맞춰 화면이 한 가지 형태만 다루게 한다.
+                "is_evaluable": analysis.get("overall", {}).get("is_evaluable", True),
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
                 "cached": True,
@@ -130,13 +133,20 @@ def evaluate_student_for_all_departments(
             print(f"학과 {dept.name} 평가 실패: {e}")
             continue
     
-    # 종합 점수 기준 내림차순 정렬
-    results.sort(key=lambda x: x['overall_score'], reverse=True)
-    
+    # 평가 근거가 있는 학과만 순위를 매긴다.
+    # 근거 0개 학과는 어떤 학생에게나 같은 값이 나와 순위 정보가 없고, 그럼에도
+    # 과거에는 공허참 100점으로 추천 1위를 차지했다. 점수 없이 뒤에 붙인다.
+    evaluable = [r for r in results if r.get('is_evaluable', True)]
+    not_evaluable = [r for r in results if not r.get('is_evaluable', True)]
+    evaluable.sort(key=lambda x: x['overall_score'], reverse=True)
+    not_evaluable.sort(key=lambda x: x['department_name'])
+
     return {
         "student_id": student_id,
         "total_departments": len(results),
-        "results": results
+        "evaluable_count": len(evaluable),
+        "not_evaluable_count": len(not_evaluable),
+        "results": evaluable + not_evaluable
     }
 
 

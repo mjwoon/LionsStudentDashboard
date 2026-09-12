@@ -138,8 +138,48 @@ def test_analysis_json_overall_weights_and_score_contract():
         "recommended_courses": 0.3,
         "curriculum_completion": 0.3,
     }
+    # 평가 근거(요건 그룹·권장과목·1학년 과목)가 하나도 없는 학과다.
+    # 과거에는 공허참 100%가 그대로 가중합되어 70.0이 나왔다 — 데이터 공백이
+    # 가산점이 되는 버그였다. 이제 근거 없는 항목은 가중치에서 제외되므로 0.0.
+    # 근거가 0개면 점수가 아니라 '평가 불가'다 — 0점이라는 판정을 내릴 수도 없다.
+    assert aj["overall"]["score"] is None
+    assert aj["overall"]["is_evaluable"] is False
+    assert aj["overall"]["scored_components"] == []
+
+
+def test_analysis_json_overall_score_uses_plain_weighted_sum_when_data_present():
+    """세 항목의 근거가 모두 있으면 기존 0.4/0.3/0.3 가중합 그대로다(동작 보존)."""
+    completed = {"codes": set(), "names": set(), "details": []}
+
+    def _no_similar(codes, name, comp):
+        return (False, 0.0, None)
+
+    aj = EvaluationResponseBuilder.build_analysis_json(
+        student=MagicMock(),
+        department=MagicMock(),
+        enrollments=[],
+        student_completed_courses=completed,
+        entry_breakdown={"score": 100.0, "required": 1, "qualifying": 1, "satisfied": True, "has_requirement": True},
+        recommended_exact_rate=0.0,
+        recommended_similar_rate=50.0,
+        curriculum_exact_rate=0.0,
+        curriculum_similar_rate=50.0,
+        necessary_courses=[],
+        recommended_course_names=["권장과목A"],
+        first_year_courses=[{"course_code": "AAA1001", "course_name": "1학년과목A"}],
+        course_name_to_codes={},
+        is_graph_available=False,
+        find_best_similar_course_func=_no_similar,
+    )
+
     # 100*0.4 + 50*0.3 + 50*0.3 = 70.0
     assert aj["overall"]["score"] == 70.0
+    assert aj["overall"]["is_evaluable"] is True
+    assert set(aj["overall"]["scored_components"]) == {
+        "entry_requirement",
+        "recommended_courses",
+        "curriculum_completion",
+    }
 
 
 def test_analysis_json_entry_requirement_reflects_breakdown():

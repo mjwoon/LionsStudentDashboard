@@ -1,6 +1,7 @@
 from typing import List, Dict, Callable
 from lions_core.models import Student, Department, StudentCourse
 from lions_core.constants import EVALUATION_WEIGHTS
+from lions_core import scoring
 
 class EvaluationResponseBuilder:
     """Evaluation Service에서 계산된 Raw 데이터를 받아 API 응답 형태(JSON)로 포맷팅하는 역할을 담당합니다."""
@@ -141,10 +142,18 @@ class EvaluationResponseBuilder:
             })
 
         # 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
-        overall_score = (
-            entry_breakdown["score"] * EVALUATION_WEIGHTS["entry_requirement"] +
-            recommended_similar_rate * EVALUATION_WEIGHTS["recommended_courses"] +
-            curriculum_similar_rate * EVALUATION_WEIGHTS["curriculum_completion"]
+        # 평가 근거가 없는 항목은 가중치에서 제외된다 — 데이터 공백이 가산점이 되면
+        # 요건 미등록 학과가 전부 70점대로 부풀려진다(scoring.weighted_overall_score 참고).
+        overall_components = scoring.build_overall_components(
+            entry_breakdown=entry_breakdown,
+            recommended_similar_rate=recommended_similar_rate,
+            recommended_total=len(recommended_course_names),
+            curriculum_similar_rate=curriculum_similar_rate,
+            curriculum_total=len(first_year_courses),
+        )
+        is_evaluable = scoring.is_evaluable(overall_components)
+        overall_score = scoring.weighted_overall_score(
+            overall_components, EVALUATION_WEIGHTS
         )
 
         return {
@@ -162,6 +171,7 @@ class EvaluationResponseBuilder:
                 "exact_rate": recommended_exact_rate,
                 "similar_rate": recommended_similar_rate,
                 "total_courses": len(recommended_course_names),
+                "has_data": len(recommended_course_names) > 0,
                 "exact_completed": sum(1 for d in recommended_details if d["is_exact_match"]),
                 "similar_completed": sum(1 for d in recommended_details if d["is_similar_match"]),
                 "details": recommended_details,
@@ -171,13 +181,20 @@ class EvaluationResponseBuilder:
                 "exact_rate": curriculum_exact_rate,
                 "similar_rate": curriculum_similar_rate,
                 "total_courses": len(first_year_courses),
+                "has_data": len(first_year_courses) > 0,
                 "exact_completed": sum(1 for d in curriculum_details if d["is_exact_match"]),
                 "similar_completed": sum(1 for d in curriculum_details if d["is_similar_match"]),
                 "details": curriculum_details,
                 "status": "완료" if curriculum_similar_rate >= 100 else "진행중"
             },
             "overall": {
-                "score": overall_score,
-                "weights": dict(EVALUATION_WEIGHTS)
+                "score": overall_score if is_evaluable else None,
+                # 근거가 0개면 점수가 아니라 '평가 불가'. 화면·정렬 모두 이 플래그를 따른다.
+                "is_evaluable": is_evaluable,
+                "weights": dict(EVALUATION_WEIGHTS),
+                # 종합 점수에 실제로 반영된 항목 — 재정규화 결과를 화면에서 설명할 수 있게 한다.
+                "scored_components": [
+                    name for name, (_, has_data) in overall_components.items() if has_data
+                ],
             }
         }

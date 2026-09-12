@@ -264,19 +264,30 @@ class EvaluationService:
             student_completed_courses, department_id
         )
         
-        # 4. 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
-        overall_score = (
-            entry_requirement_score * EVALUATION_WEIGHTS["entry_requirement"] +
-            recommended_similar_rate * EVALUATION_WEIGHTS["recommended_courses"] +
-            curriculum_similar_rate * EVALUATION_WEIGHTS["curriculum_completion"]
-        )
-        
-        # 5. 상세 분석 JSON 생성
+        # 4. 상세 분석 재료 조회 (종합 점수의 '항목 존재 여부' 판정에도 쓰인다)
         dept_courses_data = self._get_department_courses(department.id, admission_year)
         necessary_courses = dept_courses_data.get("necessary_courses", [])
         recommended_course_names = dept_courses_data.get("recommended_courses", [])
         first_year_courses = self._get_department_first_year_curriculum(department.id)
         course_name_to_codes = self._get_all_course_codes_by_name()
+
+        # 5. 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
+        # 평가 근거가 등록되지 않은 항목은 가중치에서 제외한다. 그렇지 않으면 공허참
+        # 100%가 그대로 가중합되어 요건 미등록 학과가 일괄 70점 바닥을 받는다.
+        overall_components = scoring.build_overall_components(
+            entry_breakdown=entry_breakdown,
+            recommended_similar_rate=recommended_similar_rate,
+            recommended_total=len(recommended_course_names),
+            curriculum_similar_rate=curriculum_similar_rate,
+            curriculum_total=len(first_year_courses),
+        )
+        # 근거가 하나도 없으면 점수를 제시하지 않는다. 그런 학과는 어떤 학생을 넣어도
+        # 같은 값이 나와(과거 100, 지금 0) 학생을 구분하지 못하므로, '0점'이라는
+        # 판정이 아니라 '평가 불가'다. 학과 추천 정렬에서도 빠져야 한다.
+        is_evaluable = scoring.is_evaluable(overall_components)
+        overall_score = scoring.weighted_overall_score(
+            overall_components, EVALUATION_WEIGHTS
+        )
         
         analysis_json = EvaluationResponseBuilder.build_analysis_json(
             student=student,
@@ -296,8 +307,8 @@ class EvaluationService:
             find_best_similar_course_func=self._find_best_similar_course
         )
         
-        # 6. 등급 판정
-        grade = classify_grade(overall_score)
+        # 6. 등급 판정 (평가 불가면 등급도 없다)
+        grade = classify_grade(overall_score) if is_evaluable else None
         
         result = {
             'student_id': student_id,
@@ -312,8 +323,11 @@ class EvaluationService:
             'curriculum_exact_rate': round(curriculum_exact_rate, 2),
             'curriculum_similar_rate': round(curriculum_similar_rate, 2),
             # 종합
-            'overall_score': round(overall_score, 2),
+            'overall_score': round(overall_score, 2) if is_evaluable else None,
             'grade': grade,
+            # 종합 점수를 낼 근거가 하나라도 있는가. False면 overall_score/grade는 None이며
+            # 학과 추천 정렬에서 제외된다.
+            'is_evaluable': is_evaluable,
             'analysis_json': analysis_json,
             'ai_summary': None,
             'evaluated_at': datetime.now(timezone.utc)
