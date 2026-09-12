@@ -307,8 +307,11 @@ class EvaluationService:
             find_best_similar_course_func=self._find_best_similar_course
         )
         
-        # 6. 등급 판정 (평가 불가면 등급도 없다)
-        grade = classify_grade(overall_score) if is_evaluable else None
+        # 6. 진입요건 게이트 + 등급 판정
+        # 요건은 학칙이 정하는 관문이지 가중치짜리 연속값이 아니다. 관문을 못 넘었으면
+        # 준비도가 아무리 높아도 등급을 주지 않는다(scoring.grade_for 주석 참고).
+        entry_gate = scoring.entry_gate_state(entry_breakdown)
+        grade = scoring.grade_for(entry_gate, overall_score if is_evaluable else None)
         
         result = {
             'student_id': student_id,
@@ -325,6 +328,9 @@ class EvaluationService:
             # 종합
             'overall_score': round(overall_score, 2) if is_evaluable else None,
             'grade': grade,
+            # 진입요건 관문: open(충족) / blocked(미충족) / unknown(요건 미등록).
+            # 학과 추천 정렬과 등급 부여를 이 값이 지배한다.
+            'entry_gate': entry_gate,
             # 종합 점수를 낼 근거가 하나라도 있는가. False면 overall_score/grade는 None이며
             # 학과 추천 정렬에서 제외된다.
             'is_evaluable': is_evaluable,

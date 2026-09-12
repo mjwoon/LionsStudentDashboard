@@ -164,6 +164,9 @@ class EvaluationResponseBuilder:
                 "total_courses": entry_breakdown["required"],
                 "completed_courses": entry_breakdown["qualifying"],
                 "has_requirement": entry_breakdown["has_requirement"],
+                # open(충족) / blocked(미충족) / unknown(요건 미등록).
+                # 화면 헤드라인과 학과 추천 정렬이 이 값을 따른다.
+                "gate": scoring.entry_gate_state(entry_breakdown),
                 "details": entry_requirement_details,
                 "status": "충족" if entry_breakdown["satisfied"] else "미충족"
             },

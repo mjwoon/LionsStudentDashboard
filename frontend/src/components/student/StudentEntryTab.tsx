@@ -139,6 +139,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const reqPercent = Math.round(entryRequirementScore);
   // 요건이 등록되지 않은 학과는 점수가 공허참 100%다 — 만점처럼 보이면 안 되므로 카드에서 분리한다.
   const reqHasData = entryReqData?.has_requirement ?? reqTotal > 0;
+  // 진입요건은 학칙이 정하는 관문이다. open(충족) / blocked(미충족) / unknown(미등록).
+  const entryGate: 'open' | 'blocked' | 'unknown' =
+    (evaluationData as any)?.entry_gate ?? entryReqData?.gate ?? 'unknown';
 
   // recommended_courses 구조에서 읽기 (total_courses, similar_completed, similar_rate)
   const recData = evaluationData?.analysis_json?.recommended_courses as any;
@@ -324,6 +327,13 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
           {/* 전체 적합도 */}
           <div className="bg-white border border-black/10 rounded-[14px] p-[37px] flex-1 flex flex-col gap-[12px] justify-center">
             <p className="text-[20px] text-[#6a7282]">전체 적합도</p>
+            {/* 관문 상태가 헤드라인이다 — 요건 미충족이면 준비도가 높아도 진입할 수 없다. */}
+            {entryGate === 'blocked' && (
+              <p className="text-[18px] font-semibold text-[#b42318]">진입요건 미충족</p>
+            )}
+            {entryGate === 'open' && (
+              <p className="text-[18px] font-semibold text-[#067647]">진입요건 충족</p>
+            )}
             <p className="text-[28px] font-bold text-[#101828]">{overallScore}%</p>
             <p className="text-[18px] text-[#6a7282]">
               {scoredCount >= 3

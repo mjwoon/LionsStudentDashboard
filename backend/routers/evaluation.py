@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from database import get_db
 from constants import classify_grade
+from lions_core import scoring
 from services.evaluation_service import EvaluationService
 from repositories import (
     StudentRepository,
@@ -61,10 +62,14 @@ def evaluate_student_for_department(
                 "curriculum_similar_rate": curriculum.get("similar_rate", 0),
                 # 종합
                 "overall_score": float(cached_result.overall_score or 0),
-                "grade": classify_grade(cached_result.overall_score),
+                "grade": scoring.grade_for(
+                    entry_req.get("gate", scoring.GATE_UNKNOWN),
+                    float(cached_result.overall_score),
+                ),
                 # 캐시는 overall_score가 not None일 때만 사용되므로 평가 가능한 건이지만,
                 # 응답 계약을 새 계산 경로와 맞춰 화면이 한 가지 형태만 다루게 한다.
                 "is_evaluable": analysis.get("overall", {}).get("is_evaluable", True),
+                "entry_gate": entry_req.get("gate", scoring.GATE_UNKNOWN),
                 "summary_message": "진입요건 충족" if cached_result.is_satisfied else "추가 노력 필요",
                 "evaluated_at": cached_result.calculated_at.isoformat() if cached_result.calculated_at else None,
                 "cached": True,
@@ -138,7 +143,14 @@ def evaluate_student_for_all_departments(
     # 과거에는 공허참 100점으로 추천 1위를 차지했다. 점수 없이 뒤에 붙인다.
     evaluable = [r for r in results if r.get('is_evaluable', True)]
     not_evaluable = [r for r in results if not r.get('is_evaluable', True)]
-    evaluable.sort(key=lambda x: x['overall_score'], reverse=True)
+    # 진입요건 관문이 준비도 점수를 지배한다. 요건 미충족 60점이 충족 40점보다
+    # 위에 오면 추천이 거짓말을 하게 된다(scoring.ranking_key 주석 참고).
+    evaluable.sort(
+        key=lambda x: scoring.ranking_key(
+            x.get('entry_gate', scoring.GATE_UNKNOWN), x['overall_score']
+        ),
+        reverse=True,
+    )
     not_evaluable.sort(key=lambda x: x['department_name'])
 
     return {

@@ -13,6 +13,8 @@ EvaluationService에서 IO(DB 조회·그래프 접속)와 뒤섞여 있던 '계
 
 from typing import Callable, Dict, List, NamedTuple, Optional, Set, Tuple
 
+from lions_core.constants import classify_grade
+
 
 class SimilarMatch(NamedTuple):
     """유사과목 판정 결과.
@@ -277,3 +279,49 @@ def is_evaluable(components: Dict[str, Tuple[float, bool]]) -> bool:
     학과 추천 정렬에서도 빠져야 한다.
     """
     return any(has_data for _, has_data in components.values())
+
+
+# ── 진입요건 게이트 ────────────────────────────────────────────────
+#
+# 진입요건은 '얼마나 준비됐나'와 성질이 다르다. 학칙이 정하는 관문(통과/불통과)이지
+# 가중치 30~40%짜리 연속값이 아니다. 가중합에 섞으면 다음 역전이 생긴다:
+#
+#   요건 완전 미충족 (0, 100, 100) -> 0.4*0   + 0.3*100 + 0.3*100 = 60점 (D)
+#   요건 완전 충족   (100, 0,  0)  -> 0.4*100 + 0.3*0   + 0.3*0   = 40점 (F)
+#
+# 임계값을 어디로 옮겨도 사라지지 않는다. 점수는 준비도로 그대로 두되(요건 진행률까지
+# 담고 있어 정보 손실이 없다), 등급과 순위는 게이트가 지배하게 한다.
+
+GATE_OPEN = "open"          # 요건 충족 — 진입 가능
+GATE_BLOCKED = "blocked"    # 요건 미충족 — 진입 불가
+GATE_UNKNOWN = "unknown"    # 요건 미등록 — 판정할 근거가 없음
+
+# 순위에서의 게이트 우선순위. '알 수 없음'은 확인된 미충족보다는 앞에 둔다 —
+# 데이터가 없다는 이유로 실제 미충족보다 불리해질 이유가 없다.
+_GATE_RANK = {GATE_OPEN: 2, GATE_UNKNOWN: 1, GATE_BLOCKED: 0}
+
+
+def entry_gate_state(entry_breakdown: Dict) -> str:
+    """진입요건 관문 상태 — open / blocked / unknown."""
+    if not entry_breakdown.get("has_requirement", False):
+        return GATE_UNKNOWN
+    return GATE_OPEN if entry_breakdown.get("satisfied", False) else GATE_BLOCKED
+
+
+def grade_for(gate_state: str, readiness_score: Optional[float]) -> Optional[str]:
+    """준비도 등급. 관문을 못 넘었으면 등급을 주지 않는다.
+
+    등급은 '진입 가능성'의 요약이므로 blocked에는 붙을 수 없다. unknown까지 막으면
+    요건이 등록되지 않은 학과가 전부 빈칸이 되므로, 알 수 없음은 미충족과 구분한다.
+    """
+    if gate_state == GATE_BLOCKED or readiness_score is None:
+        return None
+    return classify_grade(readiness_score)
+
+
+def ranking_key(gate_state: str, readiness_score: Optional[float]) -> Tuple[int, float]:
+    """학과 추천 정렬 키 — 게이트가 점수를 지배한다.
+
+    (게이트 우선순위, 준비도)의 사전식 비교라 미충족 60점이 충족 40점을 이길 수 없다.
+    """
+    return (_GATE_RANK.get(gate_state, 0), readiness_score if readiness_score is not None else -1.0)
