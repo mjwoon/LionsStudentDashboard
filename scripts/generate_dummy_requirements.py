@@ -18,15 +18,21 @@ group5_requirements_recs.csv에는 실제 학사 규정 기반 데이터가 13�
 2. 후보 과목 풀: 그 학과 1학년 '전공기초' → 없으면 '전공핵심'.
    교육과정이 아예 없는 세부전공(예: 신소재반도체공학전공)은 같은 단과대학에서
    dept_id가 바로 아래이면서 교육과정을 가진 학과(=모학부)의 과목을 차용한다.
-3. 정렬: 실제 수강 이력 빈도 내림차순 → 동률은 학수번호 오름차순.
+3. 후보는 반드시 **과목 마스터(group3)** 에 있는 학수번호여야 한다.
+   requirement_courses.course_code가 courses를 참조하는 외래키라, 교육과정(group4)에만
+   있고 마스터에 없는 코드를 쓰면 Postgres에서 외래키 위반으로 업로드가 통째로 깨진다
+   (SQLite는 외래키를 강제하지 않아 이 문제를 숨긴다).
+4. 정렬: 실제 수강 이력 빈도 내림차순 → 동률은 학수번호 오름차순.
    아무도 듣지 않는 과목으로 요건을 채우면 전원 0점이 되어 변별력이 없어지므로,
    실제 요건이 그렇듯 학생들이 실제로 수강하는 기초과목을 우선한다.
-4. 진입요건: 실제 ELEC 행의 관용구를 따른다 — 같은 후보 집합에 OR로 묶인 두 그룹.
+5. 진입요건: 실제 ELEC 행의 관용구를 따른다 — 같은 후보 집합에 OR로 묶인 두 그룹.
    그룹1 = A(4.0) 이상 1과목, 그룹2 = B(3.0) 이상 2과목.
-5. 권장과목: 같은 후보 풀 상위 3과목의 과목명.
-6. 1학년 교육과정: 교육과정이 아예 없는 세부전공에는 모학부의 1학년 과목을 그대로
+6. 권장과목: 같은 후보 풀 상위 3과목의 과목명.
+7. 1학년 교육과정: 교육과정 행이 **아예 없는** 세부전공에만 모학부의 1학년 과목을
    복제한다. 세부전공은 실제로도 모학부의 1학년 과정을 공유하므로 임의 창작이 아니다.
    (설강학과는 모학부 이름을 유지하고 학과ID만 세부전공으로 바꾼다.)
+   '교육과정은 있는데 과목 마스터에 없어 후보가 비는' 경우는 이와 다른 상황이므로
+   교육과정을 물려주지 않는다 — 남의 학과 과목을 제 것으로 만들어버리게 된다.
 
 사용법
 ------
@@ -49,6 +55,7 @@ DEPTS_CSV = ROOT / "group1_colleges_depts_.csv"
 CURRICULUM_CSV = ROOT / "group4_교육과정_전체.csv"
 REAL_CSV = ROOT / "group5_requirements_recs.csv"
 ENROLLMENTS_CSV = ROOT / "sample_enrollments_300.csv"
+COURSES_CSV = ROOT / "group3_courses.csv"  # 과목 마스터 — 요건 과목의 외래키 대상
 
 DUMMY_OUT = ROOT / "group5_requirements_recs_dummy.csv"
 FULL_OUT = ROOT / "group5_requirements_recs_full.csv"
@@ -76,11 +83,16 @@ def read_csv(path):
         return list(csv.DictReader(f))
 
 
-def build_candidate_pools(curriculum, enrollment_counts):
-    """학과ID -> 1학년 후보 과목 리스트(수강 빈도 내림차순)."""
+def build_candidate_pools(curriculum, enrollment_counts, master_codes):
+    """학과ID -> 1학년 후보 과목 리스트(수강 빈도 내림차순).
+
+    master_codes에 없는 학수번호는 후보에서 뺀다. requirement_courses가 courses를
+    참조하는 외래키라, 교육과정에만 있는 코드를 넣으면 Postgres에서 업로드 전체가
+    외래키 위반으로 롤백된다.
+    """
     by_dept = defaultdict(list)
     for row in curriculum:
-        if row["학년"] == "1":
+        if row["학년"] == "1" and row["학수번호"] in master_codes:
             by_dept[row["학과ID"]].append(row)
 
     pools = {}
@@ -96,22 +108,14 @@ def build_candidate_pools(curriculum, enrollment_counts):
     return pools
 
 
-def resolve_pool(dept, depts_by_college, pools):
-    """학과의 후보 풀과, 차용한 경우 그 모학부.
-
-    세부전공(예: 신소재반도체공학전공)은 교육과정이 별도로 등록돼 있지 않다.
-    같은 단과대학에서 dept_id가 바로 아래이면서 교육과정을 가진 학과를 모학부로 본다.
-    """
-    own = pools.get(dept["dept_id"])
-    if own:
-        return own, None
-
+def find_parent(dept, depts_by_college, pools):
+    """같은 단과대학에서 dept_id가 바로 아래이면서 후보 풀을 가진 학과(=모학부)."""
     siblings = depts_by_college[dept["college_id"]]
-    lower = [d for d in siblings if int(d["dept_id"]) < int(dept["dept_id"]) and pools.get(d["dept_id"])]
-    if not lower:
-        return None, None
-    parent = max(lower, key=lambda d: int(d["dept_id"]))
-    return pools[parent["dept_id"]], parent
+    lower = [
+        d for d in siblings
+        if int(d["dept_id"]) < int(dept["dept_id"]) and pools.get(d["dept_id"])
+    ]
+    return max(lower, key=lambda d: int(d["dept_id"])) if lower else None
 
 
 def inherited_curriculum_rows(curriculum, parent, dept):
@@ -175,7 +179,8 @@ def main():
     enrollments = read_csv(ENROLLMENTS_CSV)
 
     enrollment_counts = Counter(e["학수번호"] for e in enrollments)
-    pools = build_candidate_pools(curriculum, enrollment_counts)
+    master_codes = {c["학수번호"] for c in read_csv(COURSES_CSV)}
+    pools = build_candidate_pools(curriculum, enrollment_counts, master_codes)
 
     depts_by_college = defaultdict(list)
     for d in depts:
@@ -193,27 +198,40 @@ def main():
     dummy_rows, curriculum_dummy, skipped, inherited = [], [], [], []
     req_added = rec_added = 0
 
+    # 교육과정 행이 아예 없는 학과 — 이 학과들만 모학부 과정을 물려받을 자격이 있다.
+    depts_without_curriculum = {
+        row_dept_id
+        for row_dept_id in {d["dept_id"] for d in targets}
+        if not any(c["학과ID"] == row_dept_id and c["학년"] == "1" for c in curriculum)
+    }
+
     for dept in targets:
         code = dept["dept_code"]
-        pool, parent = resolve_pool(dept, depts_by_college, pools)
-        if not pool:
-            skipped.append(dept["dept_name"])
-            continue
+        own_pool = pools.get(dept["dept_id"])
+        parent = None if own_pool else find_parent(dept, depts_by_college, pools)
 
-        candidates = pool[:MAX_CANDIDATES]
-        if code not in has_requirement:
-            dummy_rows.extend(requirement_rows(code, candidates, parent["dept_name"] if parent else None))
-            req_added += 1
-        if code not in has_recommendation:
-            dummy_rows.extend(recommendation_rows(code, candidates))
-            rec_added += 1
-
-        # 교육과정이 없는 세부전공에는 모학부의 1학년 과정을 물려준다.
-        if parent is not None:
+        # 교육과정이 통째로 없는 세부전공에만 모학부 1학년 과정을 복제한다.
+        if parent is not None and dept["dept_id"] in depts_without_curriculum:
             rows = inherited_curriculum_rows(curriculum, parent, dept)
             if rows:
                 curriculum_dummy.extend(rows)
                 inherited.append(f'{dept["dept_name"]}<-{parent["dept_name"]}')
+
+        pool = own_pool or (pools.get(parent["dept_id"]) if parent else None)
+        if not pool:
+            # 1학년 과목이 과목 마스터(group3)에 하나도 없는 학과. 요건 후보를 만들 수
+            # 없다 — 없는 과목으로 요건을 채우면 외래키 위반이거나 영원히 미충족이 된다.
+            skipped.append(dept["dept_name"])
+            continue
+
+        candidates = pool[:MAX_CANDIDATES]
+        borrowed = parent["dept_name"] if (parent and not own_pool) else None
+        if code not in has_requirement:
+            dummy_rows.extend(requirement_rows(code, candidates, borrowed))
+            req_added += 1
+        if code not in has_recommendation:
+            dummy_rows.extend(recommendation_rows(code, candidates))
+            rec_added += 1
 
     write_csv(DUMMY_OUT, dummy_rows)
     write_csv(FULL_OUT, [{k: r.get(k, "") for k in HEADER} for r in real_rows] + dummy_rows)
