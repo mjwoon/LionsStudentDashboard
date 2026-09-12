@@ -367,7 +367,7 @@ uv run python experiment_rq1.py                    # LLM(gpt-4o) 포함: OPENAI_
 # 1) 유사도 lookup 덤프 (graphDB 3.11 env)
 uv run python build_similarity_lookup.py           # -> results/rq2/similarity_lookup.json
 
-# 2) 임계값별 12,000건 재계산 (루트 3.12 env)
+# 2) 임계값별 11,400건 재계산 (루트 3.12 env)
 ../.venv/bin/python experiment_rq2.py --tstar <RQ1_tstar>            # 전체
 ../.venv/bin/python experiment_rq2.py --tstar 0.75 --max-students 15 # 스모크
 ```

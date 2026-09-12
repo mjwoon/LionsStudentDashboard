@@ -9,11 +9,21 @@ import numpy as np
 import pandas as pd
 
 
+_ORDER_COL = "sort_key"  # 없으면 overall_score 로 폴백
+
+
+def _order_column(df) -> str:
+    """정렬 기준 컬럼. 프로덕션 순위는 scoring.ranking_key(게이트, 준비도)를 따르므로
+    게이트를 반영한 sort_key 가 있으면 그것을 쓴다(진입요건 관문 분리 이후)."""
+    return _ORDER_COL if _ORDER_COL in df.columns else "overall_score"
+
+
 def _ranked(df):
+    col = _order_column(df)
     out = {}
     for sid, g in df.groupby("student_id"):
         s = g.sort_values("department_id")
-        out[sid] = dict(zip(s["department_id"], s["overall_score"]))
+        out[sid] = dict(zip(s["department_id"], s[col].astype(float)))
     return out
 
 
@@ -64,8 +74,18 @@ def spearman_vs_baseline(df, base_df) -> pd.Series:
     return pd.Series(res)
 
 
+_NO_GRADE = "없음"  # 관문 차단·평가 불가로 등급이 부여되지 않은 상태
+
+
 def grade_migration(df, base_df) -> pd.DataFrame:
+    """등급 전이 행렬. 등급 미부여(None)는 버리지 않고 '없음' 범주로 집계한다.
+
+    진입요건 관문 분리 이후 blocked 는 등급이 None 이므로, dropna 로 떨구면
+    관문에 막힌 건들이 통째로 사라져 이동량이 과소 집계된다.
+    """
     a = df.set_index(["student_id", "department_id"])["grade"]
     b = base_df.set_index(["student_id", "department_id"])["grade"]
-    j = pd.DataFrame({"base": b, "new": a}).dropna()
+    j = pd.DataFrame({"base": b, "new": a})
+    j = j[j.index.isin(b.index) & j.index.isin(a.index)]
+    j = j.fillna(_NO_GRADE)
     return pd.crosstab(j["base"], j["new"])

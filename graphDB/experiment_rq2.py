@@ -31,8 +31,8 @@ try:
 except ImportError:
     _HAS_PLT = False
 
-from lions_core.models import Student, Department  # noqa: E402
-from lions_core.constants import LIONS_COLLEGE_ID  # noqa: E402
+from lions_core.models import Student  # noqa: E402
+from lions_core.repositories import DepartmentRepository  # noqa: E402
 from experiment.similarity_lookup import load_lookup, make_similarity_fn  # noqa: E402
 from experiment.injected_eval import InjectedEvaluationService  # noqa: E402
 from experiment.seeding import seed_sqlite  # noqa: E402
@@ -41,12 +41,30 @@ from experiment.impact_metrics import (  # noqa: E402
 )
 
 
+# scoring._GATE_RANK 와 같은 순서를 재현한다. pending(요건 과목 미이수)이 빠지면
+# 기본값 0으로 떨어져 blocked(성적 미달)과 같은 순위가 되므로 네 상태를 모두 적는다.
+_GATE_RANK = {"open": 3, "pending": 2, "unknown": 1, "blocked": 0}
+
+
+def _sort_key(gate_state, readiness):
+    """scoring.ranking_key((게이트, 준비도))의 단조 스칼라 등가물.
+
+    준비도는 0~100이므로 게이트 우선순위에 1000을 곱하면 사전식 순서가 보존된다.
+    등급·점수가 None인 경우(관문 차단·평가 불가)는 -1로 최하위에 둔다.
+    """
+    return _GATE_RANK.get(gate_state, 0) * 1000.0 + (
+        readiness if readiness is not None else -1.0
+    )
+
+
 def _evaluate_all(db, sim_fn, threshold, max_students=0):
     svc = InjectedEvaluationService(db, sim_fn, threshold)
     students = db.query(Student).all()
     if max_students:
         students = students[:max_students]
-    depts = [d.id for d in db.query(Department).all() if d.id > LIONS_COLLEGE_ID]
+    # 평가 대상 학과 판정은 리포지토리가 유일한 출처다. 필터를 복제하면
+    # LIONS_COLLEGE_ID 의미가 바뀔 때(학과 id 100 → 단과대학 id 1) 조용히 틀어진다.
+    depts = [d.id for d in DepartmentRepository(db).list_evaluation_targets()]
     rows = []
     for st in students:
         sid = st.student_id
@@ -56,8 +74,12 @@ def _evaluate_all(db, sim_fn, threshold, max_students=0):
                 r = svc.evaluate_student(sid, did, year, save_to_db=False)
             except Exception:
                 continue
+            gate = r.get("entry_gate", "unknown")
+            score = r.get("overall_score")
             rows.append({"student_id": sid, "department_id": did,
-                         "overall_score": r["overall_score"], "grade": r["grade"]})
+                         "overall_score": score, "grade": r.get("grade"),
+                         "entry_gate": gate,
+                         "sort_key": _sort_key(gate, score)})
     return pd.DataFrame(rows)
 
 
@@ -86,7 +108,7 @@ def main():
         e.to_csv(f"{args.out}/evaluations_{t}.csv", index=False)
         evals[t] = e
 
-    base = evals[0.8]  # 현행 실효값 기준선
+    base = evals[0.8]  # 비교 기준선(관행값 0.8)
     summary = {"thresholds": thresholds,
                "n_rows_per_threshold": {t: int(len(evals[t])) for t in thresholds},
                "n_additional_relations": {t: int(sum(1 for v in lut.values() if v >= t))
