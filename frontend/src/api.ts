@@ -30,13 +30,26 @@ import type {
   ClearCacheResponse,
 } from './types'
 
+// 요청 하나가 이만큼을 넘기면 중단한다.
+//
+// 타임아웃이 아예 없어서, 백엔드가 느리거나 멈추면 화면이 무기한 스피너로 남았다.
+// 상대 등급 도입으로 단일 학과 조회 한 번이 평가 대상 학과 전체를 훑게 되면서 이
+// 경로가 무거워졌다(로컬 Postgres 실측: 캐시가 빈 첫 조회 0.79초, 캐시 적중 0.29초).
+// 운영은 원격 DB에 Render 무료 플랜이라 콜드 스타트까지 겹치면 훨씬 느릴 수 있어,
+// 정상 요청을 끊지 않도록 넉넉히 잡되 무한 대기만은 막는 값으로 둔다.
+const REQUEST_TIMEOUT_MS = 60_000
+
 // API 요청 헬퍼 함수
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`
-  
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     const response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
@@ -60,10 +73,18 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
     return await response.json()
   } catch (error) {
+    // AbortError를 그대로 올리면 화면에 'aborted'만 뜬다. 무엇이 일어났는지 읽히게 한다.
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `요청이 ${REQUEST_TIMEOUT_MS / 1000}초 안에 응답하지 않아 중단했습니다. 잠시 후 다시 시도해 주세요.`
+      )
+    }
     if (error instanceof Error) {
       throw error
     }
     throw new Error('Unknown error occurred')
+  } finally {
+    clearTimeout(timer)
   }
 }
 
