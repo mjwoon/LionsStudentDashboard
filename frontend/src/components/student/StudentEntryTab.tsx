@@ -52,7 +52,8 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
-        const response = await api.departments.list();
+        // 진입 대상 전공만 — 학생의 소속 계열은 분석 대상이 아니다.
+        const response = await api.departments.list(true);
         setDepartments(response.departments);
       } catch (error) {
         console.error('Failed to fetch departments:', error);

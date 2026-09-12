@@ -126,13 +126,29 @@ def get_entry_requirements(
 
 
 @router.get("/departments", response_model=DepartmentListResponse)
-def get_departments(db: Session = Depends(get_db)):
-    """학과 리스트 및 졸업 학점 확인"""
+def get_departments(
+    evaluation_targets_only: bool = False,
+    db: Session = Depends(get_db),
+):
+    """학과 리스트 및 졸업 학점 확인.
+
+    evaluation_targets_only=True면 라이언스 칼리지의 세 계열(전계열·인문사회계열·
+    자연계열)을 뺀다. 그 셋은 학생의 소속이지 진입 대상 전공이 아니므로 '분석할 학과
+    선택'의 후보가 될 수 없다. 다른 소비자를 위해 기본값은 전체 반환을 유지한다.
+    """
     from models.models import DepartmentEntryRequirement
-    
-    departments = db.query(Department).options(
-        joinedload(Department.college)
-    ).all()
+
+    if evaluation_targets_only:
+        # 대상 판정은 DepartmentRepository가 단일 진실 원천이다.
+        target_ids = {d.id for d in DepartmentRepository(db).list_evaluation_targets()}
+        departments = [
+            d for d in db.query(Department).options(joinedload(Department.college)).all()
+            if d.id in target_ids
+        ]
+    else:
+        departments = db.query(Department).options(
+            joinedload(Department.college)
+        ).all()
     
     # Check which departments have entry requirements configured
     eval_dept_ids = {
