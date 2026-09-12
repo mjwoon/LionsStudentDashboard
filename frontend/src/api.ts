@@ -108,8 +108,12 @@ export const api = {
 
   // 학과 관련 API
   departments: {
-    list: () => 
-      fetchAPI<DepartmentsResponse>('/api/departments'),
+    // evaluationTargetsOnly: 라이언스 칼리지 세 계열(전계열·인문사회계열·자연계열)을 제외한다.
+    // 그 셋은 학생의 소속이지 진입 대상 전공이 아니다.
+    list: (evaluationTargetsOnly = false) =>
+      fetchAPI<DepartmentsResponse>(
+        `/api/departments${evaluationTargetsOnly ? '?evaluation_targets_only=true' : ''}`
+      ),
     
     courses: (departmentId: string, page = 1, perPage = 20) => {
       const params = new URLSearchParams({

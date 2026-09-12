@@ -33,6 +33,10 @@ router = APIRouter(
 )
 
 
+# 건너뛴 행 사유를 응답에 실을 최대 개수. 수천 건이 잘못돼도 응답이 터지지 않게 한다.
+MAX_REPORTED_SKIPS = 50
+
+
 class GroupedUploadResponse(DataUploadResponse):
     """통합 업로드 응답 (하위 결과 포함)"""
     sub_results: Optional[List[dict]] = None
@@ -362,11 +366,21 @@ async def upload_requirements_grouped(
 
         # Step 2: requirement_courses 추출 (course_code가 있는 행)
         # requirement_id가 없으면 (dept_code, admission_year, requirement_group)으로 자동 조회
+        #
+        # 이 단계는 매칭에 실패한 행을 조용히 버려왔다. group5 CSV의 dept_code가 'CS'인데
+        # 학과 마스터에는 'CS_CS'만 있어 컴퓨터학부 요건이 통째로 사라졌는데도 응답은
+        # 성공이었다. 버려지는 행은 반드시 건수와 사유를 남긴다.
         req_courses_list = []
-        for row in data:
+        skipped_reasons = []
+
+        def _skip(row_no, reason):
+            skipped_reasons.append(f"{row_no}행: {reason}")
+
+        for row_no, row in enumerate(data, start=2):  # 2행 = 헤더 다음 첫 데이터 행
             req_id = row.get("requirement_id") or row.get("요건 ID") or row.get("요건ID")
             course_code = row.get("course_code") or row.get("학수번호") or row.get("과목코드")
             if not course_code:
+                # 권장과목 전용 행 — 매핑 대상이 아니다(누락이 아님).
                 continue
 
             # requirement_id가 없으면 dept_code + admission_year + requirement_group으로 조회
@@ -374,36 +388,57 @@ async def upload_requirements_grouped(
                 dept_code = row.get("department_code") or row.get("dept_code") or row.get("학과코드") or row.get("소속학과") or row.get("학과")
                 adm_year = row.get("admission_year") or row.get("적용학번")
                 req_group = row.get("requirement_group") or row.get("요건그룹") or row.get("그룹")
-                if dept_code and adm_year and req_group:
-                    from models.models import DepartmentEntryRequirement, Department as DeptModel
-                    dept = db.query(DeptModel).filter(DeptModel.code == str(dept_code)).first()
-                    if dept:
-                        try:
-                            adm_year_int = int(float(adm_year))
-                            req_group_int = int(float(req_group))
-                        except (ValueError, TypeError):
-                            continue
-                        req_obj = db.query(DepartmentEntryRequirement).filter(
-                            DepartmentEntryRequirement.department_id == dept.id,
-                            DepartmentEntryRequirement.admission_year == adm_year_int,
-                            DepartmentEntryRequirement.requirement_group == req_group_int
-                        ).first()
-                        if req_obj:
-                            req_id = req_obj.id
+                if not (dept_code and adm_year and req_group):
+                    _skip(row_no, f"과목 {course_code}: 학과코드·적용학번·요건그룹 중 빠진 값이 있음")
+                    continue
 
-            if req_id and course_code:
-                req_courses_list.append(RequirementCourseDataUpload(
-                    requirement_id=int(req_id),
-                    course_code=str(course_code)
-                ))
+                from models.models import DepartmentEntryRequirement, Department as DeptModel
+                dept = db.query(DeptModel).filter(DeptModel.code == str(dept_code)).first()
+                if not dept:
+                    _skip(row_no, f"과목 {course_code}: 학과코드 '{dept_code}'가 학과 마스터에 없음")
+                    continue
+
+                try:
+                    adm_year_int = int(float(adm_year))
+                    req_group_int = int(float(req_group))
+                except (ValueError, TypeError):
+                    _skip(row_no, f"과목 {course_code}: 적용학번('{adm_year}')·요건그룹('{req_group}')이 숫자가 아님")
+                    continue
+
+                req_obj = db.query(DepartmentEntryRequirement).filter(
+                    DepartmentEntryRequirement.department_id == dept.id,
+                    DepartmentEntryRequirement.admission_year == adm_year_int,
+                    DepartmentEntryRequirement.requirement_group == req_group_int
+                ).first()
+                if not req_obj:
+                    _skip(row_no, f"과목 {course_code}: {dept_code} {adm_year_int}학번 {req_group_int}그룹 요건이 등록되지 않음")
+                    continue
+                req_id = req_obj.id
+
+            req_courses_list.append(RequirementCourseDataUpload(
+                requirement_id=int(req_id),
+                course_code=str(course_code)
+            ))
 
         if req_courses_list:
             rc_resp = UploadService.upload_requirement_courses(db, req_courses_list)
-            sub_results.append(_make_sub_result("요건 과목 매핑", rc_resp))
+            mapping_result = _make_sub_result("요건 과목 매핑", rc_resp)
             total_uploaded += rc_resp.uploaded_count
             total_updated += rc_resp.updated_count
         else:
-            sub_results.append({"label": "요건 과목 매핑", "success": True, "message": "매핑 데이터 없음", "uploaded_count": 0, "updated_count": 0})
+            mapping_result = {"label": "요건 과목 매핑", "success": True, "message": "매핑 데이터 없음", "uploaded_count": 0, "updated_count": 0}
+
+        # 버려진 행을 결과에 싣는다. 건너뛴 행이 있으면 성공으로 넘기지 않는다 —
+        # 데이터 공백이 조용히 지나가는 것이 이 기능의 가장 큰 위험이었다.
+        mapping_result["skipped_count"] = len(skipped_reasons)
+        mapping_result["skipped_reasons"] = skipped_reasons[:MAX_REPORTED_SKIPS]
+        if skipped_reasons:
+            mapping_result["success"] = False
+            mapping_result["message"] = (
+                f"{mapping_result.get('message') or ''} "
+                f"매칭 실패로 건너뛴 행 {len(skipped_reasons)}건"
+            ).strip()
+        sub_results.append(mapping_result)
 
         # Step 3: recommendations 추출
         recs_list = []

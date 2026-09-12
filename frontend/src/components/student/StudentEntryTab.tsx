@@ -45,13 +45,26 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const [selectedCollege, setSelectedCollege] = useState<string>('');
   const [curriculum, setCurriculum] = useState<Record<string, Record<string, CurriculumCourse[]>> | null>(null);
   const [curriculumLoading, setCurriculumLoading] = useState(false);
-  const isEvaluationAvailable = true;
+  // 평가 가능 여부는 응답이 알려준다(진입요건·권장과목·1학년 교육과정 중 하나라도
+  // 등록돼 있는지). 근거가 0개인 학과는 어떤 학생에게나 같은 값이라 점수를 내지 않는다.
+  // 조회 자체는 항상 시도해야 이 플래그를 알 수 있으므로 fetch 게이트로는 쓰지 않는다.
 
   useEffect(() => {
     const fetchDepartments = async () => {
       try {
-        const response = await api.departments.list();
+        // 진입 대상 전공만 — 학생의 소속 계열은 분석 대상이 아니다.
+        const response = await api.departments.list(true);
         setDepartments(response.departments);
+
+        // 학생 목록에서 넘어올 때 학생 '본인의 소속 계열'이 초기 선택으로 실려 온다
+        // (StudentListView가 student.department.id를 넘긴다). 자연계열·인문사회계열은
+        // 학과가 아니라 진입 대상이 될 수 없으므로, 대상 목록에 없는 초기값은 버린다.
+        // 그대로 두면 선택 상자는 비어 있는데 점수 카드만 채워지는 상태가 된다.
+        setSelectedDepartmentId((current) =>
+          current && !response.departments.some((d) => String(d.id) === String(current))
+            ? null
+            : current
+        );
       } catch (error) {
         console.error('Failed to fetch departments:', error);
       }
@@ -80,28 +93,40 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   }, [selectedDepartmentId]);
 
   useEffect(() => {
-    if (student && selectedDepartmentId && isEvaluationAvailable) {
-      const fetchEvaluation = async () => {
-        try {
-          setEvaluationLoading(true);
-          const data = await api.evaluation.getStudentEvaluation(
-            student.student_id,
-            selectedDepartmentId
-          );
-          setEvaluationData(data);
-        } catch (error) {
-          console.error('Failed to fetch evaluation:', error);
-          setEvaluationData(null);
-        } finally {
-          setEvaluationLoading(false);
-        }
-      };
-      fetchEvaluation();
-    } else if (selectedDepartmentId && !isEvaluationAvailable) {
+    if (!student || !selectedDepartmentId) {
+      // 선택이 없으면 점수 카드도 비운다. 앞선 조회 결과를 그대로 두면
+      // '학과를 선택하세요'인데 점수만 떠 있는 상태가 된다.
       setEvaluationData(null);
       setEvaluationLoading(false);
+      return;
     }
-  }, [student, selectedDepartmentId, isEvaluationAvailable]);
+
+    // 학과를 바꾸는 동안 이전 학과의 점수가 남아 보이지 않도록 즉시 비운다.
+    let cancelled = false;
+    setEvaluationData(null);
+    setEvaluationLoading(true);
+
+    const fetchEvaluation = async () => {
+      try {
+        const data = await api.evaluation.getStudentEvaluation(
+          student.student_id,
+          selectedDepartmentId
+        );
+        if (!cancelled) setEvaluationData(data);
+      } catch (error) {
+        console.error('Failed to fetch evaluation:', error);
+        if (!cancelled) setEvaluationData(null);
+      } finally {
+        if (!cancelled) setEvaluationLoading(false);
+      }
+    };
+    fetchEvaluation();
+
+    // 빠르게 학과를 바꾸면 먼저 건 요청이 나중에 도착해 엉뚱한 학과 점수를 덮어쓸 수 있다.
+    return () => {
+      cancelled = true;
+    };
+  }, [student, selectedDepartmentId]);
 
   // Derived Summary States for Cards
   // entry_requirement (단수) 구조에서 읽기
@@ -112,14 +137,28 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   // 진입요건 %는 등급을 결정하는 규칙 점수(entry_requirement_score)를 그대로 사용한다.
   // reqCompleted/reqTotal은 백엔드가 최고 그룹의 qualifying/required로 채우므로 "X/Y 과목"이 %와 일치.
   const reqPercent = Math.round(entryRequirementScore);
+  // 요건이 등록되지 않은 학과는 점수가 공허참 100%다 — 만점처럼 보이면 안 되므로 카드에서 분리한다.
+  const reqHasData = entryReqData?.has_requirement ?? reqTotal > 0;
+  // 진입요건은 학칙이 정하는 관문이다. open(충족) / blocked(미충족) / unknown(미등록).
+  const entryGate: 'open' | 'blocked' | 'unknown' =
+    (evaluationData as any)?.entry_gate ?? entryReqData?.gate ?? 'unknown';
 
   // recommended_courses 구조에서 읽기 (total_courses, similar_completed, similar_rate)
   const recData = evaluationData?.analysis_json?.recommended_courses as any;
   const recTotal = recData?.total_courses ?? recData?.total ?? 0;
   const recCompleted = recData?.similar_completed ?? recData?.completed ?? 0;
   const recPercent = recData?.similar_rate ?? recData?.completion_rate ?? (evaluationData as any)?.recommended_similar_rate ?? 0;
+  const recHasData = recData?.has_data ?? recTotal > 0;
 
-  const overallScore = evaluationData?.overall_score || 0;
+  // 근거가 0개인 학과는 overall_score가 null로 온다 — 0점이라는 판정이 아니다.
+  const isEvaluationAvailable =
+    (evaluationData as any)?.is_evaluable ??
+    (evaluationData as any)?.analysis_json?.overall?.is_evaluable ??
+    true;
+  const overallScore = evaluationData?.overall_score ?? 0;
+  // 종합 점수가 실제로 몇 개 항목을 반영했는지 — 학과끼리 비교할 때 기준이 다름을 알린다.
+  const scoredCount =
+    ((evaluationData as any)?.analysis_json?.overall?.scored_components?.length ?? 3) as number;
 
   // 1) Main Content Renderer: Returns only the necessary content state (loading, error, or curriculum tables)
   const renderContent = () => {
@@ -223,7 +262,7 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.33} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-[20px] text-[#95430E] font-semibold leading-normal">
-                  선택한 학과는 현재 평가가 지원되지 않으나, 등록된 교육과정을 확인할 수 있습니다.
+                  이 학과는 진입요건·권장과목이 등록되지 않아 적합도를 계산할 수 없습니다. 등록된 교육과정은 아래에서 확인할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -237,7 +276,7 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
       <div className="bg-white border border-black/10 rounded-[14px] p-[36px] items-center text-center">
         <p className="text-[22px] text-[#6a7282]">
           {!isEvaluationAvailable
-            ? "선택한 학과는 현재 평가가 지원되지 않으며 등록된 교육과정이 없습니다."
+            ? "이 학과는 진입요건·권장과목·교육과정이 모두 등록되지 않아 적합도를 계산할 수 없습니다."
             : "등록된 교육과정 데이터가 없습니다."}
         </p>
       </div>
@@ -264,28 +303,43 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
           {/* 전공 진입 필수 */}
           <div className="bg-white border border-black/10 rounded-[14px] p-[37px] flex-1 flex flex-col gap-[12px] justify-center">
             <p className="text-[20px] text-[#6a7282]">전공 진입 필수</p>
-            <p className="text-[28px] font-bold text-[#101828]">{reqPercent}%</p>
-            <p className="text-[18px] text-[#6a7282]">{reqCompleted} / {reqTotal} 과목</p>
+            <p className="text-[28px] font-bold text-[#101828]">{reqHasData ? `${reqPercent}%` : "—"}</p>
+            <p className="text-[18px] text-[#6a7282]">
+              {reqHasData ? `${reqCompleted} / ${reqTotal} 과목` : "등록된 진입요건 없음"}
+            </p>
             <div className="bg-[#e5e7eb] h-1.5 rounded-full w-full overflow-hidden mt-1 relative">
-              <div className="bg-[#3b82f6] h-full rounded-full absolute left-0 top-0" style={{ width: `${Math.min(100, reqPercent)}%` }} />
+              <div className="bg-[#3b82f6] h-full rounded-full absolute left-0 top-0" style={{ width: `${reqHasData ? Math.min(100, reqPercent) : 0}%` }} />
             </div>
           </div>
 
           {/* 권장 과목 */}
           <div className="bg-white border border-black/10 rounded-[14px] p-[37px] flex-1 flex flex-col gap-[12px] justify-center">
             <p className="text-[20px] text-[#6a7282]">권장 과목</p>
-            <p className="text-[28px] font-bold text-[#101828]">{recPercent}%</p>
-            <p className="text-[18px] text-[#6a7282]">{recCompleted} / {recTotal} 과목</p>
+            <p className="text-[28px] font-bold text-[#101828]">{recHasData ? `${recPercent}%` : "—"}</p>
+            <p className="text-[18px] text-[#6a7282]">
+              {recHasData ? `${recCompleted} / ${recTotal} 과목` : "등록된 권장과목 없음"}
+            </p>
             <div className="bg-[#e5e7eb] h-1.5 rounded-full w-full overflow-hidden mt-1 relative">
-              <div className="bg-[#ef4444] h-full rounded-full absolute left-0 top-0" style={{ width: `${Math.min(100, recPercent)}%` }} />
+              <div className="bg-[#ef4444] h-full rounded-full absolute left-0 top-0" style={{ width: `${recHasData ? Math.min(100, recPercent) : 0}%` }} />
             </div>
           </div>
 
           {/* 전체 적합도 */}
           <div className="bg-white border border-black/10 rounded-[14px] p-[37px] flex-1 flex flex-col gap-[12px] justify-center">
             <p className="text-[20px] text-[#6a7282]">전체 적합도</p>
+            {/* 관문 상태가 헤드라인이다 — 요건 미충족이면 준비도가 높아도 진입할 수 없다. */}
+            {entryGate === 'blocked' && (
+              <p className="text-[18px] font-semibold text-[#b42318]">진입요건 미충족</p>
+            )}
+            {entryGate === 'open' && (
+              <p className="text-[18px] font-semibold text-[#067647]">진입요건 충족</p>
+            )}
             <p className="text-[28px] font-bold text-[#101828]">{overallScore}%</p>
-            <p className="text-[18px] text-[#6a7282]">종합 진입 준비도</p>
+            <p className="text-[18px] text-[#6a7282]">
+              {scoredCount >= 3
+                ? "종합 진입 준비도"
+                : `종합 진입 준비도 · ${scoredCount}개 항목 기준`}
+            </p>
             <div className="bg-[#e5e7eb] h-1.5 rounded-full w-full overflow-hidden mt-1 relative">
               <div className="bg-[#10b981] h-full rounded-full absolute left-0 top-0" style={{ width: `${Math.min(100, overallScore)}%` }} />
             </div>
