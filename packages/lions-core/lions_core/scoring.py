@@ -350,3 +350,80 @@ def ranking_key(gate_state: str, readiness_score: Optional[float]) -> Tuple[int,
     (게이트 우선순위, 준비도)의 사전식 비교라 미충족 60점이 충족 40점을 이길 수 없다.
     """
     return (_GATE_RANK.get(gate_state, 0), readiness_score if readiness_score is not None else -1.0)
+
+
+# ---------------------------------------------------------------------------
+# 상대 적합도 등급
+#
+# 절대 경계(GRADE_THRESHOLDS)로 등급을 매기면 A가 한 건도 안 나온다. 학생 한 명을
+# 38개 학과 전부에 대해 평가하므로 대부분 조합이 안 맞는 것이 정상이고, 실측에서
+# 전체 분포의 중앙값은 11.11인 반면 학생별 최고점은 중앙값 56.41이다. 절대 경계는
+# 데이터 충실도에도 취약해, 같은 경계를 요건 데이터가 희소한 상태와 채워진 상태에
+# 적용하면 A 비율이 6.1%와 18.7%로 갈린다.
+#
+# 그래서 등급은 "이 학생의 선택지 중 이 학과가 어디쯤인가"로 읽는다. 관문
+# (open/pending/blocked)이 '진입 가능한가'를 이미 말하고 있으므로 역할이 겹치지 않는다.
+# ---------------------------------------------------------------------------
+
+# 학생 내 상위 누적 비율 경계. 38개 학과 기준 A 약 4개, B 약 6개, C 약 9개, D 약 9개.
+RELATIVE_GRADE_BANDS: Tuple[Tuple[str, float], ...] = (
+    ("A", 0.10),
+    ("B", 0.25),
+    ("C", 0.50),
+    ("D", 0.75),
+)
+
+# 절대 준비도 상한. 순위만으로 등급을 주면 어느 학과와도 겹치는 과목이 없는 학생
+# (실측에서 학생별 최고점 최솟값이 0.00)에게도 A가 붙는다. 상대 등급을 매긴 뒤
+# 절대 점수가 뒷받침하지 못하면 이 표까지 낮춘다.
+RELATIVE_GRADE_SCORE_CAPS: Tuple[Tuple[str, float], ...] = (
+    ("A", 30.0),
+    ("B", 20.0),
+    ("C", 10.0),
+    ("D", 1.0),
+)
+
+_GRADE_SEVERITY = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+
+
+def _band_grade(rank: int, total: int) -> str:
+    """학생 내 순위(1부터)를 상위 누적 비율 밴드에 대응시킨다."""
+    if total <= 0:
+        return "F"
+    percentile = rank / total  # 1등이면 1/total, 꼴찌면 1.0
+    for grade, cutoff in RELATIVE_GRADE_BANDS:
+        if percentile <= cutoff:
+            return grade
+    return "F"
+
+
+def _score_cap(readiness_score: float) -> str:
+    """절대 준비도가 허용하는 최고 등급."""
+    for grade, minimum in RELATIVE_GRADE_SCORE_CAPS:
+        if readiness_score >= minimum:
+            return grade
+    return "F"
+
+
+def relative_grade(
+    gate_state: str,
+    readiness_score: Optional[float],
+    rank: Optional[int],
+    total: Optional[int],
+) -> Optional[str]:
+    """학생 내 상대 적합도 등급.
+
+    순위 밴드로 등급을 정하되 절대 준비도가 뒷받침하는 범위까지만 올린다.
+    순위 정보가 없으면(rank/total이 None) 절대 경계로 폴백한다 — 한 학과만 평가된
+    상태에서 그 학과가 자동으로 1등이 되어 A를 받는 일을 막는다.
+
+    blocked와 평가 불가(readiness_score None)에 등급을 주지 않는 정책은 grade_for와
+    동일하게 유지한다.
+    """
+    if gate_state == GATE_BLOCKED or readiness_score is None:
+        return None
+    if rank is None or total is None or total <= 1:
+        return classify_grade(readiness_score)
+    band = _band_grade(rank, total)
+    cap = _score_cap(readiness_score)
+    return band if _GRADE_SEVERITY[band] <= _GRADE_SEVERITY[cap] else cap

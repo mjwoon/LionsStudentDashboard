@@ -48,6 +48,8 @@ def test_get_student_evaluation_success():
         
         mock_eval_service_instance.evaluate_student.return_value = mock_result
         mock_eval_service_instance.get_curriculum_details.return_value = {}
+        # 상대 적합도 등급의 모수(학생의 학과 전체)를 비워 절대 경계 폴백으로 둔다.
+        mock_eval_service_instance.readiness_ranking.return_value = {}
         
         response = client.get(f"/api/evaluation/student/{student_id}/department/{department_id}")
         

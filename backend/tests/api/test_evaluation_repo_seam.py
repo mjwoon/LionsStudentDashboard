@@ -55,6 +55,8 @@ def test_cached_branch_via_repository_seam():
             CR.return_value.get.return_value = cached
 
             ES.return_value.get_curriculum_details.return_value = {}
+            # 상대 적합도 등급의 모수(학생의 학과 전체)를 비워 절대 경계 폴백으로 둔다.
+            ES.return_value.readiness_ranking.return_value = {}
 
             resp = client.get("/api/evaluation/student/20250001/department/9")
     finally:

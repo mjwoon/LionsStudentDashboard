@@ -483,6 +483,61 @@ class EvaluationService:
     
     # ==================== Neo4j 유사도 통합 ====================
 
+    def readiness_ranking(
+        self,
+        student_id: int,
+        admission_year: Optional[int] = None,
+    ) -> Dict[int, Tuple[int, int]]:
+        """학생의 평가 대상 학과를 추천 순서대로 세워 학과별 (순위, 모수)를 돌려준다.
+
+        등급을 상대 적합도로 매기려면 그 학생의 선택지 전체가 필요하다. 단일 학과
+        조회만으로는 모수를 알 수 없고, 저장된 행만 쓰면 '누가 어떤 조합을 열어봤는가'에
+        따라 등급이 달라진다. 그래서 평가 대상 학과를 모두 확보하되, 이미 계산된
+        overall_score가 있으면 재계산하지 않는다(첫 조회만 느리다).
+
+        정렬은 scoring.ranking_key를 그대로 쓴다. 화면에 보이는 추천 순서와 등급이
+        어긋나지 않게 하기 위해서다. 평가 근거가 없는 학과(overall_score None)는
+        순위에서 빠진다.
+
+        Returns:
+            {department_id: (rank, total)} — rank는 1부터, total은 평가 가능한 학과 수.
+        """
+        from lions_core.repositories import DepartmentRepository
+
+        year = (
+            admission_year
+            if admission_year is not None
+            else self.get_admission_year_from_student_id(str(student_id))
+        )
+        cache_repo = EvaluationCacheRepository(self.db)
+        entries = []
+        for dept in DepartmentRepository(self.db).list_evaluation_targets():
+            score = None
+            gate = scoring.GATE_UNKNOWN
+            cached = cache_repo.get(student_id, dept.id)
+            if cached is not None and cached.overall_score is not None:
+                score = float(cached.overall_score)
+                analysis = cached.analysis_json or {}
+                gate = (analysis.get("entry_requirement") or {}).get(
+                    "gate", scoring.GATE_UNKNOWN
+                )
+            else:
+                try:
+                    result = self.evaluate_student(
+                        student_id, dept.id, year, save_to_db=True
+                    )
+                except Exception:
+                    continue
+                score = result.get("overall_score")
+                gate = result.get("entry_gate", scoring.GATE_UNKNOWN)
+            if score is None:
+                continue
+            entries.append((dept.id, gate, score))
+
+        entries.sort(key=lambda e: scoring.ranking_key(e[1], e[2]), reverse=True)
+        total = len(entries)
+        return {dept_id: (rank, total) for rank, (dept_id, _, _) in enumerate(entries, 1)}
+
     def _is_graph_available(self) -> bool:
         """
         Neo4j 연결 가능 여부 확인
