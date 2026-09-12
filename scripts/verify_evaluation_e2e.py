@@ -30,8 +30,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SEED_PLAN = [
     ("org", "group1_colleges_depts_.csv"),
     ("courses", "group3_courses.csv"),
-    ("curriculum", "group4_교육과정_full.csv"),
-    ("requirements", "group5_requirements_recs_full.csv"),
+    ("curriculum", "group4_교육과정_전체.csv"),
+    ("requirements", "group5_requirements_recs.csv"),
     ("students", "sample_students_300.csv"),
     ("enrollments", "sample_enrollments_300.csv"),
 ]

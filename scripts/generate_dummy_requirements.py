@@ -3,18 +3,21 @@
 
 왜 필요한가
 -----------
-group5_requirements_recs.csv에는 실제 학사 규정 기반 데이터가 13개 학과분만 있다.
-평가 대상 38개 학과 중 34개에 진입요건이, 25개에 권장과목이 없어서 종합 적합도가
-'교육과정 이수율' 한 항목으로만 계산되고, 학과끼리 기준이 달라 비교가 성립하지 않는다.
-데모·개발 환경에서 3개 항목이 모두 살아있는 상태를 재현하기 위한 **합성 데이터**다.
+저장소의 요건 데이터는 원래 4개 학과분 진입요건, 13개 학과분 권장과목뿐이었다.
+평가 대상 38개 학과 중 나머지는 종합 적합도가 '교육과정 이수율' 한 항목으로만
+계산되고, 학과끼리 기준이 달라 비교가 성립하지 않는다. 개발·실험 환경에서 3개 항목이
+모두 살아있는 상태를 재현하기 위한 **합성 데이터**다.
 
-    ⚠️  실제 학사 규정이 아니다. 운영 데이터로 쓰면 안 된다.
-        모든 요건 설명에 '[더미]' 접두어가 붙는다.
+    ⚠️  실제 학사 규정이 아니다. 생성된 모든 행의 requirement_text에
+        '[더미]' 접두어가 붙으므로, 이 접두어로 원본과 구분할 수 있다.
+
+원본 CSV에 제자리(in-place)로 병합한다. 재실행하면 이전에 생성한 '[더미]' 행을
+먼저 걷어내고 다시 만들므로 몇 번을 돌려도 결과가 같다(중복이 쌓이지 않는다).
 
 생성 규칙 (결정론적 — 같은 입력이면 항상 같은 출력)
 --------------------------------------------------
 1. 대상: 평가 대상 학과(dept_id > 100) 중 라이언스 칼리지 계열(LIONS*) 제외.
-   이미 실제 데이터가 있는 학과는 해당 항목을 건너뛴다(덮어쓰지 않는다).
+   원본('[더미]'가 아닌 행)에 이미 데이터가 있는 학과는 그 항목을 건너뛴다.
 2. 후보 과목 풀: 그 학과 1학년 '전공기초' → 없으면 '전공핵심'.
    교육과정이 아예 없는 세부전공(예: 신소재반도체공학전공)은 같은 단과대학에서
    dept_id가 바로 아래이면서 교육과정을 가진 학과(=모학부)의 과목을 차용한다.
@@ -38,11 +41,10 @@ group5_requirements_recs.csv에는 실제 학사 규정 기반 데이터가 13�
 ------
     python3 scripts/generate_dummy_requirements.py
 
-출력
-----
-    group5_requirements_recs_dummy.csv   요건·권장 더미 행만 (검토용)
-    group5_requirements_recs_full.csv    요건·권장 실제 + 더미 (업로드용)
-    group4_교육과정_full.csv              교육과정 실제 + 더미 (업로드용)
+갱신 대상 (제자리 병합)
+----------------------
+    group5_requirements_recs.csv   진입요건 + 권장과목
+    group4_교육과정_전체.csv        1학년 교육과정 (상속분 추가)
 """
 
 import csv
@@ -57,9 +59,10 @@ REAL_CSV = ROOT / "group5_requirements_recs.csv"
 ENROLLMENTS_CSV = ROOT / "sample_enrollments_300.csv"
 COURSES_CSV = ROOT / "group3_courses.csv"  # 과목 마스터 — 요건 과목의 외래키 대상
 
-DUMMY_OUT = ROOT / "group5_requirements_recs_dummy.csv"
-FULL_OUT = ROOT / "group5_requirements_recs_full.csv"
-CURRICULUM_FULL_OUT = ROOT / "group4_교육과정_full.csv"
+# 제자리 병합 — 별도 산출물을 두지 않는다. 파일이 둘이면 업로드할 때 어느 쪽이
+# 맞는지 매번 헷갈리고, seeding 스크립트마다 파일명을 바꿔야 한다.
+REQUIREMENTS_OUT = REAL_CSV
+CURRICULUM_OUT = CURRICULUM_CSV
 
 HEADER = [
     "dept_code", "admission_year", "requirement_group", "target_grade_level",
@@ -127,12 +130,17 @@ def inherited_curriculum_rows(curriculum, parent, dept):
     ]
 
 
-def requirement_rows(dept_code, candidates, borrowed_from):
-    """ELEC 관용구 그대로: 같은 후보 집합에 OR로 묶인 두 그룹."""
-    note = f" (교육과정 차용: {borrowed_from})" if borrowed_from else ""
+def requirement_rows(dept_code, candidates):
+    """ELEC 관용구 그대로: 같은 후보 집합에 OR로 묶인 두 그룹.
+
+    모학부에서 차용했다는 주석은 넣지 않는다. 1회차에 교육과정이 상속되고 나면
+    2회차에는 그 학과가 제 교육과정을 갖게 되어 '차용'이 아니게 되고, 그러면
+    requirement_text가 실행 횟수에 따라 달라져 멱등성이 깨진다.
+    상속 관계는 교육과정 파일(설강학과=모학부, 학과ID=세부전공)과 실행 로그에 남는다.
+    """
     text = (
         f"{DUMMY_PREFIX} 아래 {len(candidates)}개 과목 중 "
-        f"성적 B(3.0) 이상 2과목 또는 A(4.0) 이상 1과목 필수{note}"
+        f"성적 B(3.0) 이상 2과목 또는 A(4.0) 이상 1과목 필수"
     )
     groups = [("1.0", "A", "1.0"), ("2.0", "B", str(min(2, len(candidates))) + ".0")]
 
@@ -155,10 +163,26 @@ def requirement_rows(dept_code, candidates, borrowed_from):
 
 
 def recommendation_rows(dept_code, candidates):
+    """권장과목 행. requirement_text에 마커만 채운다.
+
+    업로드 Step 3은 dept_code와 recommended_course만 읽고, Step 1·2는 적용학번·
+    요건그룹·학수번호가 비어 있어 이 행을 건너뛴다. 따라서 마커를 넣어도 동작은
+    그대로이고, 재실행 시 생성분을 골라낼 수 있게 된다.
+    """
     return [
-        {**{k: "" for k in HEADER}, "dept_code": dept_code, "recommended_course": c["교과목이름"]}
+        {
+            **{k: "" for k in HEADER},
+            "dept_code": dept_code,
+            "requirement_text": f"{DUMMY_PREFIX} 권장과목",
+            "recommended_course": c["교과목이름"],
+        }
         for c in candidates[:MAX_RECOMMENDED]
     ]
+
+
+def is_generated(row):
+    """이 스크립트가 이전에 만든 행인가."""
+    return (row.get("requirement_text") or "").startswith(DUMMY_PREFIX)
 
 
 def write_csv_with(path, header, rows):
@@ -175,8 +199,12 @@ def write_csv(path, rows):
 def main():
     depts = read_csv(DEPTS_CSV)
     curriculum = read_csv(CURRICULUM_CSV)
-    real_rows = read_csv(REAL_CSV)
     enrollments = read_csv(ENROLLMENTS_CSV)
+
+    # 이전에 만든 행을 걷어내고 원본만 남긴다 → 몇 번을 돌려도 결과가 같다.
+    existing_rows = read_csv(REAL_CSV)
+    real_rows = [r for r in existing_rows if not is_generated(r)]
+    regenerated = len(existing_rows) - len(real_rows)
 
     enrollment_counts = Counter(e["학수번호"] for e in enrollments)
     master_codes = {c["학수번호"] for c in read_csv(COURSES_CSV)}
@@ -225,18 +253,16 @@ def main():
             continue
 
         candidates = pool[:MAX_CANDIDATES]
-        borrowed = parent["dept_name"] if (parent and not own_pool) else None
         if code not in has_requirement:
-            dummy_rows.extend(requirement_rows(code, candidates, borrowed))
+            dummy_rows.extend(requirement_rows(code, candidates))
             req_added += 1
         if code not in has_recommendation:
             dummy_rows.extend(recommendation_rows(code, candidates))
             rec_added += 1
 
-    write_csv(DUMMY_OUT, dummy_rows)
-    write_csv(FULL_OUT, [{k: r.get(k, "") for k in HEADER} for r in real_rows] + dummy_rows)
+    write_csv(REQUIREMENTS_OUT, [{k: r.get(k, "") for k in HEADER} for r in real_rows] + dummy_rows)
     write_csv_with(
-        CURRICULUM_FULL_OUT,
+        CURRICULUM_OUT,
         CURRICULUM_HEADER,
         [{k: r.get(k, "") for k in CURRICULUM_HEADER} for r in curriculum] + curriculum_dummy,
     )
@@ -246,9 +272,12 @@ def main():
     print(f"권장과목 더미 생성   : {rec_added}개 학과")
     print(f"후보 과목 없어 제외  : {len(skipped)}개 학과 {skipped if skipped else ''}")
     print(f"교육과정 상속        : {len(inherited)}개 학과 {inherited if inherited else ''}")
-    print(f"더미 행              : {len(dummy_rows)}행 -> {DUMMY_OUT.name}")
-    print(f"통합(실제+더미)      : {len(real_rows) + len(dummy_rows)}행 -> {FULL_OUT.name}")
-    print(f"교육과정 통합        : {len(curriculum) + len(curriculum_dummy)}행 -> {CURRICULUM_FULL_OUT.name}")
+    if regenerated:
+        print(f"이전 생성분 교체     : {regenerated}행 제거 후 재생성")
+    print(f"원본(비-더미) 행     : {len(real_rows)}행")
+    print(f"생성 행              : {len(dummy_rows)}행")
+    print(f"요건 파일            : {len(real_rows) + len(dummy_rows)}행 -> {REQUIREMENTS_OUT.name}")
+    print(f"교육과정 파일        : {len(curriculum) + len(curriculum_dummy)}행 -> {CURRICULUM_OUT.name}")
 
 
 if __name__ == "__main__":
