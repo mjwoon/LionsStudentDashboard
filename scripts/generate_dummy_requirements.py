@@ -78,7 +78,20 @@ LIONS_CODES = {"LIONS1", "LIONS2", "LIONS3"}
 ADMISSION_YEAR = "2026.0"
 MAX_CANDIDATES = 5
 MAX_RECOMMENDED = 3
+# 마커는 lions_core.constants가 단일 진실 원천이다 — 운영 업로드 차단과 기동 시
+# 탐지가 같은 값을 봐야 한다. 이 스크립트는 의존성 없이 돌아야 하므로 값을 복제하되,
+# 아래 검증으로 어긋나면 즉시 드러나게 한다.
 DUMMY_PREFIX = "[더미]"
+
+try:
+    from lions_core.constants import DUMMY_DATA_MARKER as _CANONICAL_MARKER
+except ImportError:
+    pass  # 워크스페이스 밖에서 단독 실행
+else:
+    assert DUMMY_PREFIX == _CANONICAL_MARKER, (
+        f"마커 불일치: 생성기 {DUMMY_PREFIX!r} vs lions_core {_CANONICAL_MARKER!r}. "
+        "운영 차단이 생성 데이터를 못 알아봅니다."
+    )
 
 
 def read_csv(path):

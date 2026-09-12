@@ -43,6 +43,23 @@ EVALUATION_WEIGHTS = {
     "curriculum_completion": 0.3,  # 교육과정(1학년) 유사 이수
 }
 
+# ============================================================================
+# 합성(더미) 데이터 표식
+# ============================================================================
+
+# scripts/generate_dummy_requirements.py가 만든 행의 requirement_text 접두어.
+# 이 표식이 유일한 식별 수단이다 — 생성 데이터와 원본이 같은 CSV에 병합돼 있고,
+# requirement_text는 API 응답에도 화면에도 실리지 않기 때문이다. 운영 환경의
+# 업로드 차단(routers/admin_upload_grouped)과 기동 시 탐지(db_migrations)가
+# 같은 값을 봐야 하므로 여기에 둔다.
+DUMMY_DATA_MARKER = "[더미]"
+
+
+def is_dummy_requirement_text(text) -> bool:
+    """합성 데이터로 표시된 요건 설명인가."""
+    return isinstance(text, str) and text.lstrip().startswith(DUMMY_DATA_MARKER)
+
+
 # 유사과목 인정 최소 유사도 (Neo4j SIMILAR_TO). 평가 서비스 전용 임계값.
 SIMILARITY_THRESHOLD = 0.7
 

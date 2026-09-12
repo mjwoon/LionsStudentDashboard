@@ -140,7 +140,7 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   // 요건이 등록되지 않은 학과는 점수가 공허참 100%다 — 만점처럼 보이면 안 되므로 카드에서 분리한다.
   const reqHasData = entryReqData?.has_requirement ?? reqTotal > 0;
   // 진입요건은 학칙이 정하는 관문이다. open(충족) / blocked(미충족) / unknown(미등록).
-  const entryGate: 'open' | 'blocked' | 'unknown' =
+  const entryGate: 'open' | 'pending' | 'blocked' | 'unknown' =
     (evaluationData as any)?.entry_gate ?? entryReqData?.gate ?? 'unknown';
 
   // recommended_courses 구조에서 읽기 (total_courses, similar_completed, similar_rate)
@@ -330,6 +330,10 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
             {/* 관문 상태가 헤드라인이다 — 요건 미충족이면 준비도가 높아도 진입할 수 없다. */}
             {entryGate === 'blocked' && (
               <p className="text-[18px] font-semibold text-[#b42318]">진입요건 미충족</p>
+            )}
+            {/* 아직 안 들은 것은 차단이 아니다 — 1학년에게는 정상 상태다. */}
+            {entryGate === 'pending' && (
+              <p className="text-[18px] font-semibold text-[#b54708]">진입요건 과목 미이수</p>
             )}
             {entryGate === 'open' && (
               <p className="text-[18px] font-semibold text-[#067647]">진입요건 충족</p>

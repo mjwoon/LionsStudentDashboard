@@ -12,7 +12,8 @@ import logging
 import os
 from pathlib import Path
 
-from lions_core.db import engine, init_db
+from lions_core.constants import DUMMY_DATA_MARKER
+from lions_core.db import SessionLocal, engine, init_db
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -68,3 +69,49 @@ def init_schema() -> None:
         _upgrade_via_alembic()
     else:
         init_db()
+
+    warn_if_dummy_requirements_present()
+
+
+def count_dummy_requirements(db) -> int:
+    """DB에 남아 있는 합성(더미) 진입요건 수.
+
+    생성 데이터와 원본이 같은 CSV에 병합돼 있고 requirement_text는 API 응답에도
+    화면에도 실리지 않으므로, DB를 직접 들여다보는 것 말고는 알 방법이 없다.
+    """
+    from models.models import DepartmentEntryRequirement
+
+    return (
+        db.query(DepartmentEntryRequirement)
+        .filter(DepartmentEntryRequirement.requirement_text.like(f"{DUMMY_DATA_MARKER}%"))
+        .count()
+    )
+
+
+def warn_if_dummy_requirements_present() -> None:
+    """운영에 합성 요건이 들어가 있으면 기동 로그에 크게 남긴다.
+
+    기동을 거부하지는 않는다. 데이터 상태 때문에 서비스를 통째로 내리는 것은
+    과하고, 이 상황은 사람이 데이터를 바로잡아야 풀리기 때문이다. 대신 놓칠 수
+    없게 ERROR로 남긴다 — 학생이 존재하지 않는 요건을 '충족'으로 보고 진로를
+    정하는 것이 이 문제의 실제 피해다.
+    """
+    if (os.getenv("APP_ENV") or "").lower() != "production":
+        return
+
+    try:
+        with SessionLocal() as db:
+            count = count_dummy_requirements(db)
+    except Exception as exc:  # 탐지 실패가 기동을 막아서는 안 된다
+        logger.warning("더미 데이터 점검을 건너뜀: %s", exc)
+        return
+
+    if count:
+        logger.error(
+            "운영 DB에 합성(더미) 진입요건 %d건이 있습니다. "
+            "scripts/generate_dummy_requirements.py가 만든 데이터이며 실제 학사 규정이 "
+            "아닙니다. 학생에게 존재하지 않는 요건이 '충족'으로 표시됩니다. "
+            "requirement_text가 '%s'로 시작하는 행을 제거하고 실제 규정으로 교체하세요.",
+            count,
+            DUMMY_DATA_MARKER,
+        )

@@ -122,8 +122,10 @@ def verify_no_vacuous_full_marks(base, c):
     c.check(len(overall["scored_components"]) == 3, "세 항목이 모두 반영된다")
     c.check(r["overall_score"] < 70,
             f"요건 미충족 학생이 70점 미만이다 (실제 {r['overall_score']})")
-    c.check(r["entry_gate"] == "blocked", "진입요건 관문이 blocked다")
-    c.check(r["grade"] is None, "관문을 못 넘으면 등급을 주지 않는다")
+    # 이 학생은 요건 후보 과목을 아직 안 들었다 → 차단이 아니라 진행 전(pending).
+    # 2학년 진입을 준비하는 1학년에게 미이수는 정상 상태다.
+    c.check(r["entry_gate"] == "pending", f'진입요건 관문이 pending이다 (실제 {r["entry_gate"]})')
+    c.check(r["grade"] is not None, "미이수는 차단이 아니므로 준비도 등급은 부여된다")
 
 
 def verify_gate_dominates_ranking(base, c):
@@ -134,15 +136,20 @@ def verify_gate_dominates_ranking(base, c):
 
     c.check(not (LIONS_TRACKS & set(names)), "추천 목록에 라이언스 계열이 없다")
 
-    order = {"open": 2, "unknown": 1, "blocked": 0}
+    # scoring._GATE_RANK와 같은 순서: 충족 > 미이수 > 요건미등록 > 성적미달
+    order = {"open": 3, "pending": 2, "unknown": 1, "blocked": 0}
     gates = [order.get(r.get("entry_gate", "unknown"), 0)
              for r in results if r.get("is_evaluable", True)]
     c.check(gates == sorted(gates, reverse=True),
-            "요건 충족 학과가 미충족 학과보다 항상 위에 온다")
+            "게이트 우선순위가 준비도 점수를 지배한다")
 
     graded = [r for r in results if r.get("grade") is not None]
     c.check(all(r.get("entry_gate") != "blocked" for r in graded),
-            "등급이 붙은 학과 중 요건 미충족은 없다")
+            "등급이 붙은 학과 중 '성적 미달로 차단'은 없다")
+
+    states = {r.get("entry_gate") for r in results}
+    c.check("pending" in states or "open" in states,
+            f"관문 상태가 blocked 하나로 뭉개지지 않는다 (관측: {sorted(s for s in states if s)})")
 
 
 def verify_null_score_roundtrip(base, c):

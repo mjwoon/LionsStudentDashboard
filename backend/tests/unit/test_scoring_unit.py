@@ -173,7 +173,9 @@ def test_rules_grade_below_target_excluded():
 
 def test_breakdown_no_groups():
     b = scoring.entry_requirement_breakdown([], _completed([]))
-    assert b == {"score": 100.0, "required": 0, "qualifying": 0, "satisfied": True, "has_requirement": False}
+    # attempted: '아직 안 들음'과 '들었는데 성적 미달'을 가르기 위해 추가된 키.
+    assert b == {"score": 100.0, "required": 0, "qualifying": 0, "attempted": 0,
+                 "satisfied": True, "has_requirement": False}
 
 
 def test_breakdown_reports_best_group_required_and_qualifying():
