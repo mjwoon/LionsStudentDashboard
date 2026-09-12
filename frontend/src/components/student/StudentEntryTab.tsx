@@ -55,6 +55,16 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
         // 진입 대상 전공만 — 학생의 소속 계열은 분석 대상이 아니다.
         const response = await api.departments.list(true);
         setDepartments(response.departments);
+
+        // 학생 목록에서 넘어올 때 학생 '본인의 소속 계열'이 초기 선택으로 실려 온다
+        // (StudentListView가 student.department.id를 넘긴다). 자연계열·인문사회계열은
+        // 학과가 아니라 진입 대상이 될 수 없으므로, 대상 목록에 없는 초기값은 버린다.
+        // 그대로 두면 선택 상자는 비어 있는데 점수 카드만 채워지는 상태가 된다.
+        setSelectedDepartmentId((current) =>
+          current && !response.departments.some((d) => String(d.id) === String(current))
+            ? null
+            : current
+        );
       } catch (error) {
         console.error('Failed to fetch departments:', error);
       }
@@ -83,24 +93,39 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   }, [selectedDepartmentId]);
 
   useEffect(() => {
-    if (student && selectedDepartmentId) {
-      const fetchEvaluation = async () => {
-        try {
-          setEvaluationLoading(true);
-          const data = await api.evaluation.getStudentEvaluation(
-            student.student_id,
-            selectedDepartmentId
-          );
-          setEvaluationData(data);
-        } catch (error) {
-          console.error('Failed to fetch evaluation:', error);
-          setEvaluationData(null);
-        } finally {
-          setEvaluationLoading(false);
-        }
-      };
-      fetchEvaluation();
+    if (!student || !selectedDepartmentId) {
+      // 선택이 없으면 점수 카드도 비운다. 앞선 조회 결과를 그대로 두면
+      // '학과를 선택하세요'인데 점수만 떠 있는 상태가 된다.
+      setEvaluationData(null);
+      setEvaluationLoading(false);
+      return;
     }
+
+    // 학과를 바꾸는 동안 이전 학과의 점수가 남아 보이지 않도록 즉시 비운다.
+    let cancelled = false;
+    setEvaluationData(null);
+    setEvaluationLoading(true);
+
+    const fetchEvaluation = async () => {
+      try {
+        const data = await api.evaluation.getStudentEvaluation(
+          student.student_id,
+          selectedDepartmentId
+        );
+        if (!cancelled) setEvaluationData(data);
+      } catch (error) {
+        console.error('Failed to fetch evaluation:', error);
+        if (!cancelled) setEvaluationData(null);
+      } finally {
+        if (!cancelled) setEvaluationLoading(false);
+      }
+    };
+    fetchEvaluation();
+
+    // 빠르게 학과를 바꾸면 먼저 건 요청이 나중에 도착해 엉뚱한 학과 점수를 덮어쓸 수 있다.
+    return () => {
+      cancelled = true;
+    };
   }, [student, selectedDepartmentId]);
 
   // Derived Summary States for Cards
