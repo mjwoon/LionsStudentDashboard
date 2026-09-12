@@ -163,8 +163,10 @@ class EvaluationResponseBuilder:
                 "score": entry_breakdown["score"],
                 "total_courses": entry_breakdown["required"],
                 "completed_courses": entry_breakdown["qualifying"],
+                # 성적과 무관한 이수 시도 수. 미이수(pending)와 성적 미달(blocked) 구분용.
+                "attempted_courses": entry_breakdown.get("attempted", 0),
                 "has_requirement": entry_breakdown["has_requirement"],
-                # open(충족) / blocked(미충족) / unknown(요건 미등록).
+                # open(충족) / pending(미이수) / blocked(성적 미달) / unknown(요건 미등록).
                 # 화면 헤드라인과 학과 추천 정렬이 이 값을 따른다.
                 "gate": scoring.entry_gate_state(entry_breakdown),
                 "details": entry_requirement_details,

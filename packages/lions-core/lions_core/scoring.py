@@ -164,16 +164,23 @@ def entry_requirement_breakdown(
           "score": 최고 그룹 진행률(0~100, round2),
           "required": 그 그룹의 required_count,
           "qualifying": 그 그룹의 자격 이수 과목수(required로 clamp, 표시용),
+          "attempted": 그 그룹의 후보과목 중 성적과 무관하게 이수한 과목수,
           "satisfied": score >= 100,
           "has_requirement": 그룹 존재 여부,
         }
         그룹이 없으면 score=100, has_requirement=False.
+
+    attempted가 필요한 이유: qualifying만 세면 '아직 안 들은 학생'과 '들었는데 성적이
+    모자란 학생'이 똑같이 0으로 떨어진다. 이 시스템의 대상은 2학년 진입을 준비하는
+    1학년이라 요건 과목 미이수가 정상 상태다. 둘을 구분해야 '진행 전'과 '차단'을
+    가를 수 있다(entry_gate_state 참고).
     """
     if not groups:
         return {
             "score": 100.0,
             "required": 0,
             "qualifying": 0,
+            "attempted": 0,
             "satisfied": True,
             "has_requirement": False,
         }
@@ -186,6 +193,7 @@ def entry_requirement_breakdown(
     best_progress = -1.0
     best_required = 0
     best_qualifying = 0
+    best_attempted = 0
     for group in groups:
         required = group["required_count"]
         qualifying = sum(
@@ -193,17 +201,21 @@ def entry_requirement_breakdown(
             for code in group["candidate_codes"]
             if completed_numeric.get(code, 0.0) >= group["target_min"]
         )
+        # 성적과 무관하게 '이수 이력이 있는' 후보 과목 수.
+        attempted = sum(1 for code in group["candidate_codes"] if code in completed_numeric)
         progress = 100.0 if required <= 0 else min(qualifying / required, 1.0) * 100
         if progress > best_progress:
             best_progress = progress
             best_required = required
             best_qualifying = min(qualifying, required) if required > 0 else qualifying
+            best_attempted = min(attempted, required) if required > 0 else attempted
 
     score = round(best_progress, 2)
     return {
         "score": score,
         "required": best_required,
         "qualifying": best_qualifying,
+        "attempted": best_attempted,
         "satisfied": score >= 100.0,
         "has_requirement": True,
     }
@@ -293,26 +305,39 @@ def is_evaluable(components: Dict[str, Tuple[float, bool]]) -> bool:
 # 담고 있어 정보 손실이 없다), 등급과 순위는 게이트가 지배하게 한다.
 
 GATE_OPEN = "open"          # 요건 충족 — 진입 가능
-GATE_BLOCKED = "blocked"    # 요건 미충족 — 진입 불가
+GATE_PENDING = "pending"    # 요건 과목 미이수 — 아직 진행 전(1학년의 정상 상태)
+GATE_BLOCKED = "blocked"    # 요건 과목을 들었으나 성적 미달 — 실제로 막힘
 GATE_UNKNOWN = "unknown"    # 요건 미등록 — 판정할 근거가 없음
 
-# 순위에서의 게이트 우선순위. '알 수 없음'은 확인된 미충족보다는 앞에 둔다 —
-# 데이터가 없다는 이유로 실제 미충족보다 불리해질 이유가 없다.
-_GATE_RANK = {GATE_OPEN: 2, GATE_UNKNOWN: 1, GATE_BLOCKED: 0}
+# 순위에서의 게이트 우선순위.
+# pending은 아직 기회가 열려 있으므로 unknown보다 앞, blocked는 확인된 미달이라 맨 뒤.
+# '알 수 없음'은 확인된 미달보다는 앞에 둔다 — 데이터가 없다는 이유로 실제 미달보다
+# 불리해질 이유가 없다.
+_GATE_RANK = {GATE_OPEN: 3, GATE_PENDING: 2, GATE_UNKNOWN: 1, GATE_BLOCKED: 0}
 
 
 def entry_gate_state(entry_breakdown: Dict) -> str:
-    """진입요건 관문 상태 — open / blocked / unknown."""
+    """진입요건 관문 상태 — open / pending / blocked / unknown.
+
+    '아직 안 들었다'와 '들었는데 성적이 모자란다'를 가른다. 대상이 2학년 진입을
+    준비하는 1학년이라 미이수는 정상 상태이고, 이를 차단으로 취급하면 대부분의
+    학생이 등급 없이 표시된다.
+    """
     if not entry_breakdown.get("has_requirement", False):
         return GATE_UNKNOWN
-    return GATE_OPEN if entry_breakdown.get("satisfied", False) else GATE_BLOCKED
+    if entry_breakdown.get("satisfied", False):
+        return GATE_OPEN
+    if entry_breakdown.get("attempted", 0) >= entry_breakdown.get("required", 0):
+        return GATE_BLOCKED
+    return GATE_PENDING
 
 
 def grade_for(gate_state: str, readiness_score: Optional[float]) -> Optional[str]:
-    """준비도 등급. 관문을 못 넘었으면 등급을 주지 않는다.
+    """준비도 등급. 관문이 확인된 미달(blocked)일 때만 등급을 주지 않는다.
 
-    등급은 '진입 가능성'의 요약이므로 blocked에는 붙을 수 없다. unknown까지 막으면
-    요건이 등록되지 않은 학과가 전부 빈칸이 되므로, 알 수 없음은 미충족과 구분한다.
+    등급은 '진입 가능성'의 요약이므로 확인된 미달에는 붙을 수 없다. 다만 pending
+    (아직 미이수)과 unknown(요건 미등록)까지 막으면 1학년 대부분과 요건 미등록
+    학과가 전부 빈칸이 되므로, 이 둘은 blocked와 구분한다.
     """
     if gate_state == GATE_BLOCKED or readiness_score is None:
         return None
