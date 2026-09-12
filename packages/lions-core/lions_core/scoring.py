@@ -13,6 +13,8 @@ EvaluationService에서 IO(DB 조회·그래프 접속)와 뒤섞여 있던 '계
 
 from typing import Callable, Dict, List, NamedTuple, Optional, Set, Tuple
 
+from lions_core.constants import classify_grade
+
 
 class SimilarMatch(NamedTuple):
     """유사과목 판정 결과.
@@ -213,3 +215,113 @@ def entry_requirement_score_by_rules(
 ) -> float:
     """진입요건 부분 점수 (0~100). entry_requirement_breakdown의 score(단일 진실)."""
     return entry_requirement_breakdown(groups, student_completed_courses)["score"]
+
+
+def weighted_overall_score(
+    components: Dict[str, Tuple[float, bool]],
+    weights: Dict[str, float],
+) -> float:
+    """존재하는 항목만으로 가중 평균 — 없는 항목의 가중치는 재정규화로 흡수한다.
+
+    배경: 요건·권장 데이터가 등록되지 않은 학과는 해당 항목이 공허참 100%로
+    채워진다. 이를 그대로 가중합하면 데이터 공백이 곧 가산점이 되어
+    (0.4 + 0.3) × 100 = 70점이 바닥으로 깔린다. '평가할 근거가 없다'와
+    '완벽히 충족했다'는 다르므로, 근거 없는 항목은 분자·분모 모두에서 뺀다.
+
+    Args:
+        components: {항목명: (점수 0~100, 데이터 존재 여부)}
+        weights: {항목명: 가중치}. components에 없는 키는 무시된다.
+
+    Returns:
+        존재 항목의 가중 평균(0~100, round2). 존재 항목이 없으면 0.0.
+    """
+    present = {
+        name: score
+        for name, (score, has_data) in components.items()
+        if has_data and weights.get(name, 0.0) > 0
+    }
+    total_weight = sum(weights[name] for name in present)
+    if total_weight <= 0:
+        return 0.0
+
+    weighted_sum = sum(present[name] * weights[name] for name in present)
+    return round(weighted_sum / total_weight, 2)
+
+
+def build_overall_components(
+    entry_breakdown: Dict,
+    recommended_similar_rate: float,
+    recommended_total: int,
+    curriculum_similar_rate: float,
+    curriculum_total: int,
+) -> Dict[str, Tuple[float, bool]]:
+    """종합 점수 입력 조립 — 항목별 (점수, 데이터 존재 여부).
+
+    서비스와 프레젠터가 같은 종합 점수를 내도록 조립 규칙을 한 곳에 둔다(단일 진실).
+    '데이터 존재 여부'는 각 항목의 평가 근거(요건 그룹/권장과목/1학년 과목)가
+    실제로 등록되어 있는지를 뜻한다.
+    """
+    return {
+        "entry_requirement": (
+            entry_breakdown["score"],
+            bool(entry_breakdown.get("has_requirement", False)),
+        ),
+        "recommended_courses": (recommended_similar_rate, recommended_total > 0),
+        "curriculum_completion": (curriculum_similar_rate, curriculum_total > 0),
+    }
+
+
+def is_evaluable(components: Dict[str, Tuple[float, bool]]) -> bool:
+    """평가 근거가 하나라도 있는가 — 없으면 점수 자체를 제시하면 안 된다.
+
+    근거가 0개인 학과는 어떤 학생을 넣어도 같은 값이 나온다(과거 만점, 지금 0점).
+    상수는 학생을 구분하지 못하므로 '0점'이 아니라 '평가 불가'로 다뤄야 하고,
+    학과 추천 정렬에서도 빠져야 한다.
+    """
+    return any(has_data for _, has_data in components.values())
+
+
+# ── 진입요건 게이트 ────────────────────────────────────────────────
+#
+# 진입요건은 '얼마나 준비됐나'와 성질이 다르다. 학칙이 정하는 관문(통과/불통과)이지
+# 가중치 30~40%짜리 연속값이 아니다. 가중합에 섞으면 다음 역전이 생긴다:
+#
+#   요건 완전 미충족 (0, 100, 100) -> 0.4*0   + 0.3*100 + 0.3*100 = 60점 (D)
+#   요건 완전 충족   (100, 0,  0)  -> 0.4*100 + 0.3*0   + 0.3*0   = 40점 (F)
+#
+# 임계값을 어디로 옮겨도 사라지지 않는다. 점수는 준비도로 그대로 두되(요건 진행률까지
+# 담고 있어 정보 손실이 없다), 등급과 순위는 게이트가 지배하게 한다.
+
+GATE_OPEN = "open"          # 요건 충족 — 진입 가능
+GATE_BLOCKED = "blocked"    # 요건 미충족 — 진입 불가
+GATE_UNKNOWN = "unknown"    # 요건 미등록 — 판정할 근거가 없음
+
+# 순위에서의 게이트 우선순위. '알 수 없음'은 확인된 미충족보다는 앞에 둔다 —
+# 데이터가 없다는 이유로 실제 미충족보다 불리해질 이유가 없다.
+_GATE_RANK = {GATE_OPEN: 2, GATE_UNKNOWN: 1, GATE_BLOCKED: 0}
+
+
+def entry_gate_state(entry_breakdown: Dict) -> str:
+    """진입요건 관문 상태 — open / blocked / unknown."""
+    if not entry_breakdown.get("has_requirement", False):
+        return GATE_UNKNOWN
+    return GATE_OPEN if entry_breakdown.get("satisfied", False) else GATE_BLOCKED
+
+
+def grade_for(gate_state: str, readiness_score: Optional[float]) -> Optional[str]:
+    """준비도 등급. 관문을 못 넘었으면 등급을 주지 않는다.
+
+    등급은 '진입 가능성'의 요약이므로 blocked에는 붙을 수 없다. unknown까지 막으면
+    요건이 등록되지 않은 학과가 전부 빈칸이 되므로, 알 수 없음은 미충족과 구분한다.
+    """
+    if gate_state == GATE_BLOCKED or readiness_score is None:
+        return None
+    return classify_grade(readiness_score)
+
+
+def ranking_key(gate_state: str, readiness_score: Optional[float]) -> Tuple[int, float]:
+    """학과 추천 정렬 키 — 게이트가 점수를 지배한다.
+
+    (게이트 우선순위, 준비도)의 사전식 비교라 미충족 60점이 충족 40점을 이길 수 없다.
+    """
+    return (_GATE_RANK.get(gate_state, 0), readiness_score if readiness_score is not None else -1.0)

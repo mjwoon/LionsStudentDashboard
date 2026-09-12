@@ -72,8 +72,13 @@ class EvaluationCacheRepository:
         #   related_courses_score        ← recommended_similar_rate  (권장과목 유사 이수율)
         status.curriculum_completion_score = result.get('curriculum_similar_rate', 0)
         status.related_courses_score = result.get('recommended_similar_rate', 0)
-        status.overall_score = result['overall_score']
+        # 평가 근거가 0개인 학과는 overall_score가 None이다('0점'이 아니라 '평가 불가').
+        # 컬럼이 nullable이므로 그대로 저장하고, 충족 여부는 단정할 수 없으니 False로 둔다.
+        overall_score = result['overall_score']
+        status.overall_score = overall_score
         status.analysis_json = analysis_json
         status.calculated_at = result['evaluated_at']
-        status.is_satisfied = result['overall_score'] >= MIN_SATISFACTION_SCORE
+        status.is_satisfied = (
+            overall_score is not None and overall_score >= MIN_SATISFACTION_SCORE
+        )
         return status

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 대체 인정 유사도 임계값의 최적값 `t*`를 실험적으로 산출(RQ1)하고, 임계값 변화가 12,120건 평가의 점수·학과 순위에 미치는 영향을 측정(RQ2)하는 재현 가능한 실험 하니스를 만든다.
+**Goal:** 대체 인정 유사도 임계값의 최적값 `t*`를 실험적으로 산출(RQ1)하고, 임계값 변화가 12,000건(고유 학생 300 × 평가대상 학과 40) 평가의 점수·학과 순위에 미치는 영향을 측정(RQ2)하는 재현 가능한 실험 하니스를 만든다.
 
 **Architecture:** 순수 계산 유닛(표본추출·가중 지표·부트스트랩·κ·유사도 lookup·영향 지표)은 TDD로 개별 구현하고, LLM 레이블링·플롯·오케스트레이션은 그 위에서 조립한다. RQ1은 하이브리드 유사도(0.7·SBERT + 0.3·TF-IDF) 위에서 층화표본 400쌍을 LLM 골드·TF-IDF silver 두 GT로 채점해 가중 P/R/F1을 스윕한다. RQ2는 SQLite에 CSV를 시딩하고 `EvaluationService`에 유사도·가변 임계값을 주입(Neo4j 우회)해 임계값별 전면 재계산한다.
 
@@ -1186,7 +1186,7 @@ git commit -m "feat(experiment): CSV->SQLite seeding via grouped upload"
 
 ---
 
-## Task 13: RQ2 오케스트레이터 (CLI, 12,120건 재계산 + 영향 분석)
+## Task 13: RQ2 오케스트레이터 (CLI, 12,000건 재계산 + 영향 분석)
 
 **Files:**
 - Create: `graphDB/experiment_rq2.py`
@@ -1288,7 +1288,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: 소규모 스모크 실행** — 임의 t*로 파이프라인 검증:
 
 Run: `cd graphDB && python experiment_rq2.py --tstar 0.75`
-Expected: `results/rq2/`에 `evaluations_{0.6,0.7,0.75,0.8}.csv`(각 ~12,120행/전체 학과×학생), `ranking_stability.csv`, `grade_migration_*.csv`, `score_shift.png`, `summary.json` 생성. `ranking_stability`의 t=0.8 행은 ρ=1.0·top1=0.0(기준선 자기자신).
+Expected: `results/rq2/`에 `evaluations_{0.6,0.7,0.75,0.8}.csv`(각 12,000행 = 학생 300 × 학과 40), `ranking_stability.csv`, `grade_migration_*.csv`, `score_shift.png`, `summary.json` 생성. `ranking_stability`의 t=0.8 행은 ρ=1.0·top1=0.0(기준선 자기자신).
 
 - [ ] **Step 3: 산출물 확인** — Run: `cd graphDB && cat results/rq2/ranking_stability.csv results/rq2/summary.json`. 임계값이 낮아질수록 `n_additional_relations` 증가·top1_change_rate 증가 경향 확인.
 

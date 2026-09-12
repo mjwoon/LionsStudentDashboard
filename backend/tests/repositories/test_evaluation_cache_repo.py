@@ -101,3 +101,30 @@ def test_save_result_with_ai_summary(db):
     # analysis_json에도 주입 + 기존 키 보존
     assert status.analysis_json["ai_summary"] == "양호합니다"
     assert status.analysis_json["entry_requirement"] == {"score": 100}
+
+
+def test_save_result_handles_non_evaluable_null_score(db):
+    """평가 불가(overall_score=None) 결과도 저장할 수 있어야 한다.
+
+    근거가 0개인 학과는 점수를 내지 않는다. 예전에는 항상 숫자가 들어온다고 보고
+    `result['overall_score'] >= 70`을 그대로 비교해 None이 오면 TypeError로 터졌다.
+    """
+    _seed(db)
+    repo = EvaluationCacheRepository(db)
+
+    repo.save_result(
+        student_id=202400001,
+        department_id=101,
+        result={
+            "curriculum_similar_rate": 0.0,
+            "recommended_similar_rate": 0.0,
+            "overall_score": None,
+            "analysis_json": {"overall": {"score": None, "is_evaluable": False}},
+            "evaluated_at": datetime.now(timezone.utc),
+        },
+    )
+    db.commit()
+
+    row = db.query(StudentRequirementStatus).one()
+    assert row.overall_score is None
+    assert row.is_satisfied is False
