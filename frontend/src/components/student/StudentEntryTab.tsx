@@ -165,8 +165,12 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
     if (!selectedDepartmentId) return null;
 
     if (isEvaluationAvailable && evaluationLoading) {
+      // 등급을 학생 내 상대 위치로 매기면서 조회 한 번이 평가 대상 학과 전체를 훑는다.
+      // 캐시가 빈 첫 조회는 로컬 Postgres 실측 0.79초, 운영은 더 걸릴 수 있다.
+      // 아래 교육과정 로딩과 달리 여기만 정지된 텍스트여서 멈춘 것처럼 보였다.
       return (
         <div className="bg-white border border-black/10 rounded-[14px] p-[36px] items-center text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0e4a84] mb-3"></div>
           <p className="text-[22px] text-[#6a7282]">평가 데이터를 불러오는 중...</p>
         </div>
       );
