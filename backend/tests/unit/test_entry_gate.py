@@ -62,3 +62,75 @@ def test_ranking_places_unknown_between_open_and_blocked():
         > scoring.ranking_key("unknown", 90.0)
         > scoring.ranking_key("blocked", 90.0)
     )
+
+
+# ---------------------------------------------------------------------------
+# pending — '아직 안 들음'과 '들었는데 성적 미달'은 다르다
+#
+# 이 시스템의 대상은 자율전공학부 1학년이고 2학년 진입을 준비하는 단계다.
+# 요건 과목을 아직 안 들은 것은 정상 상태이지 차단 사유가 아니다. qualifying만
+# 세면 미이수 학생과 성적 미달 학생이 똑같이 0으로 떨어져 둘 다 blocked이 된다.
+# ---------------------------------------------------------------------------
+
+def _completed_with(details):
+    return {
+        "codes": {d["course_code"] for d in details},
+        "names": {d["course_name"] for d in details},
+        "details": details,
+    }
+
+
+def _course_detail(code, name, numeric):
+    return {"course_code": code, "course_name": name, "grade": "", "credits": 3,
+            "numeric_grade": numeric}
+
+
+def _group(codes, required=1, target_min=3.0):
+    return {"group": 1, "target_min": target_min, "required_count": required,
+            "candidate_codes": set(codes)}
+
+
+def test_breakdown_reports_attempted_regardless_of_grade():
+    """성적이 모자라도 '이수 시도'로는 잡힌다."""
+    completed = _completed_with([_course_detail("AAA1001", "과목A", 1.0)])
+    b = scoring.entry_requirement_breakdown([_group(["AAA1001"])], completed)
+
+    assert b["attempted"] == 1
+    assert b["qualifying"] == 0
+
+
+def test_breakdown_attempted_zero_when_never_taken():
+    completed = _completed_with([_course_detail("ZZZ9999", "다른과목", 4.5)])
+    b = scoring.entry_requirement_breakdown([_group(["AAA1001"])], completed)
+
+    assert b["attempted"] == 0
+    assert b["qualifying"] == 0
+
+
+def test_gate_pending_when_requirement_courses_not_taken_yet():
+    """미이수는 차단이 아니라 진행 전이다."""
+    breakdown = {"score": 0.0, "satisfied": False, "has_requirement": True,
+                 "required": 1, "attempted": 0}
+    assert scoring.entry_gate_state(breakdown) == "pending"
+
+
+def test_gate_blocked_only_when_attempted_but_short():
+    """들었는데 성적이 모자란 경우만 진짜 차단이다."""
+    breakdown = {"score": 0.0, "satisfied": False, "has_requirement": True,
+                 "required": 1, "attempted": 1}
+    assert scoring.entry_gate_state(breakdown) == "blocked"
+
+
+def test_grade_given_when_pending():
+    """미이수 학생에게까지 등급을 지우면 1학년 대부분이 빈칸이 된다."""
+    assert scoring.grade_for("pending", 55.0) == "F"
+
+
+def test_ranking_order_open_pending_unknown_blocked():
+    """요건 충족 > 미이수 > 요건 미등록 > 성적 미달."""
+    assert (
+        scoring.ranking_key("open", 10.0)
+        > scoring.ranking_key("pending", 90.0)
+        > scoring.ranking_key("unknown", 90.0)
+        > scoring.ranking_key("blocked", 90.0)
+    )
