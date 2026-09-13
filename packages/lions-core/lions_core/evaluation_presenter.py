@@ -35,7 +35,6 @@ class EvaluationResponseBuilder:
         for necessary in necessary_courses:
             course_code = necessary.get("course_code", "")
             course_name = necessary.get("course_name", "")
-            is_completed = course_code in completed_codes or course_name in completed_names
 
             # 어떤 과목으로 이수했는지 찾기
             matched_course = None
@@ -44,10 +43,17 @@ class EvaluationResponseBuilder:
                     matched_course = detail
                     break
 
+            # 수강 중인 과목은 codes/names에도 들어 있다(이수율에는 반영되므로).
+            # 여기서까지 이수로 세면 요건 상세가 "이수함"인데 점수는 0/1이 된다.
+            # 진입요건은 성적이 판정 기준이라 아직 성적이 없는 과목을 이수로 칠 수 없다.
+            is_in_progress = bool(matched_course and matched_course.get("in_progress"))
+            is_completed = matched_course is not None and not is_in_progress
+
             entry_requirement_details.append({
                 "course_code": course_code,
                 "course_name": course_name,
                 "is_completed": is_completed,
+                "is_in_progress": is_in_progress,
                 "matched_course": matched_course
             })
 

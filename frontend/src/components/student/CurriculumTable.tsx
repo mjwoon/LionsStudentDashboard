@@ -134,16 +134,14 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
                           </div>
                         </td>
                         <td className="px-[24px] text-[15px] text-[#6a7282] align-middle">
+                          {/* 비고는 '어디서 들었나'를 알리는 칸이다. 같은 학과 과목에 '동등인정'을
+                              붙이면 이수현황 칸과 같은 말을 반복할 뿐이고, 성적을 보지 않아
+                              F에도 붙었다. 타 학과 개설일 때만 그 학과명을 남긴다. */}
                           {(() => {
                             if (course.course_type === '교양필수') return '-';
                             if (course.enrolled_department_name) {
                               return (
                                 <span className="text-[#f59e0b]">{course.enrolled_department_name}</span>
-                              );
-                            }
-                            if (course.enrolled) {
-                              return (
-                                <span className="text-[#26BD89]">동등인정</span>
                               );
                             }
                             return '-';
