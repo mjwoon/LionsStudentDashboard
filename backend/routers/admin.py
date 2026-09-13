@@ -21,7 +21,9 @@ import json
 import logging
 import io
 import math
+import os
 import ssl
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,33 @@ def _get_redis_url():
         logger.warning("Upstash URL이 redis://로 시작합니다. rediss://로 변환합니다.")
         url = "rediss://" + url[len("redis://"):]
     return url
+
+
+# 큐에 넣은 작업을 우리 쪽에서도 적어 둔다.
+#
+# Celery 결과 키(celery-task-meta-*)는 워커가 실제로 집어야 생긴다. 그래서 그 키가
+# 없다는 것만으로는 세 경우를 구분할 수 없었다 — 오타 난 job_id, 방금 큐에 들어간
+# 작업, 워커가 죽어 영원히 안 돌 작업. 전부 PENDING으로 보였고 화면은 영원히 폴링했다.
+# 큐잉 시점을 남겨두면 '없음 / 대기 / 지연'을 가를 수 있다.
+JOB_REGISTRY_PREFIX = "lions:bulk-eval:job:"
+JOB_REGISTRY_TTL_SECONDS = 60 * 60 * 24        # 하루면 진행 상황을 되찾기에 충분하다
+# 이보다 오래 결과가 없으면 워커가 집지 않는 것으로 본다. 무료·유휴 상태의 워커가
+# 깨어나는 시간을 감안해 넉넉하게 둔다.
+JOB_STALE_AFTER_SECONDS = int(os.getenv("BULK_EVAL_STALE_AFTER_SECONDS", "300"))
+
+
+def job_registry_key(job_id: str) -> str:
+    return f"{JOB_REGISTRY_PREFIX}{job_id}"
+
+
+def _register_job(job_id: str) -> None:
+    """큐잉 사실을 기록한다. 실패해도 큐잉 자체를 되돌리지는 않는다."""
+    try:
+        _get_redis_client().setex(
+            job_registry_key(job_id), JOB_REGISTRY_TTL_SECONDS, str(time.time())
+        )
+    except Exception as e:
+        logger.warning(f"job 대장 기록 실패({job_id}): {e}")
 
 
 def _get_redis_client():
@@ -422,6 +451,8 @@ async def bulk_evaluate(
             }
         )
         
+        _register_job(task.id)
+
         return {
             "job_id": task.id,
             "status": "QUEUED",
@@ -448,6 +479,30 @@ async def get_job_status(job_id: str):
         # Celery는 결과를 'celery-task-meta-{task_id}' 키에 저장
         raw = r.get(f"celery-task-meta-{job_id}")
         if raw is None:
+            queued_at = r.get(job_registry_key(job_id))
+            if queued_at is None:
+                # 큐에 넣은 적이 없다. 화면이 폴링을 멈출 수 있어야 한다.
+                return {
+                    "job_id": job_id,
+                    "status": "NOT_FOUND",
+                    "error": "해당 작업을 찾을 수 없습니다. 이미 만료됐거나 실행된 적이 없습니다.",
+                }
+
+            try:
+                waited = time.time() - float(queued_at)
+            except (TypeError, ValueError):
+                waited = 0.0
+
+            if waited > JOB_STALE_AFTER_SECONDS:
+                return {
+                    "job_id": job_id,
+                    "status": "STALE",
+                    "error": (
+                        f"큐에 들어간 지 {int(waited // 60)}분이 지나도록 처리가 시작되지 않았습니다. "
+                        "AI 워커가 실행 중인지 확인하세요."
+                    ),
+                }
+
             return {
                 "job_id": job_id,
                 "status": "PENDING",
@@ -510,6 +565,8 @@ async def trigger_rebuild_graph():
         
         task = celery_app.send_task("rebuild_graph")
         
+        _register_job(task.id)
+
         return {
             "job_id": task.id,
             "status": "QUEUED",

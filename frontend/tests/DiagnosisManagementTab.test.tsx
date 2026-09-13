@@ -69,3 +69,31 @@ describe('DiagnosisManagementTab — 창을 나갔다 와도 진행이 이어진
     expect(api.admin.getJobStatus).not.toHaveBeenCalled();
   });
 });
+
+describe('DiagnosisManagementTab — 끝나지 않는 폴링을 멈춘다', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  // 없는 job을 계속 조회하면 진행률이 영원히 '대기 중'에 머문다.
+  it('NOT_FOUND면 폴링을 멈추고 job_id를 지운다', async () => {
+    (api.admin.getJobStatus as any).mockResolvedValue({
+      job_id: 'job-x', status: 'NOT_FOUND', error: '해당 작업을 찾을 수 없습니다.',
+    });
+    localStorage.setItem('diagnosis_job_id', 'job-x');
+    render(<DiagnosisManagementTab />);
+    await waitFor(() => expect(localStorage.getItem('diagnosis_job_id')).toBeNull());
+    expect(await screen.findByText(/찾을 수 없습니다/)).toBeInTheDocument();
+  });
+
+  it('STALE이면 워커 상태를 알리고 멈춘다', async () => {
+    (api.admin.getJobStatus as any).mockResolvedValue({
+      job_id: 'job-y', status: 'STALE', error: 'AI 워커가 실행 중인지 확인하세요.',
+    });
+    localStorage.setItem('diagnosis_job_id', 'job-y');
+    render(<DiagnosisManagementTab />);
+    await waitFor(() => expect(localStorage.getItem('diagnosis_job_id')).toBeNull());
+    expect(await screen.findByText(/워커/)).toBeInTheDocument();
+  });
+});

@@ -73,6 +73,15 @@ export default function DiagnosisManagementTab() {
         setEvaluating(false);
         setJobId(null);
         writeStoredJobId(null);
+      } else if (response.status === 'NOT_FOUND' || response.status === 'STALE') {
+        // 결과가 영영 오지 않는 상태다. 계속 조회하면 진행률이 '대기 중'에 멈춰 선다.
+        // NOT_FOUND는 큐에 들어간 적이 없는 job, STALE은 워커가 집지 않는 job이다.
+        stopPolling();
+        setError(response.error || '작업 상태를 확인할 수 없습니다');
+        setProgress(null);
+        setEvaluating(false);
+        setJobId(null);
+        writeStoredJobId(null);
       }
       // PENDING/STARTED → keep polling
     } catch (err) {
