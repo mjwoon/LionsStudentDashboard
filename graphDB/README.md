@@ -400,6 +400,29 @@ uv run python analyze_calibration_supervised.py --skip-supervised  # SBERT 없�
 `calibration_supervised.png`, `summary.{json,md}`. SBERT 임베딩은
 `results/rq1/course_embeddings.npy` 에 캐시된다.
 
+### RQ1 후속 — 재현율 민감도와 검정력
+
+```bash
+uv run python analyze_prior_sensitivity.py                 # 민감도 + 이름 충돌 탐색
+uv run python analyze_prior_sensitivity.py --skip-screen   # SBERT 없이 민감도만
+```
+
+재현율은 "유사도 0.6 미만에 대체 인정 가능한 쌍이 없다"는 **미검증 전제** 위에 있다.
+하위 양성 수 M 을 가정했을 때 실제 관측(0/100, 0/60)이 나올 결합 확률을 초기하분포로
+구하고 그때의 재현율을 함께 낸다. 기각되지 않는 M 의 범위에서는 재현율이 측정값이
+아니라 가정값이다.
+
+> **용어 주의.** 이것은 식별(identifiability) 문제가 아니라 **검정력** 문제다.
+> 층별 표집확률이 정확히 알려져 있고 모든 쌍의 선택 확률이 0보다 크므로 HT 추정량은
+> 존재하고 불편이다(값은 0). PU 학습의 클래스 사전확률 비식별성은 표집확률을 모르고
+> 음성 레이블도 없는 상황의 결과이며 본 설계에는 해당하지 않는다.
+
+동시에 **비용 0의 표적 탐색**을 한다. 이름이 똑같은데 유사도가 낮은 쌍은 유사도
+척도의 명백한 실패 사례이므로, 그런 쌍이 없다는 것은 무작위 0건보다 강한 증거다.
+
+산출(`results/rq1_prior/`): `recall_sensitivity.csv`, `recall_sensitivity.png`,
+`summary.{json,md}`.
+
 ### 사람 레이블 타당성 검증
 
 ```bash
