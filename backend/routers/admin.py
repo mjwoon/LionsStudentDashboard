@@ -59,8 +59,47 @@ JOB_REGISTRY_TTL_SECONDS = 60 * 60 * 24        # 하루면 진행 상황을 되�
 JOB_STALE_AFTER_SECONDS = int(os.getenv("BULK_EVAL_STALE_AFTER_SECONDS", "300"))
 
 
+PROGRESS_SNAPSHOT_PREFIX = "lions:bulk-eval:progress:"
+
+
 def job_registry_key(job_id: str) -> str:
     return f"{JOB_REGISTRY_PREFIX}{job_id}"
+
+
+def progress_snapshot_key(job_id: str) -> str:
+    return f"{PROGRESS_SNAPSHOT_PREFIX}{job_id}"
+
+
+def _stalled_seconds(r, job_id: str, progress: dict):
+    """진행률이 멈춘 지 얼마나 됐는지. 아직 멈추지 않았으면 None.
+
+    워커가 죽거나 진행률 기록이 끊기면 메타는 PROGRESS인 채로 굳는다. 화면은 그 차이를
+    알 수 없어 영원히 폴링한다. 그래서 current가 마지막으로 '바뀐' 시각을 서버가 따로
+    적어 두고, 그때부터 재는 것이 판정 근거다. 워커가 남긴 값만 보면 굳었다는 사실
+    자체를 알 수 없다.
+    """
+    current = progress.get("current")
+    if current is None:
+        return None
+
+    key = progress_snapshot_key(job_id)
+    now = time.time()
+    try:
+        raw = r.get(key)
+        if raw is not None:
+            seen, ts = _decode(raw).rsplit(":", 1)
+            if seen == str(current):
+                waited = now - float(ts)
+                # 움직이지 않았으면 기준점을 갱신하지 않는다 — 갱신하면 시계가 계속 초기화된다.
+                return waited if waited > JOB_STALE_AFTER_SECONDS else None
+        r.setex(key, JOB_REGISTRY_TTL_SECONDS, f"{current}:{now}")
+    except Exception as e:
+        logger.warning(f"진행률 스냅샷 처리 실패({job_id}): {e}")
+    return None
+
+
+def _decode(raw) -> str:
+    return raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
 
 
 def _register_job(job_id: str) -> None:
@@ -489,7 +528,7 @@ async def get_job_status(job_id: str):
                 }
 
             try:
-                waited = time.time() - float(queued_at)
+                waited = time.time() - float(_decode(queued_at))
             except (TypeError, ValueError):
                 waited = 0.0
 
@@ -524,7 +563,21 @@ async def get_job_status(job_id: str):
         }
 
         if status == "PROGRESS":
-            response["progress"] = data.get("result", {})
+            progress = data.get("result", {}) or {}
+            stalled = _stalled_seconds(r, job_id, progress)
+            if stalled is not None:
+                return {
+                    "job_id": job_id,
+                    "status": "STALE",
+                    "error": (
+                        f"{int(stalled // 60)}분째 진행이 없습니다 "
+                        f"({progress.get('current')}/{progress.get('total')}에서 멈춤). "
+                        "AI 워커 로그를 확인하세요."
+                    ),
+                    # 어디서 멈췄는지 보여줘야 다시 돌릴지 판단할 수 있다.
+                    "progress": progress,
+                }
+            response["progress"] = progress
         elif status == "SUCCESS":
             response["result"] = data.get("result")
         elif status == "FAILURE":
