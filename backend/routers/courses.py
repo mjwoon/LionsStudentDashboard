@@ -295,7 +295,9 @@ def get_full_curriculum(
         credits = course_db.credits if course_db else 3
         course_type = course_db.course_type if course_db else "전공선택"
         course_id = course_db.course_id if course_db else 0
-        semester = course_db.semester if course_db and course_db.semester else 0
+        # 학기는 학과 교육과정이 정본이다. 과목 마스터(Course.semester)는 업로드가
+        # 채우지 못해 오랫동안 전부 1이었고, 그 값을 쓰면 2학기 과목이 1학기로 묶인다.
+        semester = cur.semester or (course_db.semester if course_db else 0) or 0
         
         # 학년(Curriculum.course_year 기준) 및 학기
         year = cur.course_year
