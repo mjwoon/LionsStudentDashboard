@@ -10,6 +10,7 @@ from models.schemas import (
     SurveyChoiceBase
 )
 from services.student_service import calculate_entry_requirement_completion
+from lions_core.enrollment import earned_credits
 from repositories import StudentRepository, DepartmentRepository
 
 router = APIRouter(prefix="/api", tags=["students"])
@@ -197,7 +198,9 @@ def get_student_courses(student_id: int, db: Session = Depends(get_db)):
         StudentCourse.year.desc(), StudentCourse.semester.desc()
     ).all()
     
-    total_credits = sum(enrollment.credits for enrollment in enrollments)
+    # 취득학점 — 성적이 확정되고 F가 아닌 수강만 센다. 수강중 과목은 아직 학점이
+    # 아니다(화면 라벨이 '총 취득학점'이다). 판정 기준은 평가·교육과정 표와 공유한다.
+    total_credits = earned_credits(enrollments)
     
     course_history = []
     for enrollment in enrollments:

@@ -26,6 +26,7 @@ from lions_core.repositories import (
     StudentRepository,
     DepartmentRepository,
 )
+from lions_core.enrollment import completion_status
 from lions_core.evaluation_presenter import EvaluationResponseBuilder
 from lions_core import scoring
 from lions_core.constants import (
@@ -42,21 +43,11 @@ from lions_core.constants import (
 def _completion_status(enrollment) -> str:
     """교육과정 표에 쓸 이수 상태.
 
-    completed   성적이 나왔고 낙제가 아니다
-    failed      F — 이수가 아니다. 예전에는 '이수완료 (F)'로 표시됐다
-    in_progress 수강했지만 성적이 아직 없다(진행 중인 학기)
-    not_taken   수강 이력이 없다
-
-    점수 쪽(_get_student_completed_courses)과 같은 기준이다. 둘이 갈리면 표에는
-    이수로 뜨는 과목이 점수에는 안 잡히는 일이 생긴다.
+    점수 쪽(_get_student_completed_courses)·학점 집계와 같은 기준을 쓴다.
+    둘이 갈리면 표에는 이수로 뜨는 과목이 점수에는 안 잡히는 일이 생기므로
+    판정을 lions_core.enrollment 한 곳에 둔다.
     """
-    if enrollment is None:
-        return "not_taken"
-    if not enrollment.grade:
-        return "in_progress"
-    if enrollment.grade == FAILING_GRADE:
-        return "failed"
-    return "completed"
+    return completion_status(enrollment)
 
 
 class EvaluationService:

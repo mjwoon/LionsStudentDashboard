@@ -5,6 +5,7 @@ Student service for managing student data and GPA calculations.
 from sqlalchemy.orm import Session
 from typing import Tuple
 from models.models import Student, StudentCourse, Course
+from lions_core.enrollment import is_earned
 
 
 def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[float, int]:
@@ -43,8 +44,8 @@ def calculate_student_gpa_and_credits(db: Session, student_id: int) -> Tuple[flo
     for enrollment in enrollments:
         credits = course_credits.get(enrollment.course_code, DEFAULT_CREDITS)
         
-        # Total earned credits (including F)
-        if enrollment.grade != FAILING_GRADE:
+        # 취득학점 — 판정 기준은 lions_core.enrollment 한 곳에서 가져온다.
+        if is_earned(enrollment):
             total_earned_credits += credits
         
         # GPA calculation (exclude F grades)
