@@ -112,8 +112,6 @@ class Student(Base):
         class_number (Integer): 분반 단위 숫자
         track (String): 배정 트랙 혹은 입학계열 (예: 자연계열 등)
         status (String): 현재 학적 상태 (기본값: "재학")
-        current_gpa (Numeric): 취득 종합 현재 평점
-        total_credits (Integer): 누적 취득 학점
         updated_at (DateTime): 학적 정보의 마지막 최종 수정 일시
         
         department (relationship): 해당 학생의 원 소속 학과 (N:1)
@@ -135,8 +133,6 @@ class Student(Base):
     # 기존 유지 필드 (updated_database.md에는 없지만 기능 유지를 위해 보존)
     track = Column(String(20), nullable=True)  # 전계열, 자연계열, 인문사회계열
     status = Column(String(20), default="재학")  # 재학, 휴학, 졸업 등
-    current_gpa = Column(Numeric(3, 2), nullable=True)  # 현재 평점 (4.5 만점)
-    total_credits = Column(Integer, default=0)  # 총 이수 학점
     
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
     
