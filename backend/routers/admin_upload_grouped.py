@@ -155,6 +155,8 @@ async def upload_students_grouped(
     CSV 컬럼:
     student_id, name, email, phone, department_id, pride, class_number, track,
     survey_round_id, first_choice_id, second_choice_id, decision_status_id, decision_scale
+
+    survey_date(제출일)는 선택 열이다. 없으면 현재 시각이 들어간다.
     """
     try:
         data = await parse_upload_file(file)

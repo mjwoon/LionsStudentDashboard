@@ -201,6 +201,9 @@ class UploadService:
                 decision_status_id=data.decision_status_id,
                 decision_scale=data.decision_scale
             )
+            # 열이 없으면 건드리지 않는다 — 모델 기본값(현재 시각)이 그대로 쓰인다.
+            if data.survey_date is not None:
+                new_survey.survey_date = data.survey_date
             if data.id is not None:
                 new_survey.id = data.id
             return new_survey
@@ -210,6 +213,9 @@ class UploadService:
             existing.second_choice_id = data.second_choice_id
             existing.decision_status_id = data.decision_status_id
             existing.decision_scale = data.decision_scale
+            # 날짜 열이 없는 기존 CSV로 덮어쓸 때 이미 들어 있던 제출일을 지우지 않는다.
+            if data.survey_date is not None:
+                existing.survey_date = data.survey_date
 
         return UploadService._generic_upload(
             db=db,
