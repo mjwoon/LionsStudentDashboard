@@ -40,7 +40,8 @@
 
 사용법
 ------
-    python3 scripts/generate_dummy_requirements.py
+    python3 scripts/generate_dummy_requirements.py            # 생성(제자리 병합)
+    python3 scripts/generate_dummy_requirements.py --remove   # 생성분 제거, 실제 규정만 남김
 
 갱신 대상 (제자리 병합)
 ----------------------
@@ -50,6 +51,7 @@
 
 import csv
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -210,7 +212,31 @@ def write_csv(path, rows):
     write_csv_with(path, HEADER, rows)
 
 
+def remove_generated():
+    """대장에 적힌 생성분을 걷어내고 실제 학사 규정만 남긴다.
+
+    운영·평가에 합성 요건이 섞이는 것을 막기 위한 경로다. 대장(.generated-requirements.json)은
+    지우지 않으므로, 이 스크립트를 인자 없이 다시 돌리면 같은 생성분을 복원할 수 있다
+    (실험의 '요건 완비' 시나리오 재현용). 교육과정(group4)은 건드리지 않는다 —
+    세부전공이 모학부 1학년 과정을 공유하는 것은 실제로도 그렇기 때문이다.
+    """
+    existing_rows = read_csv(REAL_CSV)
+    real_rows = strip_previous_output(existing_rows, load_manifest())
+    write_csv(REQUIREMENTS_OUT, real_rows)
+    removed = len(existing_rows) - len(real_rows)
+    req_depts = {r["dept_code"] for r in real_rows if r["course_code"]}
+    rec_depts = {r["dept_code"] for r in real_rows if r["recommended_course"]}
+    print(f"제거한 생성분        : {removed}행")
+    print(f"남은 실제 규정       : {len(real_rows)}행 -> {REQUIREMENTS_OUT.name}")
+    print(f"  진입요건 보유 학과 : {len(req_depts)}개 {sorted(req_depts)}")
+    print(f"  권장과목 보유 학과 : {len(rec_depts)}개")
+
+
 def main():
+    if "--remove" in sys.argv:
+        remove_generated()
+        return
+
     depts = read_csv(DEPTS_CSV)
     curriculum = read_csv(CURRICULUM_CSV)
     enrollments = read_csv(ENROLLMENTS_CSV)
