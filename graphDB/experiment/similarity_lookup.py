@@ -13,14 +13,31 @@ _SEP = ""  # 학수번호에 나오지 않는 구분자
 
 
 def build_lookup(df, sim, min_keep: float = 0.6):
-    """학수번호 있는 쌍 중 sim ≥ min_keep 만 보관. 키는 정렬된 (code_a, code_b)."""
+    """유효 쌍 중 학수번호가 양쪽에 있고 sim ≥ min_keep 인 것만 보관.
+
+    유효 쌍 규칙은 pairs.valid_pair_indices와 같아야 한다 — 같은 학수번호 쌍과
+    연계과목(1,2 시리즈) 쌍을 제외한다. 연계과목을 빼지 않으면 건축설계1을 이수한
+    학생에게 건축설계2가 대체 인정된다. 학수번호 채움률이 낮던 시절에는 연계 쌍이
+    거의 잡히지 않아 드러나지 않았으나, 마스터 재구축으로 채움률이 97.6%가 되면서
+    ≥0.7 쌍 153개 중 45개(29%)가 연계과목 쌍이 됐다.
+
+    키는 정렬된 (code_a, code_b).
+    """
+    # text_features는 sklearn에 의존한다. 이 모듈은 루트 3.12 환경(sbert·sklearn 없음)에서도
+    # load_lookup/make_similarity_fn 때문에 임포트되므로, 빌드 시점에만 필요한 의존은
+    # 함수 안에서 불러 2환경 분리를 유지한다.
+    from text_features import is_sequential_course
+
     codes = df["학수번호"].fillna("").astype(str).tolist()
+    names = df["교과목 이름"].astype(str).tolist()
     n = len(codes)
     lut = {}
     iu, ju = np.triu_indices(n, k=1)
     for i, j in zip(iu.tolist(), ju.tolist()):
         ci, cj = codes[i], codes[j]
         if not ci or not cj or ci == cj:
+            continue
+        if is_sequential_course(names[i], names[j]):
             continue
         s = float(sim[i][j])
         if s >= min_keep:
