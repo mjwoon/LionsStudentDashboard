@@ -12,6 +12,31 @@ type JobProgress = {
   error_count?: number;
 };
 
+/** 진행 중인 대량 진단의 job_id 보관 키.
+ *
+ *  대량 진단은 Celery 워커가 서버에서 돌린다 — 창을 닫아도 계속 진행된다.
+ *  그런데 탭을 벗어나면 이 컴포넌트가 언마운트되면서 jobId state가 사라져,
+ *  돌아왔을 때 무엇을 조회해야 할지 몰라 진행률이 초기화됐다. 작업이 멈춘 것처럼
+ *  보였을 뿐 실제로는 계속 돌고 있었다. job_id만 남겨두면 이어서 붙을 수 있다. */
+const JOB_STORAGE_KEY = 'diagnosis_job_id';
+
+function readStoredJobId(): string | null {
+  try {
+    return localStorage.getItem(JOB_STORAGE_KEY);
+  } catch {
+    return null;  // 프라이빗 모드 등에서 접근이 막힐 수 있다
+  }
+}
+
+function writeStoredJobId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(JOB_STORAGE_KEY, id);
+    else localStorage.removeItem(JOB_STORAGE_KEY);
+  } catch {
+    /* 저장이 막혀도 이번 세션 안에서는 state로 동작한다 */
+  }
+}
+
 export default function DiagnosisManagementTab() {
   const [forceRecalculate, setForceRecalculate] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
@@ -40,24 +65,44 @@ export default function DiagnosisManagementTab() {
         setProgress(null);
         setEvaluating(false);
         setJobId(null);
+        writeStoredJobId(null);
       } else if (response.status === 'FAILURE') {
         stopPolling();
         setError(response.error || '태스크 실행 중 오류가 발생했습니다');
         setProgress(null);
         setEvaluating(false);
         setJobId(null);
+        writeStoredJobId(null);
       }
       // PENDING/STARTED → keep polling
     } catch (err) {
       stopPolling();
       setError(err instanceof Error ? err.message : '상태 조회 중 오류');
       setEvaluating(false);
+      writeStoredJobId(null);
     }
   }, [stopPolling]);
 
   useEffect(() => {
     return () => stopPolling();
   }, [stopPolling]);
+
+  // 탭에 (다시) 들어왔을 때 진행 중인 작업이 있으면 이어서 따라간다.
+  // 폴링을 멈추는 것은 이 화면뿐이고 서버 작업은 계속 돌고 있다.
+  useEffect(() => {
+    const stored = readStoredJobId();
+    if (!stored) return;
+
+    setJobId(stored);
+    setEvaluating(true);
+    setProgress({ current: 0, total: 0, percent: 0, status: '진행 상황을 불러오는 중...' });
+    pollJobStatus(stored);
+    pollingRef.current = setInterval(() => pollJobStatus(stored), 2000);
+
+    return () => stopPolling();
+    // 마운트 시 한 번만 — 재개는 화면에 들어오는 시점의 동작이다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEvaluate = async () => {
     setEvaluating(true);
@@ -74,7 +119,8 @@ export default function DiagnosisManagementTab() {
       const response = await api.admin.bulkEvaluate(request);
 
       if (response.job_id) {
-        // 비동기 모드: 폴링 시작
+        // 비동기 모드: 폴링 시작. 창을 나갔다 와도 이어붙을 수 있게 남겨 둔다.
+        writeStoredJobId(response.job_id);
         setJobId(response.job_id);
         setProgress({ current: 0, total: 0, percent: 0, status: '대기 중...' });
 
