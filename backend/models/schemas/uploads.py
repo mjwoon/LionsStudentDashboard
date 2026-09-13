@@ -2,9 +2,9 @@
 대량 업로드/동기화 입력 DTO. (models/schemas 에서 분리)
 """
 
-from pydantic import BaseModel, EmailStr, Field, AliasChoices, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, AliasChoices, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Base Response Models
@@ -21,6 +21,8 @@ class MajorSurveyDataUpload(BaseModel):
         second_choice_id (int): 2지망 학과 식별자 ID
         decision_status_id (Optional[int]): 결정 상태 코드 식별자 
         decision_scale (Optional[int]): 전공결정 척도(리커트 척도)
+        survey_date (Optional[datetime]): 제출 일시. 없으면 DB 기본값(현재 시각)이 쓰인다.
+            백업에서 되돌릴 때 원래 제출일을 그대로 넣기 위한 열이다.
     """
     id: Optional[int] = Field(None, validation_alias=AliasChoices("id", "ID"))
     student_id: int = Field(..., validation_alias=AliasChoices("student_id", "학번"))
@@ -29,6 +31,21 @@ class MajorSurveyDataUpload(BaseModel):
     second_choice_id: int = Field(..., validation_alias=AliasChoices("second_choice_id", "2지망", "2지망학과", "2지망학과ID", "2지망 학과 ID"))
     decision_status_id: Optional[int] = Field(None, validation_alias=AliasChoices("decision_status_id", "결정상태", "결정상태ID"))
     decision_scale: Optional[int] = Field(None, validation_alias=AliasChoices("decision_scale", "결정척도", "리커트 척도"))
+    survey_date: Optional[datetime] = Field(None, validation_alias=AliasChoices(
+        "survey_date", "submitted_at", "제출일", "제출일시", "설문일", "조사일"))
+
+    @field_validator("survey_date")
+    @classmethod
+    def _assume_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        """naive 입력은 UTC로 본다.
+
+        survey_date 컬럼이 timezone-aware라, naive를 그대로 넘기면 DB·드라이버가
+        제 나름의 시간대를 붙여 날짜가 하루 밀 수 있다. "2026-08-10"처럼 날짜만 적은
+        CSV가 흔하므로 여기서 한 번에 맞춘다.
+        """
+        if v is not None and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
     model_config = {"populate_by_name": True}
 

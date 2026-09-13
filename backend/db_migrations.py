@@ -12,7 +12,8 @@ import logging
 import os
 from pathlib import Path
 
-from lions_core.db import engine, init_db
+from lions_core.db import SessionLocal, engine, init_db
+from lions_core.generated_data import load_manifest
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -68,4 +69,64 @@ def init_schema() -> None:
         _upgrade_via_alembic()
     else:
         init_db()
+
+    warn_if_generated_requirements_present()
+
+
+def count_generated_requirements(db) -> tuple[int, int]:
+    """DB에 남아 있는 합성(생성) 진입요건·권장과목 수 (요건, 권장).
+
+    판별 근거는 `.generated-requirements.json` 대장의 학과코드다. requirement_text로는
+    판별할 수 없다 — 생성기가 실제 ELEC 규정의 관용구를 글자 그대로 복제하기 때문이다
+    (lions_core.generated_data 참고). 요건과 권장과목은 학과 단위로 따로 기록되므로
+    각각 해당 목록으로만 센다.
+    """
+    from models.models import CourseRecommendation, Department, DepartmentEntryRequirement
+
+    manifest = load_manifest()
+    if manifest.is_empty:
+        return (0, 0)
+
+    def _count(model, dept_codes):
+        if not dept_codes:
+            return 0
+        return (
+            db.query(model)
+            .join(Department, model.department_id == Department.id)
+            .filter(Department.code.in_(sorted(dept_codes)))
+            .count()
+        )
+
+    return (
+        _count(DepartmentEntryRequirement, manifest.requirement_dept_codes),
+        _count(CourseRecommendation, manifest.recommendation_dept_codes),
+    )
+
+
+def warn_if_generated_requirements_present() -> None:
+    """운영에 합성 요건이 들어가 있으면 기동 로그에 크게 남긴다.
+
+    기동을 거부하지는 않는다. 데이터 상태 때문에 서비스를 통째로 내리는 것은 과하고,
+    이 상황은 사람이 데이터를 바로잡아야 풀리기 때문이다. 대신 놓칠 수 없게 ERROR로
+    남긴다 — 학생이 존재하지 않는 요건을 '충족'으로 보고 진로를 정하는 것이 실제 피해다.
+    """
+    if (os.getenv("APP_ENV") or "").lower() != "production":
+        return
+
+    try:
+        with SessionLocal() as db:
+            req_count, rec_count = count_generated_requirements(db)
+    except Exception as exc:  # 탐지 실패가 기동을 막아서는 안 된다
+        logger.warning("합성 데이터 점검을 건너뜀: %s", exc)
+        return
+
+    if req_count or rec_count:
+        logger.error(
+            "운영 DB에 합성(생성) 데이터가 있습니다 — 진입요건 %d건, 권장과목 %d건. "
+            "scripts/generate_dummy_requirements.py가 만든 데이터이며 실제 학사 규정이 "
+            "아닙니다. 학생에게 존재하지 않는 요건이 '충족'으로 표시됩니다. "
+            "해당 학과는 .generated-requirements.json에 적혀 있습니다.",
+            req_count,
+            rec_count,
+        )
 
