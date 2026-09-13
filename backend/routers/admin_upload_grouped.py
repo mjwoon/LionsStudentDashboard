@@ -22,6 +22,8 @@ from models.schemas import (
 )
 from services.upload_service import UploadService
 from routers.admin import parse_upload_file
+from config import settings
+from lions_core.generated_data import load_manifest
 from typing import List, Optional
 import logging
 
@@ -322,6 +324,55 @@ async def upload_curriculum_grouped(
 # ─────────────────────────────────────────────
 # 그룹 5: 진입요건 + 권장과목
 # ─────────────────────────────────────────────
+def _reject_generated_rows_in_production(data: List[dict]) -> None:
+    """운영 환경에서는 합성(생성) 요건이 섞인 CSV를 받지 않는다.
+
+    scripts/generate_dummy_requirements.py가 만든 행이 원본과 같은 파일
+    (group5_requirements_recs.csv)에 제자리 병합된다. 파일이 하나뿐이라 관리자가
+    운영 업로드 화면에서 그것을 고르기 쉽고, 올라간 뒤에는 화면상 구분이 없다.
+    학생은 존재하지 않는 요건을 '충족'으로 보고 진로를 정하게 된다.
+
+    판별은 `.generated-requirements.json` 대장(학과코드 × 행 종류)으로 한다.
+    requirement_text로는 판별할 수 없다 — 생성기가 실제 ELEC 규정의 관용구를
+    글자 그대로 복제하므로 문자열 판별식은 진짜 규정을 오탐한다
+    (lions_core.generated_data 참고).
+
+    개발·실험 환경은 합성 데이터가 목적이므로 그대로 통과시킨다.
+    """
+    if (settings.app_env or "").lower() != "production":
+        return
+
+    manifest = load_manifest()
+    if manifest.is_empty:
+        # 대장이 없으면 판별 근거가 없다. 막을 수 없다는 사실을 로그로 드러낸다.
+        logger.error(
+            "생성 데이터 대장이 비어 있어 합성 요건 차단이 동작하지 않습니다. "
+            ".generated-requirements.json이 배포에 포함됐는지 확인하세요."
+        )
+        return
+
+    offending = [
+        row_no
+        for row_no, row in enumerate(data, start=2)  # 2행 = 헤더 다음 첫 데이터 행
+        if manifest.covers_row(row)
+    ]
+    if not offending:
+        return
+
+    shown = ", ".join(str(n) for n in offending[:10])
+    more = f" 외 {len(offending) - 10}행" if len(offending) > 10 else ""
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"합성(생성) 요건 {len(offending)}행이 포함돼 운영 환경에 업로드할 수 없습니다. "
+            f"해당 행: {shown}{more}. "
+            "scripts/generate_dummy_requirements.py --remove 로 생성분을 걷어낸 뒤 올리세요. "
+            "이 학과의 실제 학사 규정을 새로 받은 것이라면 "
+            ".generated-requirements.json에서 해당 학과코드를 제거하세요."
+        ),
+    )
+
+
 @router.post("/requirements", response_model=GroupedUploadResponse)
 async def upload_requirements_grouped(
     file: UploadFile = File(...),
@@ -338,6 +389,8 @@ async def upload_requirements_grouped(
         data = await parse_upload_file(file)
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
+
+        _reject_generated_rows_in_production(data)
 
         sub_results = []
         total_uploaded = 0
