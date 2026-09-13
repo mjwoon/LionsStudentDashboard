@@ -1,6 +1,15 @@
 
 import type { CurriculumCourse } from '../../types';
 
+/** 표의 이수 상태. 백엔드가 completion_status로 내려보내는 것이 정본이다.
+ *  옛 응답(필드 없음)에서도 F를 이수로 세지 않도록 같은 규칙으로 되돌린다. */
+function completionStatus(course: CurriculumCourse): 'completed' | 'failed' | 'in_progress' | 'not_taken' {
+  if (course.completion_status) return course.completion_status;
+  if (!course.enrolled) return 'not_taken';
+  if (!course.grade) return 'in_progress';
+  return course.grade === 'F' ? 'failed' : 'completed';
+}
+
 interface CurriculumTableProps {
   curriculumData: Record<string, Record<string, CurriculumCourse[]>>;
 }
@@ -87,7 +96,7 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
                                 </svg>
                                 <span className="text-[15px] text-[#f59e0b]">유사과목 이수</span>
                               </>
-                            ) : course.enrolled && course.grade ? (
+                            ) : completionStatus(course) === 'completed' ? (
                               <>
                                 <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="#26BD89" xmlns="http://www.w3.org/2000/svg">
                                   <circle cx="12" cy="12" r="10" strokeWidth="2" />
@@ -97,7 +106,15 @@ export default function CurriculumTable({ curriculumData }: CurriculumTableProps
                                   이수완료 {course.grade !== 'P/F' && course.grade !== 'S/U' ? `(${course.grade})` : ''}
                                 </span>
                               </>
-                            ) : course.enrolled && !course.grade ? (
+                            ) : completionStatus(course) === 'failed' ? (
+                              <>
+                                <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="#F04462" xmlns="http://www.w3.org/2000/svg">
+                                  <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                                  <path d="M15 9l-6 6m0-6l6 6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                <span className="text-[15px] text-[#F04462]">이수 실패 ({course.grade})</span>
+                              </>
+                            ) : completionStatus(course) === 'in_progress' ? (
                               <>
                                 <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="#898F99" xmlns="http://www.w3.org/2000/svg">
                                   <circle cx="12" cy="12" r="10" strokeWidth="2" />

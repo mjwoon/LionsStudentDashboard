@@ -39,6 +39,26 @@ from lions_core.constants import (
 )
 
 
+def _completion_status(enrollment) -> str:
+    """교육과정 표에 쓸 이수 상태.
+
+    completed   성적이 나왔고 낙제가 아니다
+    failed      F — 이수가 아니다. 예전에는 '이수완료 (F)'로 표시됐다
+    in_progress 수강했지만 성적이 아직 없다(진행 중인 학기)
+    not_taken   수강 이력이 없다
+
+    점수 쪽(_get_student_completed_courses)과 같은 기준이다. 둘이 갈리면 표에는
+    이수로 뜨는 과목이 점수에는 안 잡히는 일이 생긴다.
+    """
+    if enrollment is None:
+        return "not_taken"
+    if not enrollment.grade:
+        return "in_progress"
+    if enrollment.grade == FAILING_GRADE:
+        return "failed"
+    return "completed"
+
+
 class EvaluationService:
     """3개 메트릭 기반 평가 서비스"""
     
@@ -68,7 +88,10 @@ class EvaluationService:
                 self._curriculum_data_cache[dept.name].append({
                     "course_code": cur.course_code,
                     "course_name": cur.course_name,
-                    "course_year": cur.course_year
+                    "course_year": cur.course_year,
+                    # 같은 교양과목도 학과마다 듣는 학기가 다르다. 과목 자체의 속성이
+                    # 아니라 교육과정이 정하는 값이므로 여기서 들고 간다.
+                    "semester": cur.semester,
                 })
         
         return self._curriculum_data_cache
@@ -699,6 +722,14 @@ class EvaluationService:
         
         # 수강 이력을 course_code로 매핑
         enrollment_map = {e.course_code: e for e in enrollments}
+
+        # 교육과정이 정한 학기. 마스터(Course.semester)는 업로드가 채우지 못해 전부 1이라
+        # 표가 그 값을 쓰면 2학기 과목이 전부 1학기로 보인다.
+        curriculum_semester = {
+            c.get("course_code"): c.get("semester")
+            for c in dept_curriculum
+            if c.get("course_code") and c.get("semester")
+        }
         
         # 해당 학과의 필수/권장 과목 리스트 가져오기 (학생 입학년도 요건과 일치시킴)
         admission_year = self.get_admission_year_from_student_id(str(student_id))
@@ -741,9 +772,12 @@ class EvaluationService:
                 "credits": course.credits,
                 "course_type": course.course_type,
                 "requirement_type": requirement_type,
-                "semester": course.semester,
+                "semester": curriculum_semester.get(course.course_code, course.semester),
                 "year": course.course_year,
                 "enrolled": enrollment is not None,
+                # 수강 이력 유무만으로는 F와 이수완료를 가를 수 없다. 표가 성적을 직접
+                # 해석하면 점수 쪽(F 제외, 성적 없으면 수강중)과 어긋나므로 여기서 정한다.
+                "completion_status": _completion_status(enrollment),
                 "grade": enrollment.grade if enrollment else None,
                 "enrollment_year": enrollment.year if enrollment else None,
                 "enrollment_semester": enrollment.semester if enrollment else None,

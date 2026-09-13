@@ -281,6 +281,9 @@ export interface CurriculumCourse {
   year: number
   semester: number
   enrolled: boolean
+  // 표의 이수 상태는 백엔드가 정한다. enrolled + grade로 화면이 추론하면
+  // F가 '이수완료 (F)'가 되어 점수(F 제외)와 어긋난다.
+  completion_status?: 'completed' | 'failed' | 'in_progress' | 'not_taken'
   grade?: string
   evaluation_type?: string
   requirement_type?: string | null

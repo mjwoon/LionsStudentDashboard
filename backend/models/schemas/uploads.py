@@ -258,6 +258,8 @@ class CourseDataUpload(BaseModel):
         course_name (str): 신설되거나 갱신될 과목의 이름
         course_type (Optional[str]): 이수 구분 유형 기호(전선, 일선 등)
         course_year (Optional[int]): 권장 학년
+        semester (Optional[int]): 권장 학기. 비어 있으면 1로 둔다(재구축분 다수가 공백이다).
+            표에 쓰이는 학기는 학과 교육과정(Curriculum.semester)이 정본이다.
         department_name (Optional[str]): 운영 주관 학과 명
         department_code (Optional[str]): 주관 학과 코드
         credits (Optional[int]): 이수 시 부여되는 학점
@@ -268,6 +270,7 @@ class CourseDataUpload(BaseModel):
     course_name: str = Field(..., validation_alias=AliasChoices("course_name", "과목명", "교과목이름", "교과목 이름", "교과목명"))
     course_type: Optional[str] = Field(None, validation_alias=AliasChoices("course_type", "이수구분"))
     course_year: Optional[int] = Field(None, validation_alias=AliasChoices("course_year", "학년", "권장학년", "권장 학년"))
+    semester: Optional[int] = Field(None, validation_alias=AliasChoices("semester", "학기", "권장학기", "권장 학기"))
     department_name: Optional[str] = Field(None, validation_alias=AliasChoices("department_name", "설강학과", "관장학과"))
     department_code: Optional[str] = Field(None, validation_alias=AliasChoices("department_code"))
     credits: Optional[int] = Field(None, validation_alias=AliasChoices("credits", "학점"))
