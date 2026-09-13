@@ -380,6 +380,26 @@ uv run python analyze_threshold_decision.py     # results/rq1/pairs_labeled.csv 
 SBERT 재계산 없이 돈다. 산출(`results/rq1_decision/`): `cost_curve.csv`(비용비 λ별 최적 임계값),
 `tstar_bootstrap.csv`, `threshold_decision.png`, `summary.{json,md}`.
 
+### RQ1 후속 — 유사도 보정 · 지도학습 비교
+
+```bash
+uv run python analyze_calibration_supervised.py                    # 보정 + 지도학습
+uv run python analyze_calibration_supervised.py --skip-supervised  # SBERT 없이 보정만
+```
+
+**보정(②)** — 유사도를 등위 보존 회귀로 `P(대체 인정)` 으로 옮긴다. 그러면 임계값이
+비용에서 유도된다(`P >= λ/(1+λ)`). 스윕에서 비용을 직접 최소화하는 `decision.cost_curve`
+와 독립인 경로라, 두 결과가 일치하면 상호 검증이 된다.
+
+**지도학습(③)** — Kim 등(EDM 2025)은 임계값 방식을 배제하고 임베딩 차이 벡터에
+분류기를 학습시켰다. 이 레이블 예산(335쌍·양성 59)에서 그 선택지가 실제로 존재하는지
+확인한다. 공정성을 위해 ⑴ 임계값도 학습 폴드에서 고르고 시험 폴드에 적용하며,
+⑵ 특징 3종 × 모델 7종 격자를 모두 돌려 지도학습의 최고 성적과 맞붙인다.
+
+산출(`results/rq1_calibration/`): `calibration_vs_empirical.csv`, `supervised_grid.csv`,
+`calibration_supervised.png`, `summary.{json,md}`. SBERT 임베딩은
+`results/rq1/course_embeddings.npy` 에 캐시된다.
+
 ### 사람 레이블 타당성 검증
 
 ```bash

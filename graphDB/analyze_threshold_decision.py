@@ -30,32 +30,14 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from experiment.pairs import SampledPair  # noqa: E402
 from experiment.metrics import sweep, best_threshold  # noqa: E402
+from experiment.rq1_data import load_sample, load_gold, require_labels  # noqa: E402
 from experiment.bootstrap import bootstrap_curves  # noqa: E402
 from experiment.decision import cost_curve, tstar_distribution  # noqa: E402
 from experiment.plotting import use_korean_font  # noqa: E402
 
 # 오탐이 미탐보다 몇 배 비싼가. 로그 격자로 훑는다.
 LAMBDAS = [0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 50.0, 100.0]
-
-
-def load_sample(pairs_csv: str) -> list[SampledPair]:
-    df = pd.read_csv(pairs_csv)
-    need = {"pair_id", "i", "j", "sim", "bin_idx", "weight"}
-    missing = need - set(df.columns)
-    if missing:
-        raise SystemExit(f"{pairs_csv}: 열 부족 {sorted(missing)}")
-    return [SampledPair(int(r.pair_id), int(r.i), int(r.j),
-                        float(r.sim), int(r.bin_idx), float(r.weight))
-            for r in df.itertuples()]
-
-
-def load_gold(results_dir: str) -> dict[int, int]:
-    """gpt-4o 2회 독립 실행의 보수적 AND (= RQ1 골드)."""
-    p1 = pd.read_csv(f"{results_dir}/llm_labels_pass1.csv").set_index("pair_id").label
-    p2 = pd.read_csv(f"{results_dir}/llm_labels_pass2.csv").set_index("pair_id").label
-    return {int(k): int(v) for k, v in ((p1 == 1) & (p2 == 1)).astype(int).items()}
 
 
 def main():
@@ -70,9 +52,7 @@ def main():
 
     sample = load_sample(args.pairs)
     gold = load_gold(args.results)
-    missing = [sp.pair_id for sp in sample if sp.pair_id not in gold]
-    if missing:
-        raise SystemExit(f"레이블 없는 pair_id {len(missing)}건: {missing[:10]}")
+    require_labels(sample, gold)
 
     thresholds = np.arange(0.30, 1.001, 0.01)
     base = sweep(sample, gold, thresholds)
