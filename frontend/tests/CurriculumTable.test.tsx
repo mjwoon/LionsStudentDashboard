@@ -49,3 +49,44 @@ describe('CurriculumTable 이수 상태', () => {
     expect(screen.queryByText(/이수완료/)).not.toBeInTheDocument();
   });
 });
+
+describe('CurriculumTable 비고', () => {
+  // 비고는 '어디서 들었나'를 알려주는 칸이다. 같은 학과 과목에 '동등인정'을 띄우면
+  // 이수현황 칸과 같은 말을 반복할 뿐이고, 성적을 보지 않아 F에도 붙었다.
+  it('타 학과 개설 과목은 그 학과명을 보여준다', () => {
+    render(<CurriculumTable curriculumData={data([
+      course({ enrolled: true, grade: 'B', completion_status: 'completed',
+               enrolled_department_name: '경영학부' }),
+    ]) as any} />);
+    expect(screen.getByText('경영학부')).toBeInTheDocument();
+  });
+
+  it('같은 학과 과목은 이수했어도 비고가 비어 있다', () => {
+    render(<CurriculumTable curriculumData={data([
+      course({ enrolled: true, grade: 'B', completion_status: 'completed' }),
+    ]) as any} />);
+    expect(screen.queryByText('동등인정')).not.toBeInTheDocument();
+  });
+
+  it('F 학점에 동등인정이 붙지 않는다', () => {
+    render(<CurriculumTable curriculumData={data([
+      course({ enrolled: true, grade: 'F', completion_status: 'failed' }),
+    ]) as any} />);
+    expect(screen.queryByText('동등인정')).not.toBeInTheDocument();
+  });
+
+  it('수강중에도 동등인정이 붙지 않는다', () => {
+    render(<CurriculumTable curriculumData={data([
+      course({ enrolled: true, completion_status: 'in_progress' }),
+    ]) as any} />);
+    expect(screen.queryByText('동등인정')).not.toBeInTheDocument();
+  });
+
+  it('교양필수는 타 학과 개설이어도 비고를 비운다', () => {
+    render(<CurriculumTable curriculumData={data([
+      course({ course_type: '교양필수', enrolled: true, grade: 'B',
+               completion_status: 'completed', enrolled_department_name: '경영학부' }),
+    ]) as any} />);
+    expect(screen.queryByText('경영학부')).not.toBeInTheDocument();
+  });
+});

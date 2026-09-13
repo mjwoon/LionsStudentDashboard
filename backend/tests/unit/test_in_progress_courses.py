@@ -109,7 +109,7 @@ from unittest.mock import MagicMock  # noqa: E402
 from lions_core.evaluation_presenter import EvaluationResponseBuilder  # noqa: E402
 
 
-def _analysis_json(completed, first_year, entry_breakdown=None):
+def _analysis_json(completed, first_year, entry_breakdown=None, necessary=None):
     def _no_similar(codes, name, comp):
         return SimilarMatch(False, 0.0, None)
 
@@ -126,7 +126,7 @@ def _analysis_json(completed, first_year, entry_breakdown=None):
         recommended_similar_rate=0.0,
         curriculum_exact_rate=0.0,
         curriculum_similar_rate=0.0,
-        necessary_courses=[],
+        necessary_courses=necessary or [],
         recommended_course_names=[],
         first_year_courses=first_year,
         course_name_to_codes={},
@@ -158,3 +158,36 @@ def test_entry_requirement_exposes_in_progress_count():
     er = _analysis_json(_completed([]), [], breakdown)["entry_requirement"]
     assert er["in_progress_courses"] == 1
     assert er["gate"] == scoring.GATE_PENDING
+
+
+# ── 진입요건 상세 목록도 수강중을 이수로 세면 안 된다 ────────────────
+# 수강중을 completed_codes에 넣으면서, 요건 상세의 is_completed가 성적이 아직 없는
+# 과목까지 이수로 표시했다. 점수(0/1)와 어긋난다.
+
+def test_requirement_detail_does_not_count_in_progress_as_completed():
+    completed = _completed([_detail("APR2013", "광고원론", None, in_progress=True)])
+    aj = _analysis_json(completed, [], necessary=[
+        {"course_code": "APR2013", "course_name": "광고원론"},
+    ])
+    d = aj["entry_requirement"]["details"][0]
+    assert d["is_completed"] is False
+    assert d["is_in_progress"] is True
+
+
+def test_requirement_detail_counts_graded_course():
+    completed = _completed([_detail("APR2013", "광고원론", 3.0)])
+    aj = _analysis_json(completed, [], necessary=[
+        {"course_code": "APR2013", "course_name": "광고원론"},
+    ])
+    d = aj["entry_requirement"]["details"][0]
+    assert d["is_completed"] is True
+    assert d["is_in_progress"] is False
+
+
+def test_requirement_detail_marks_untaken_course():
+    aj = _analysis_json(_completed([]), [], necessary=[
+        {"course_code": "APR2013", "course_name": "광고원론"},
+    ])
+    d = aj["entry_requirement"]["details"][0]
+    assert d["is_completed"] is False
+    assert d["is_in_progress"] is False
