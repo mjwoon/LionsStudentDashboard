@@ -352,14 +352,42 @@ graphDB 는 uv workspace 밖의 독립 패키지(3.11)이고 backend/lions-core 
 
 ```bash
 # graphDB 디렉터리에서 (3.11 env)
-uv run python experiment_rq1.py --no-llm          # TF-IDF만: 비용 0, 파이프라인 검증
-uv run python experiment_rq1.py                    # LLM(gpt-4o) 포함: OPENAI_API_KEY 필요
+uv run python experiment_rq1.py --no-llm                    # TF-IDF만: 비용 0, 파이프라인 검증
+uv run python experiment_rq1.py                              # LLM(gpt-4o) 포함: OPENAI_API_KEY 필요
+uv run python experiment_rq1.py --reuse-llm results/rq1      # 기존 레이블 재사용: API 재호출 없이 그림·지표 재현
 ```
 
+`--reuse-llm` 은 저장된 `llm_labels_pass{1,2}.csv` 를 읽어 골드를 다시 만든다. **논문 그림과
+수치를 API 비용 없이 재현할 때 쓴다.** 표본이 달라지면(다른 `--seed`·`--per-bin`·입력 CSV)
+pair_id 가 어긋나므로 즉시 에러를 낸다.
+
 - 표본: 하위 3구간 표본 + 상위 3구간(≥0.7) 전수(기본 `PER_BIN`).
-- 산출(`results/rq1/`): `strata.json`, `labeling_sheet.csv`(사람 교체용), `tfidf_labels.csv`,
-  `llm_labels_pass{1,2}.csv`, `sweep_metrics_{llm,tfidf}.csv`, `f1_threshold.png`,
-  `summary.{json,md}`(t\*·PR-AUC·κ). LLM 실행 후 `summary.json`의 `tstar_llm`을 RQ2에 전달.
+- 산출(`results/rq1/`): `strata.json`, `labeling_sheet.csv`(사람 교체용, 고정 시드로 행 섞음),
+  `pairs_labeled.csv`(쌍별 sim·층·가중치 — 재분석용), `tfidf_labels.csv`,
+  `llm_labels_pass{1,2}.csv`, `sweep_metrics_{llm,tfidf}.csv`,
+  `f1_threshold.png`, `pr_curve.png`, `summary.{json,md}`(t\*·PR-AUC·κ).
+  LLM 실행 후 `summary.json`의 `tstar_llm`을 RQ2에 전달.
+
+> 그림의 한글은 `experiment/plotting.py` 의 `use_korean_font()` 가 처리한다.
+> 한글 폰트가 없는 환경(일부 리눅스)에서는 경고를 내고 라벨이 깨지므로 `fonts-nanum` 등을 설치한다.
+
+### RQ1 후속 — 비용 민감 임계값 · t\* 안정성
+
+```bash
+uv run python analyze_threshold_decision.py     # results/rq1/pairs_labeled.csv + 저장된 LLM 레이블
+```
+
+SBERT 재계산 없이 돈다. 산출(`results/rq1_decision/`): `cost_curve.csv`(비용비 λ별 최적 임계값),
+`tstar_bootstrap.csv`, `threshold_decision.png`, `summary.{json,md}`.
+
+### 사람 레이블 타당성 검증
+
+```bash
+uv run python score_validity.py --human <채점표>.csv     # LLM 골드 ↔ 사람 κ
+```
+
+`results/rq1/validity_sheet_top115.csv`(t\*를 결정하는 ≥0.7 구간 115쌍, 유사도 가림 + 셔플)를
+사람이 채운 뒤 넣는다. 산출: `validity.json`.
 
 ### RQ2 — 하위 시스템 영향
 
