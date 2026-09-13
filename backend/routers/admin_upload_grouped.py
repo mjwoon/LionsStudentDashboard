@@ -22,8 +22,6 @@ from models.schemas import (
 )
 from services.upload_service import UploadService
 from routers.admin import parse_upload_file
-from config import settings
-from lions_core.constants import DUMMY_DATA_MARKER, is_dummy_requirement_text
 from typing import List, Optional
 import logging
 
@@ -79,8 +77,6 @@ async def upload_org(
         data = await parse_upload_file(file)
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
-
-        _reject_dummy_rows_in_production(data)
 
         sub_results = []
         total_uploaded = 0
@@ -163,8 +159,6 @@ async def upload_students_grouped(
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
 
-        _reject_dummy_rows_in_production(data)
-
         sub_results = []
         total_uploaded = 0
         total_updated = 0
@@ -238,8 +232,6 @@ async def upload_courses_grouped(
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
 
-        _reject_dummy_rows_in_production(data)
-
         sub_results = []
         total_uploaded = 0
         total_updated = 0
@@ -295,8 +287,6 @@ async def upload_curriculum_grouped(
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
 
-        _reject_dummy_rows_in_production(data)
-
         sub_results = []
         total_uploaded = 0
         total_updated = 0
@@ -332,42 +322,6 @@ async def upload_curriculum_grouped(
 # ─────────────────────────────────────────────
 # 그룹 5: 진입요건 + 권장과목
 # ─────────────────────────────────────────────
-def _reject_dummy_rows_in_production(data: List[dict]) -> None:
-    """운영 환경에서는 합성(더미) 요건이 섞인 CSV를 받지 않는다.
-
-    scripts/generate_dummy_requirements.py가 만든 행이 원본과 같은 파일
-    (group5_requirements_recs.csv)에 병합돼 있다. 파일이 하나뿐이라 관리자가 그것을
-    고르기 쉽고, 올라간 뒤에는 구분할 방법이 없다 — '[더미]' 접두어가 붙는
-    requirement_text는 API 응답에도 화면에도 실리지 않는다. 학생은 존재하지 않는
-    요건을 '충족'으로 보고 진로를 정하게 된다. 그래서 경계에서 막는다.
-
-    개발·실험 환경은 더미가 목적이므로 그대로 통과시킨다.
-    """
-    if (settings.app_env or "").lower() != "production":
-        return
-
-    offending = [
-        row_no
-        for row_no, row in enumerate(data, start=2)  # 2행 = 헤더 다음 첫 데이터 행
-        if is_dummy_requirement_text(
-            row.get("requirement_text") or row.get("요건설명") or row.get("설명")
-        )
-    ]
-    if not offending:
-        return
-
-    shown = ", ".join(str(n) for n in offending[:10])
-    more = f" 외 {len(offending) - 10}행" if len(offending) > 10 else ""
-    raise HTTPException(
-        status_code=400,
-        detail=(
-            f"합성(더미) 요건 {len(offending)}행이 포함돼 운영 환경에 업로드할 수 없습니다. "
-            f"requirement_text가 '{DUMMY_DATA_MARKER}'로 시작하는 행: {shown}{more}. "
-            "실제 학사 규정만 담긴 파일로 올리세요."
-        ),
-    )
-
-
 @router.post("/requirements", response_model=GroupedUploadResponse)
 async def upload_requirements_grouped(
     file: UploadFile = File(...),
@@ -384,8 +338,6 @@ async def upload_requirements_grouped(
         data = await parse_upload_file(file)
         if not data:
             raise ValueError("파일에 데이터가 없습니다.")
-
-        _reject_dummy_rows_in_production(data)
 
         sub_results = []
         total_uploaded = 0
@@ -518,7 +470,7 @@ async def upload_requirements_grouped(
         )
 
     except HTTPException:
-        # 의도적으로 올린 4xx(예: 운영 환경 더미 차단)를 500으로 덮지 않는다.
+        # 의도적으로 올린 4xx를 500으로 덮지 않는다.
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
