@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from db_migrations import init_schema
-from routers import students, courses, surveys, evaluation, admin, dashboard
+from routers import students, courses, surveys, evaluation, admin
 from routers import graph, admin_upload_grouped
 from services.graph_service import Neo4jConnection
 
@@ -42,7 +42,6 @@ app.include_router(surveys.router)
 app.include_router(evaluation.router)
 app.include_router(admin.router)
 app.include_router(admin_upload_grouped.router)
-app.include_router(dashboard.router)
 app.include_router(graph.router)
 
 
