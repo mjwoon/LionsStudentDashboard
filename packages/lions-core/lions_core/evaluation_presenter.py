@@ -95,7 +95,9 @@ class EvaluationResponseBuilder:
                 "is_similar_match": is_similar_match,
                 "similarity": round(similarity, 4),
                 "matched_by": matched_by,
-                "matched_course": matched_course
+                "matched_course": matched_course,
+                # 성적이 아직 없는 과목으로 인정된 건 '이수 완료'와 구분해서 보여준다.
+                "is_in_progress": bool(matched_course and matched_course.get("in_progress")),
             })
 
         # 3. 교육과정(1학년) 상세
@@ -138,7 +140,8 @@ class EvaluationResponseBuilder:
                 "is_similar_match": is_similar_match,
                 "similarity": round(similarity, 4),
                 "matched_by": matched_by,
-                "matched_course": matched_course
+                "matched_course": matched_course,
+                "is_in_progress": bool(matched_course and matched_course.get("in_progress")),
             })
 
         # 종합 점수 계산 (가중치 SSOT: constants.EVALUATION_WEIGHTS)
@@ -165,6 +168,9 @@ class EvaluationResponseBuilder:
                 "completed_courses": entry_breakdown["qualifying"],
                 # 성적과 무관한 이수 시도 수. 미이수(pending)와 성적 미달(blocked) 구분용.
                 "attempted_courses": entry_breakdown.get("attempted", 0),
+                # 지금 듣고 있는 요건 과목 수. 점수에는 반영되지 않는다(성적이 기준이라
+                # 충족으로 셀 수 없다) — "수강중 N과목"으로 알려주기 위한 값이다.
+                "in_progress_courses": entry_breakdown.get("in_progress", 0),
                 "has_requirement": entry_breakdown["has_requirement"],
                 # open(충족) / pending(미이수) / blocked(성적 미달) / unknown(요건 미등록).
                 # 화면 헤드라인과 학과 추천 정렬이 이 값을 따른다.
@@ -179,6 +185,8 @@ class EvaluationResponseBuilder:
                 "has_data": len(recommended_course_names) > 0,
                 "exact_completed": sum(1 for d in recommended_details if d["is_exact_match"]),
                 "similar_completed": sum(1 for d in recommended_details if d["is_similar_match"]),
+                # 위 두 수에 포함된 것 중 아직 성적이 안 나온 과목 수.
+                "in_progress_completed": sum(1 for d in recommended_details if d["is_in_progress"]),
                 "details": recommended_details,
                 "status": "완료" if recommended_similar_rate >= 100 else "진행중"
             },
@@ -189,6 +197,7 @@ class EvaluationResponseBuilder:
                 "has_data": len(first_year_courses) > 0,
                 "exact_completed": sum(1 for d in curriculum_details if d["is_exact_match"]),
                 "similar_completed": sum(1 for d in curriculum_details if d["is_similar_match"]),
+                "in_progress_completed": sum(1 for d in curriculum_details if d["is_in_progress"]),
                 "details": curriculum_details,
                 "status": "완료" if curriculum_similar_rate >= 100 else "진행중"
             },

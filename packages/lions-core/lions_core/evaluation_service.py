@@ -238,11 +238,12 @@ class EvaluationService:
         if not department:
             raise ValueError(f"학과 ID {department_id}를 찾을 수 없습니다.")
         
-        # 학생의 수강 이력 조회
+        # 학생의 수강 이력 조회 — 성적이 아직 없는 학기도 가져온다.
+        # 예전에는 여기서 성적 없는 행을 걸러냈다. 2학기 수강이 전부 여기 걸려서
+        # 학생이 실제로 들은 과목의 절반가량이 평가에 닿지도 못했다.
+        # '듣는 중'과 '안 들음'의 구분은 _get_student_completed_courses가 한다.
         enrollments = self.db.query(StudentCourse).filter(
-            StudentCourse.student_id == student_id,
-            StudentCourse.grade.isnot(None),
-            StudentCourse.grade != ""
+            StudentCourse.student_id == student_id
         ).all()
         
         # 학생이 이수한 과목 정보 수집 (과목코드, 과목명)
@@ -353,22 +354,25 @@ class EvaluationService:
 
         N+1 쿼리 방지: 유효 수강 이력의 과목코드를 한 번에 IN 절로 조회합니다.
 
+        성적이 아직 없는 수강(진행 중인 학기)은 버리지 않고 in_progress로 표시한다.
+        '안 들었다'와 '듣고 있다'는 다르다 — 버리면 학생이 실제로 들은 과목의 절반이
+        평가에서 사라진다. 성적 비교가 판정 기준인 진입요건은 이 표시를 보고 제외하고,
+        이수율(권장·교육과정)은 이수로 센다.
+
         Returns:
             {
                 "codes": {학수코드 set},
                 "names": {과목명 set},
-                "details": [{course_code, course_name, grade, credits}, ...]
+                "details": [{course_code, course_name, grade, credits,
+                             numeric_grade, in_progress}, ...]
             }
         """
         completed_codes = set()
         completed_names = set()
         completed_details = []
 
-        # F학점/미수강 제외: 유효한 수강 이력만 필터링
-        valid_enrollments = [
-            e for e in enrollments
-            if e.grade and e.grade != FAILING_GRADE
-        ]
+        # F는 낙제라 이수로 셀 수 없다. 성적이 비어 있는 것은 낙제가 아니라 진행 중이다.
+        valid_enrollments = [e for e in enrollments if e.grade != FAILING_GRADE]
         if not valid_enrollments:
             return {"codes": completed_codes, "names": completed_names, "details": completed_details}
 
@@ -379,27 +383,33 @@ class EvaluationService:
         ).all()
         course_map = {c.course_code: c for c in courses}
 
-        # grade 역참조 맵
-        grade_map = {e.course_code: e.grade for e in valid_enrollments}
-        # numeric 성적 맵: StudentCourse.numeric_grade 우선, 없으면 GRADE_TO_NUMERIC 폴백
-        numeric_map = {
-            e.course_code: (
-                float(e.numeric_grade)
-                if e.numeric_grade is not None
-                else GRADE_TO_NUMERIC.get(e.grade, 0.0)
-            )
-            for e in valid_enrollments
-        }
+        # 같은 과목이 성적 있는 행과 없는 행으로 둘 다 있으면(재수강 중) 성적 있는 쪽이 이긴다.
+        enrollment_map = {}
+        for e in valid_enrollments:
+            prev = enrollment_map.get(e.course_code)
+            if prev is None or (not prev.grade and e.grade):
+                enrollment_map[e.course_code] = e
 
         for code, course in course_map.items():
+            enrollment = enrollment_map.get(code)
+            grade = enrollment.grade if enrollment else ""
+            in_progress = not grade
+            if in_progress:
+                numeric = None
+            elif enrollment.numeric_grade is not None:
+                numeric = float(enrollment.numeric_grade)
+            else:
+                numeric = GRADE_TO_NUMERIC.get(grade, 0.0)
+
             completed_codes.add(course.course_code)
             completed_names.add(course.course_name)
             completed_details.append({
                 "course_code": course.course_code,
                 "course_name": course.course_name,
-                "grade": grade_map.get(code, ""),
+                "grade": grade or "",
                 "credits": course.credits,
-                "numeric_grade": numeric_map.get(code, 0.0),
+                "numeric_grade": numeric,
+                "in_progress": in_progress,
             })
 
         return {

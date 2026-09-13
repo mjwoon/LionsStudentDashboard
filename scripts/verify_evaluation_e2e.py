@@ -41,7 +41,12 @@ LIONS_TRACKS = {"전계열", "인문사회계열", "자연계열"}
 
 SPARSE_STUDENT = 2026105814   # 배지민 — 성적 있는 과목 4개뿐
 ICT_DATA_DEPT = 303           # 데이터인텔리전스전공 — 진입요건 미등록(실제 학사 규정 없음)
+ELEC_DEPT = 204               # 전자공학부 — 진입요건은 있고 권장과목은 없다
 ADPR_DEPT = 600               # 광고홍보학과 — 진입요건·권장과목이 모두 있는 학과
+
+# GEN2053(미분적분학2)을 2학기에 수강 중이고, 성적이 나온 ELEC 요건 과목은 없는 학생.
+# '듣는 중'이 충족(open)도 차단(blocked)도 아닌 진행 전(pending)으로 잡히는지 본다.
+IN_PROGRESS_STUDENT = 2026185927
 
 
 class Checker:
@@ -149,6 +154,26 @@ def verify_real_requirement_department(base, c):
     c.check(r["grade"] is not None, "미이수는 차단이 아니므로 준비도 등급은 부여된다")
 
 
+def verify_in_progress_courses(base, c):
+    """성적이 아직 없는 수강이 '안 들음'으로 사라지지 않는다."""
+    print("\n[2c] 듣는 중인 과목이 평가에 닿는다")
+    r = get(base, f"/api/evaluation/student/{IN_PROGRESS_STUDENT}/department/{ELEC_DEPT}"
+                  "?force_recalculate=true", timeout=120)
+    er = r["analysis_json"]["entry_requirement"]
+    cc = r["analysis_json"]["curriculum_completion"]
+
+    c.check(er["in_progress_courses"] >= 1,
+            f'수강 중인 요건 과목이 집계된다 (실제 {er["in_progress_courses"]})')
+    c.check(er["completed_courses"] == 0,
+            "성적이 없으므로 진입요건 충족으로는 세지 않는다")
+    c.check(r["entry_gate"] == "pending",
+            f'듣는 중은 차단이 아니라 진행 전이다 (실제 {r["entry_gate"]})')
+    c.check(cc["in_progress_completed"] >= 1,
+            f'교육과정 이수율에는 수강 중이 반영된다 (실제 {cc["in_progress_completed"]})')
+    c.check(cc["exact_completed"] > cc["in_progress_completed"],
+            "이수 완료와 수강 중이 한 수에 뭉개지지 않는다")
+
+
 def verify_gate_dominates_ranking(base, c):
     print("\n[3] 진입요건 관문이 학과 추천 순위를 지배한다")
     data = get(base, f"/api/evaluation/student/{SPARSE_STUDENT}/all-departments")
@@ -204,6 +229,7 @@ def main():
         verify_department_scope(base, c)
         verify_no_vacuous_full_marks(base, c)
         verify_real_requirement_department(base, c)
+        verify_in_progress_courses(base, c)
         verify_gate_dominates_ranking(base, c)
         verify_null_score_roundtrip(base, c)
     except urllib.error.URLError as e:
