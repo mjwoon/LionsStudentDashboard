@@ -45,15 +45,32 @@ app.include_router(admin_upload_grouped.router)
 app.include_router(graph.router)
 
 
+def _deployment_info() -> dict:
+    """떠 있는 빌드를 밖에서 식별할 수 있게 한다.
+
+    배포가 반영됐는지 확인할 방법이 없어 API 동작 변화로 매번 추측해야 했다.
+    Render가 넣어주는 RENDER_GIT_COMMIT을 그대로 노출한다. 로컬·테스트에는 그 값이
+    없으므로 키가 생략된다 — 개발 응답에 의미 없는 null을 남기지 않는다.
+    """
+    commit = settings.deployed_commit
+    if not commit:
+        return {}
+    info = {"commit": commit}
+    if settings.render_git_branch:
+        info["branch"] = settings.render_git_branch
+    return info
+
+
 @app.get("/")
 def read_root():
     return {
         "message": "Lions Student Dashboard API",
         "version": "1.0.0",
-        "status": "running"
+        "status": "running",
+        **_deployment_info(),
     }
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", **_deployment_info()}

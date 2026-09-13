@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # --- 배포 식별 (Render가 주입) ---
+    # 어떤 커밋이 떠 있는지 밖에서 확인할 방법이 없어 배포 반영 여부를 매번 추측해야 했다.
+    # Render는 서비스 컨테이너에 RENDER_GIT_COMMIT / RENDER_GIT_BRANCH를 넣어준다.
+    # 로컬·테스트에는 없으므로 빈 값이 기본이다.
+    render_git_commit: str = ""
+    render_git_branch: str = ""
+
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
     @model_validator(mode="after")
@@ -53,6 +60,12 @@ class Settings(BaseSettings):
                 "NEO4J_PASSWORD 환경변수를 실제 값으로 설정하세요."
             )
         return self
+
+    @cached_property
+    def deployed_commit(self) -> str | None:
+        """떠 있는 빌드의 커밋 short SHA. 배포 환경이 아니면 None."""
+        commit = self.render_git_commit.strip()
+        return commit[:7] if commit else None
 
     @cached_property
     def cors_origin_list(self) -> list[str]:
