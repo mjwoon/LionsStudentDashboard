@@ -32,6 +32,7 @@ except ImportError:
     _HAS_PLT = False
 
 from lions_core.models import Student  # noqa: E402
+from lions_core import scoring  # noqa: E402
 from lions_core.repositories import DepartmentRepository  # noqa: E402
 from experiment.similarity_lookup import load_lookup, make_similarity_fn  # noqa: E402
 from experiment.injected_eval import InjectedEvaluationService  # noqa: E402
@@ -80,7 +81,32 @@ def _evaluate_all(db, sim_fn, threshold, max_students=0):
                          "overall_score": score, "grade": r.get("grade"),
                          "entry_gate": gate,
                          "sort_key": _sort_key(gate, score)})
-    return pd.DataFrame(rows)
+    return _attach_relative_grade(pd.DataFrame(rows))
+
+
+def _attach_relative_grade(df):
+    """화면에 나가는 상대 적합도 등급을 grade_rel 컬럼으로 붙인다.
+
+    evaluate_student이 돌려주는 grade는 절대 경계(GRADE_THRESHOLDS) 기준이지만,
+    제품이 학생에게 보여주는 등급은 그 학생의 학과 선택지 안에서의 상대 위치다
+    (routers/evaluation.py가 scoring.relative_grade로 덧씌운다). RQ2가 "임계값이
+    학생이 받는 결과를 얼마나 바꾸는가"를 묻는 이상 화면에 나가는 쪽을 재야 한다.
+
+    순위는 정렬키(관문, 준비도) 기준이며 평가 가능한 건만 모수에 넣는다 —
+    readiness_ranking과 같은 규칙이다.
+    """
+    if df.empty:
+        return df
+    df = df.copy()
+    df["grade_rel"] = None
+    for sid, g in df.groupby("student_id"):
+        ev = g[g["overall_score"].notna()].sort_values("sort_key", ascending=False)
+        total = len(ev)
+        for rank, (idx, row) in enumerate(ev.iterrows(), 1):
+            df.at[idx, "grade_rel"] = scoring.relative_grade(
+                row["entry_gate"], row["overall_score"], rank, total
+            )
+    return df
 
 
 def main():
@@ -121,6 +147,12 @@ def main():
                           "spearman_min": float(rho.min()) if len(rho) else 1.0,
                           "top1_change_rate": top1_change_rate(evals[t], base)})
         grade_migration(evals[t], base).to_csv(f"{args.out}/grade_migration_{t}.csv")
+        if "grade_rel" in evals[t].columns:
+            # 절대 등급과 상대 등급은 서로 다르게 움직인다. 화면에 나가는 것은 후자다.
+            # 기존 grade를 먼저 버리지 않으면 같은 이름의 컬럼이 둘이 된다.
+            rel = evals[t].drop(columns=["grade"]).rename(columns={"grade_rel": "grade"})
+            rel_base = base.drop(columns=["grade"]).rename(columns={"grade_rel": "grade"})
+            grade_migration(rel, rel_base).to_csv(f"{args.out}/grade_migration_rel_{t}.csv")
     pd.DataFrame(stab_rows).to_csv(f"{args.out}/ranking_stability.csv", index=False)
 
     if _HAS_PLT:
