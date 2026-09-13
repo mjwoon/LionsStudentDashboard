@@ -133,6 +133,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const entryReqData = (evaluationData as any)?.analysis_json?.entry_requirement;
   const reqTotal = entryReqData?.total_courses ?? 0;
   const reqCompleted = entryReqData?.completed_courses ?? 0;
+  // 지금 듣고 있는 요건 과목. 성적이 판정 기준이라 점수에는 못 들어가지만,
+  // 알려주지 않으면 학생이 "들었는데 왜 0이냐"로 읽는다.
+  const reqInProgress = entryReqData?.in_progress_courses ?? 0;
   const entryRequirementScore = (evaluationData as any)?.entry_requirement_score ?? entryReqData?.score ?? 0;
   // 진입요건 %는 등급을 결정하는 규칙 점수(entry_requirement_score)를 그대로 사용한다.
   // reqCompleted/reqTotal은 백엔드가 최고 그룹의 qualifying/required로 채우므로 "X/Y 과목"이 %와 일치.
@@ -147,6 +150,8 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
   const recData = evaluationData?.analysis_json?.recommended_courses as any;
   const recTotal = recData?.total_courses ?? recData?.total ?? 0;
   const recCompleted = recData?.similar_completed ?? recData?.completed ?? 0;
+  // 이수율에는 포함된 수(recCompleted) 중 아직 성적이 안 나온 과목 수.
+  const recInProgress = recData?.in_progress_completed ?? 0;
   const recPercent = recData?.similar_rate ?? recData?.completion_rate ?? (evaluationData as any)?.recommended_similar_rate ?? 0;
   const recHasData = recData?.has_data ?? recTotal > 0;
 
@@ -309,7 +314,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
             <p className="text-[20px] text-[#6a7282]">전공 진입 필수</p>
             <p className="text-[28px] font-bold text-[#101828]">{reqHasData ? `${reqPercent}%` : "—"}</p>
             <p className="text-[18px] text-[#6a7282]">
-              {reqHasData ? `${reqCompleted} / ${reqTotal} 과목` : "등록된 진입요건 없음"}
+              {reqHasData
+                ? `${reqCompleted} / ${reqTotal} 과목${reqInProgress > 0 ? ` · 수강중 ${reqInProgress}과목` : ""}`
+                : "등록된 진입요건 없음"}
             </p>
             <div className="bg-[#e5e7eb] h-1.5 rounded-full w-full overflow-hidden mt-1 relative">
               <div className="bg-[#3b82f6] h-full rounded-full absolute left-0 top-0" style={{ width: `${reqHasData ? Math.min(100, reqPercent) : 0}%` }} />
@@ -321,7 +328,9 @@ export default function StudentEntryTab({ student, selectedDepartmentId: initial
             <p className="text-[20px] text-[#6a7282]">권장 과목</p>
             <p className="text-[28px] font-bold text-[#101828]">{recHasData ? `${recPercent}%` : "—"}</p>
             <p className="text-[18px] text-[#6a7282]">
-              {recHasData ? `${recCompleted} / ${recTotal} 과목` : "등록된 권장과목 없음"}
+              {recHasData
+                ? `${recCompleted} / ${recTotal} 과목${recInProgress > 0 ? ` · 수강중 ${recInProgress}과목` : ""}`
+                : "등록된 권장과목 없음"}
             </p>
             <div className="bg-[#e5e7eb] h-1.5 rounded-full w-full overflow-hidden mt-1 relative">
               <div className="bg-[#ef4444] h-full rounded-full absolute left-0 top-0" style={{ width: `${recHasData ? Math.min(100, recPercent) : 0}%` }} />

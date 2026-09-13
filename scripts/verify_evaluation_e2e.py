@@ -40,7 +40,13 @@ SEED_PLAN = [
 LIONS_TRACKS = {"전계열", "인문사회계열", "자연계열"}
 
 SPARSE_STUDENT = 2026105814   # 배지민 — 성적 있는 과목 4개뿐
-ICT_DATA_DEPT = 303           # 데이터인텔리전스전공
+ICT_DATA_DEPT = 303           # 데이터인텔리전스전공 — 진입요건 미등록(실제 학사 규정 없음)
+ELEC_DEPT = 204               # 전자공학부 — 진입요건은 있고 권장과목은 없다
+ADPR_DEPT = 600               # 광고홍보학과 — 진입요건·권장과목이 모두 있는 학과
+
+# GEN2053(미분적분학2)을 2학기에 수강 중이고, 성적이 나온 ELEC 요건 과목은 없는 학생.
+# '듣는 중'이 충족(open)도 차단(blocked)도 아닌 진행 전(pending)으로 잡히는지 본다.
+IN_PROGRESS_STUDENT = 2026185927
 
 
 class Checker:
@@ -114,18 +120,58 @@ def verify_department_scope(base, c):
 
 def verify_no_vacuous_full_marks(base, c):
     print("\n[2] 데이터 공백이 만점이 되지 않는다")
+    # 진입요건이 등록되지 않은 학과. 예전에는 이 공백이 100점으로 채워져 74점이 바닥에
+    # 깔렸다. 지금은 항목에서 빠지고 남은 둘로 재정규화된다.
     r = get(base, f"/api/evaluation/student/{SPARSE_STUDENT}/department/{ICT_DATA_DEPT}"
                   "?force_recalculate=true", timeout=120)
     overall = r["analysis_json"]["overall"]
 
     c.check(r["is_evaluable"] is True, "평가 가능 학과로 판정된다")
-    c.check(len(overall["scored_components"]) == 3, "세 항목이 모두 반영된다")
+    c.check("entry_requirement" not in overall["scored_components"],
+            "요건 미등록 학과는 진입요건 항목이 점수에서 빠진다")
+    # 이 학과는 권장과목도 실제 규정이 없어 교육과정 이수율 하나만 남는다.
+    # 항목 수가 학과마다 다르다는 사실 자체는 화면에 함께 표시된다.
+    c.check(overall["scored_components"] == ["curriculum_completion"],
+            f"남은 항목으로만 재정규화된다 (실제 {overall['scored_components']})")
     c.check(r["overall_score"] < 70,
-            f"요건 미충족 학생이 70점 미만이다 (실제 {r['overall_score']})")
+            f"이수가 적은 학생이 70점 미만이다 (실제 {r['overall_score']})")
+    c.check(r["entry_gate"] == "unknown",
+            f'요건 미등록은 관문을 판정할 수 없다 (실제 {r["entry_gate"]})')
+    c.check(r["grade"] is not None, "요건 미등록이 등급 미부여 사유는 아니다")
+
+
+def verify_real_requirement_department(base, c):
+    """실제 학사 규정이 있는 학과에서는 세 항목이 모두 산다."""
+    print("\n[2b] 실제 요건이 있는 학과 — 세 항목 평가")
+    r = get(base, f"/api/evaluation/student/{SPARSE_STUDENT}/department/{ADPR_DEPT}"
+                  "?force_recalculate=true", timeout=120)
+    overall = r["analysis_json"]["overall"]
+    c.check(len(overall["scored_components"]) == 3,
+            f"세 항목이 모두 반영된다 (실제 {overall['scored_components']})")
     # 이 학생은 요건 후보 과목을 아직 안 들었다 → 차단이 아니라 진행 전(pending).
     # 2학년 진입을 준비하는 1학년에게 미이수는 정상 상태다.
     c.check(r["entry_gate"] == "pending", f'진입요건 관문이 pending이다 (실제 {r["entry_gate"]})')
     c.check(r["grade"] is not None, "미이수는 차단이 아니므로 준비도 등급은 부여된다")
+
+
+def verify_in_progress_courses(base, c):
+    """성적이 아직 없는 수강이 '안 들음'으로 사라지지 않는다."""
+    print("\n[2c] 듣는 중인 과목이 평가에 닿는다")
+    r = get(base, f"/api/evaluation/student/{IN_PROGRESS_STUDENT}/department/{ELEC_DEPT}"
+                  "?force_recalculate=true", timeout=120)
+    er = r["analysis_json"]["entry_requirement"]
+    cc = r["analysis_json"]["curriculum_completion"]
+
+    c.check(er["in_progress_courses"] >= 1,
+            f'수강 중인 요건 과목이 집계된다 (실제 {er["in_progress_courses"]})')
+    c.check(er["completed_courses"] == 0,
+            "성적이 없으므로 진입요건 충족으로는 세지 않는다")
+    c.check(r["entry_gate"] == "pending",
+            f'듣는 중은 차단이 아니라 진행 전이다 (실제 {r["entry_gate"]})')
+    c.check(cc["in_progress_completed"] >= 1,
+            f'교육과정 이수율에는 수강 중이 반영된다 (실제 {cc["in_progress_completed"]})')
+    c.check(cc["exact_completed"] > cc["in_progress_completed"],
+            "이수 완료와 수강 중이 한 수에 뭉개지지 않는다")
 
 
 def verify_gate_dominates_ranking(base, c):
@@ -182,6 +228,8 @@ def main():
             seed(base, c)
         verify_department_scope(base, c)
         verify_no_vacuous_full_marks(base, c)
+        verify_real_requirement_department(base, c)
+        verify_in_progress_courses(base, c)
         verify_gate_dominates_ranking(base, c)
         verify_null_score_roundtrip(base, c)
     except urllib.error.URLError as e:

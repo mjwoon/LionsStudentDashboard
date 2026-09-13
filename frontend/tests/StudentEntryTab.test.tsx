@@ -111,4 +111,44 @@ describe('StudentEntryTab Component Test', () => {
     expect(badgeElement).toHaveClass('text-amber-800');
     expect(badgeElement).toHaveClass('bg-amber-100');
   });
+
+  // 지금 듣고 있는 과목(성적 미산출)은 '안 들은 것'이 아니다. 진입요건 점수에는
+  // 들어가지 않지만 화면에는 알려줘야 학생이 0/1을 보고 오해하지 않는다.
+  it('Should show in-progress courses alongside the entry-requirement ratio', async () => {
+    (api.evaluation.getStudentEvaluation as any).mockResolvedValue({
+      overall_score: 40,
+      grade: 'F',
+      entry_requirement_score: 0,
+      entry_gate: 'pending',
+      analysis_json: {
+        entry_requirement: {
+          total_courses: 2,
+          completed_courses: 0,
+          in_progress_courses: 1,
+          has_requirement: true,
+        },
+        recommended_courses: {
+          total_courses: 5,
+          similar_completed: 3,
+          in_progress_completed: 2,
+          similar_rate: 60,
+          has_data: true,
+        },
+      },
+      detailed_results: [],
+    });
+
+    render(
+      <BrowserRouter>
+        <StudentEntryTab student={mockStudent as any} selectedDepartmentId="101" />
+      </BrowserRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('전공 진입 필수')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('0 / 2 과목 · 수강중 1과목')).toBeInTheDocument();
+    expect(screen.getByText('3 / 5 과목 · 수강중 2과목')).toBeInTheDocument();
+  });
 });

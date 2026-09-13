@@ -164,7 +164,8 @@ def entry_requirement_breakdown(
           "score": 최고 그룹 진행률(0~100, round2),
           "required": 그 그룹의 required_count,
           "qualifying": 그 그룹의 자격 이수 과목수(required로 clamp, 표시용),
-          "attempted": 그 그룹의 후보과목 중 성적과 무관하게 이수한 과목수,
+          "attempted": 그 그룹의 후보과목 중 성적이 나온 이수 과목수,
+          "in_progress": 그 그룹의 후보과목 중 지금 수강 중인 과목수(점수 미반영),
           "satisfied": score >= 100,
           "has_requirement": 그룹 존재 여부,
         }
@@ -174,6 +175,10 @@ def entry_requirement_breakdown(
     모자란 학생'이 똑같이 0으로 떨어진다. 이 시스템의 대상은 2학년 진입을 준비하는
     1학년이라 요건 과목 미이수가 정상 상태다. 둘을 구분해야 '진행 전'과 '차단'을
     가를 수 있다(entry_gate_state 참고).
+
+    성적이 아직 없는 '듣는 중' 과목은 qualifying·attempted 어느 쪽에도 세지 않는다.
+    성적 비교가 판정 기준이라 충족으로 칠 수 없고, 0.0으로 세면 F와 구분되지 않아
+    아직 진행 전인 학생이 blocked로 오판된다. 대신 in_progress로 따로 세어 표시에만 쓴다.
     """
     if not groups:
         return {
@@ -181,19 +186,30 @@ def entry_requirement_breakdown(
             "required": 0,
             "qualifying": 0,
             "attempted": 0,
+            "in_progress": 0,
             "satisfied": True,
             "has_requirement": False,
         }
 
+    # 성적이 아직 없는 '듣는 중' 과목은 제외한다. 0.0으로 세면 F와 구분되지 않아
+    # 아직 진행 전인 학생이 '성적 미달(blocked)'로 오판된다(entry_gate_state 참고).
+    graded = [
+        d for d in student_completed_courses["details"] if not d.get("in_progress")
+    ]
     completed_numeric = {
-        d["course_code"]: (d.get("numeric_grade") or 0.0)
+        d["course_code"]: (d.get("numeric_grade") or 0.0) for d in graded
+    }
+    in_progress_codes = {
+        d["course_code"]
         for d in student_completed_courses["details"]
+        if d.get("in_progress")
     }
 
     best_progress = -1.0
     best_required = 0
     best_qualifying = 0
     best_attempted = 0
+    best_in_progress = 0
     for group in groups:
         required = group["required_count"]
         qualifying = sum(
@@ -201,14 +217,17 @@ def entry_requirement_breakdown(
             for code in group["candidate_codes"]
             if completed_numeric.get(code, 0.0) >= group["target_min"]
         )
-        # 성적과 무관하게 '이수 이력이 있는' 후보 과목 수.
+        # 성적과 무관하게 '이수 이력이 있는' 후보 과목 수(성적이 나온 것만).
         attempted = sum(1 for code in group["candidate_codes"] if code in completed_numeric)
+        # 지금 듣고 있는 후보 과목 수 — 점수에는 안 들어가지만 화면에 알려줘야 한다.
+        in_progress = sum(1 for code in group["candidate_codes"] if code in in_progress_codes)
         progress = 100.0 if required <= 0 else min(qualifying / required, 1.0) * 100
         if progress > best_progress:
             best_progress = progress
             best_required = required
             best_qualifying = min(qualifying, required) if required > 0 else qualifying
             best_attempted = min(attempted, required) if required > 0 else attempted
+            best_in_progress = min(in_progress, required) if required > 0 else in_progress
 
     score = round(best_progress, 2)
     return {
@@ -216,6 +235,7 @@ def entry_requirement_breakdown(
         "required": best_required,
         "qualifying": best_qualifying,
         "attempted": best_attempted,
+        "in_progress": best_in_progress,
         "satisfied": score >= 100.0,
         "has_requirement": True,
     }
