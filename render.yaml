@@ -64,6 +64,21 @@ services:
     dockerfilePath: ./ai/Dockerfile.prod
     dockerContext: .
     plan: starter
+    # 빌드 컨텍스트가 저장소 루트라, 이게 없으면 master에 무엇이 푸시되든 워커가
+    # 다시 빌드되고 재시작된다. 재시작은 돌고 있던 대량 진단을 죽인다 — 작업은
+    # acks_late로 브로커에 남지만 Redis 트랜스포트의 visibility timeout(기본 1시간)
+    # 전에는 재배달되지 않아, 그동안 화면은 '진행 중'에 멈춰 있다.
+    #
+    # 경로는 ai/Dockerfile.prod가 실제로 COPY하는 것과 일치시킨다. 빠뜨리면 워커가
+    # 옛 코드를 들고 도는데 아무도 모른다.
+    buildFilter:
+      paths:
+        - ai/**
+        - packages/lions-core/**
+        - graphDB/**
+        - pyproject.toml
+        - uv.lock
+        - render.yaml
     envVars:
       - key: APP_ENV
         value: production
